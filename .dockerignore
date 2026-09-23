@@ -2,9 +2,9 @@
 **/__pycache__
 **/.venv
 backend/htmlcov
-frontend/blob-report
-frontend/dist
-frontend/node_modules
-frontend/playwright-report
-frontend/test-results
+admin/blob-report
+admin/dist
+admin/node_modules
+admin/playwright-report
+admin/test-results
 node_modules

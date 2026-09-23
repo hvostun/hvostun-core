@@ -1,15 +1,15 @@
-FROM oven/bun:1 AS frontend-build
+FROM oven/bun:1 AS admin-build
 
 WORKDIR /app
 
 COPY package.json bun.lock /app/
-COPY frontend/package.json /app/frontend/
+COPY admin/package.json /app/admin/
 
-WORKDIR /app/frontend
+WORKDIR /app/admin
 
 RUN bun install
 
-COPY ./frontend /app/frontend
+COPY ./admin /app/admin
 
 ARG VITE_API_URL=
 
@@ -51,7 +51,7 @@ COPY ./backend/pyproject.toml ./backend/alembic.ini /app/backend/
 
 COPY ./backend/app /app/backend/app
 
-COPY --from=frontend-build /app/backend/app/frontend /app/backend/app/frontend
+COPY --from=admin-build /app/backend/app/admin /app/backend/app/admin
 
 # Sync the project
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers

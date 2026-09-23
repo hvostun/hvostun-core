@@ -1,10 +1,10 @@
 # hvostun-core
 
-Реализация продукта **Hvostun**: backend, frontend и ML-пакет в одном репозитории.
+Реализация продукта **Hvostun**: backend, admin UI, пользовательский `web` и ML-пакет в одном репозитории.
 
 ## Архитектура
 
-**Modular monolith:** один backend, один frontend, один `docker compose up`.
+**Modular monolith:** один backend, один `docker compose up`. Admin UI — `admin/`; фронт сервиса для пользователей — `web/` (пока нет).
 
 Bootstrap: [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template).
 
@@ -20,8 +20,9 @@ hvostun-core/
       alembic/
     notebooks/
     pyproject.toml
-  frontend/
+  admin/                 # React admin UI
     src/
+  web/                   # user-facing service UI (planned)
   data/
     parquet/             # open subsets / K3 export
     kb/                  # curated knowledge base для RAG (llm-chat)
@@ -31,7 +32,7 @@ hvostun-core/
 |----------------|------|
 | `db` | PostgreSQL 18 — OLTP `hvostun_{FASTAPI_ENV}` (local: `hvostun_development`) |
 | `backend` | FastAPI admin-контур (пустышка: auth шаблона + `GET /api/v1/admin/`) |
-| frontend | React build, обслуживается backend (не отдельный prod-контейнер) |
+| admin UI | React build из `admin/`, обслуживается backend (не отдельный prod-контейнер) |
 | `db-ui` / `proxy` / `mailpit` | вспомогательные local-сервисы; `db-ui` — образ Adminer, не контур `admin` |
 | `redis` / `jupyter` / `worker` | позже, в Compose сейчас нет |
 
@@ -43,7 +44,7 @@ hvostun-core/
 |------|--------|
 | Backend | FastAPI, Pydantic, SQLModel/SQLAlchemy, Alembic |
 | Auth | JWT из шаблона; `is_superuser` |
-| API | OpenAPI + generated frontend client |
+| API | OpenAPI + generated admin client |
 | UI | React, TypeScript, Tailwind, shadcn/ui |
 | Admin | dashboard шаблона; spike FastAdmin для domain CRUD |
 | ML | scikit-learn tabular (`RandomForest` + `LogisticRegression`); lockfile `uv.lock` |

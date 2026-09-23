@@ -25,7 +25,7 @@ Start the FastAPI development server:
 uv run fastapi dev
 ```
 
-In another terminal, from the project root, install the frontend dependencies and start the Vite development server:
+In another terminal, from the project root, install the admin UI dependencies and start the Vite development server:
 
 ```bash
 bun install
@@ -34,7 +34,7 @@ bun run dev
 
 Now you can open these URLs:
 
-Frontend development server: <http://localhost:5173>
+Admin UI development server: <http://localhost:5173>
 
 Backend API: <http://localhost:8000>
 
@@ -42,21 +42,21 @@ Automatic interactive API documentation with Swagger UI: <http://localhost:8000/
 
 Mailpit: <http://localhost:8025>
 
-The frontend development server uses the backend at `http://localhost:8000`, as configured in `frontend/.env`.
+The admin UI development server uses the backend at `http://localhost:8000`, as configured in `admin/.env`.
 
-### Frontend Served by FastAPI
+### Admin UI Served by FastAPI
 
-Build the frontend from the `frontend` directory:
+Build the admin UI from the `admin` directory:
 
 ```bash
 bun run build
 ```
 
-The build is written to `backend/app/frontend` and served by FastAPI at <http://localhost:8000>. Rebuild the frontend after making frontend changes.
+The build is written to `backend/app/admin` and served by FastAPI at <http://localhost:8000>. Rebuild the admin UI after making admin changes.
 
 ## Full Stack with Docker Compose
 
-To run the backend and built frontend in Docker Compose:
+To run the backend and built admin UI in Docker Compose:
 
 ```bash
 docker compose run --rm backend bash scripts/prestart.sh
@@ -65,7 +65,7 @@ docker compose watch
 
 Now you can open these URLs:
 
-Application, with the frontend and API served by FastAPI: <http://localhost:8000>
+Application, with the admin UI and API served by FastAPI: <http://localhost:8000>
 
 Automatic interactive API documentation with Swagger UI: <http://localhost:8000/docs>
 
