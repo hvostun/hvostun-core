@@ -29,21 +29,22 @@ hvostun-core/
 
 | Сервис Compose | Роль |
 |----------------|------|
-| `backend` | FastAPI + SQLModel + Alembic + auth/API |
-| `db` | PostgreSQL — единственная OLTP |
-| `redis` | sessions/cache; Celery broker позже |
+| `db` | PostgreSQL 18 — единственная OLTP admin-контура |
+| `backend` | FastAPI admin-контур (пустышка: auth шаблона + `GET /api/v1/admin/`) |
 | frontend | React build, обслуживается backend (не отдельный prod-контейнер) |
-| `jupyter` | опционально; тот же `app.ml_plan` и БД |
-| `worker` | Celery — когда появится фоновая задача |
+| `db-ui` / `proxy` / `mailpit` | вспомогательные local-сервисы; `db-ui` — образ Adminer, не контур `admin` |
+| `redis` / `jupyter` / `worker` | позже, в Compose сейчас нет |
+
+Проверка стека: скопировать `.env.example` → `.env`, затем `docker compose up -d db backend`.
 
 ## Стек
 
 | Слой | Выбор |
 |------|--------|
 | Backend | FastAPI, Pydantic, SQLModel/SQLAlchemy, Alembic |
-| Auth | JWT из шаблона; `is_superuser` + `shelter_memberships` |
+| Auth | JWT из шаблона; `is_superuser` |
 | API | OpenAPI + generated frontend client |
 | UI | React, TypeScript, Tailwind, shadcn/ui |
 | Admin | dashboard шаблона; spike FastAdmin для domain CRUD |
 | ML | scikit-learn tabular (`RandomForest` + `LogisticRegression`); lockfile `uv.lock` |
-| Deploy | Compose: `backend` + `db` + `redis` |
+| Deploy | Compose: `backend` + `db` |

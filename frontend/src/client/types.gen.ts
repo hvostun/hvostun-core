@@ -694,6 +694,13 @@ export type utilsHealthCheckData = {
 };
 
 export type utilsHealthCheckResponses = {
+    /**
+     * Successful Response
+     */
+    200: boolean;
+};
+
+export type utilsHealthCheckResponse = utilsHealthCheckResponses[keyof utilsHealthCheckResponses];
 
 export type privateCreateUserData = {
     body: PrivateUserCreate;

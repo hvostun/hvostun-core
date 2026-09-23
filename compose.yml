@@ -31,7 +31,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Variable not set}
       - POSTGRES_DB=app
 
-  adminer:
+  db-ui:
     image: adminer
     depends_on:
       - db
@@ -40,12 +40,13 @@ services:
     labels:
       # Enable Traefik for this service
       - traefik.enable=true
-      # Route HTTP traffic for the Adminer subdomain
-      - traefik.http.routers.adminer-http.rule=Host(`adminer.${DOMAIN:-localhost}`)
-      - traefik.http.routers.adminer-http.entrypoints=http
+      # Route HTTP traffic for the db-ui subdomain
+      - traefik.http.routers.db-ui-http.rule=Host(`db-ui.${DOMAIN:-localhost}`)
+      - traefik.http.routers.db-ui-http.entrypoints=http
       # Define the port inside of the Docker service to use
-      - traefik.http.services.adminer.loadbalancer.server.port=8080
+      - traefik.http.services.db-ui.loadbalancer.server.port=8080
 
+  # Admin-контур (пустышка): тот же FastAPI, без второго HTTP-сервиса.
   backend:
     image: backend:latest
     depends_on:
@@ -74,6 +75,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     labels:
+      - hvostun.contour=admin
       # Enable Traefik for this service
       - traefik.enable=true
 

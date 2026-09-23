@@ -4,6 +4,8 @@
 
 For local development, run PostgreSQL and Mailpit with Docker Compose, and run the FastAPI and Vite development servers locally.
 
+Copy `.env.example` to `.env` before `docker compose up`.
+
 Start the supporting services:
 
 ```bash
@@ -67,7 +69,7 @@ Application, with the frontend and API served by FastAPI: <http://localhost:8000
 
 Automatic interactive API documentation with Swagger UI: <http://localhost:8000/docs>
 
-Adminer, database web administration: <http://localhost:8080>
+db-ui - database web administration: <http://localhost:8080>
 
 Traefik UI, to see how the routes are being handled by the proxy: <http://localhost:8090>
 
@@ -89,7 +91,7 @@ The `compose.override.yml` file adds local development settings, such as mountin
 
 The `compose.deploy.yml` file contains the deployment-specific settings, including HTTPS and automatic certificate handling. It is explicitly combined with `compose.yml` when deploying the application.
 
-The backend reads local settings from the `.env` file. Docker Compose also uses it for variable interpolation and passes the settings each container needs.
+The backend reads local settings from the `.env` file (copy from `.env.example`). Docker Compose also uses it for variable interpolation and passes the settings each container needs.
 
 After changing variables, make sure you restart the stack:
 
@@ -99,7 +101,7 @@ docker compose watch
 
 ## The `.env` File
 
-The tracked `.env` file contains local development defaults, passwords, and other configuration. Its hostnames use `localhost` for processes running on your machine. Docker Compose overrides hostnames such as the database and SMTP server with their Compose service names.
+`.env` is not committed. Start from `.env.example`: local development defaults, passwords, and other configuration. Its hostnames use `localhost` for processes running on your machine. Docker Compose overrides hostnames such as the database and SMTP server with their Compose service names.
 
 Do not store deployment secrets in `.env`. Keep production secrets in your host/CI secret store.
 
