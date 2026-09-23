@@ -29,7 +29,7 @@ hvostun-core/
 
 | Сервис Compose | Роль |
 |----------------|------|
-| `db` | PostgreSQL 18 — единственная OLTP admin-контура |
+| `db` | PostgreSQL 18 — OLTP `hvostun_{FASTAPI_ENV}` (local: `hvostun_development`) |
 | `backend` | FastAPI admin-контур (пустышка: auth шаблона + `GET /api/v1/admin/`) |
 | frontend | React build, обслуживается backend (не отдельный prod-контейнер) |
 | `db-ui` / `proxy` / `mailpit` | вспомогательные local-сервисы; `db-ui` — образ Adminer, не контур `admin` |

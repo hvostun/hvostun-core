@@ -103,6 +103,8 @@ docker compose watch
 
 `.env` is not committed. Start from `.env.example`: local development defaults, passwords, and other configuration. Its hostnames use `localhost` for processes running on your machine. Docker Compose overrides hostnames such as the database and SMTP server with their Compose service names.
 
+The Postgres database name is `hvostun_{FASTAPI_ENV}` (local default: `hvostun_development`).
+
 Do not store deployment secrets in `.env`. Keep production secrets in your host/CI secret store.
 
 ## Pre-commit Hooks and Code Linting
