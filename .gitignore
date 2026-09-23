@@ -12,6 +12,7 @@ backend/app/frontend/
 .cursor/
 .agents
 .claude
+.data/
 .idea
 .vscode
 .DS_Store

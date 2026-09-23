@@ -1,4 +1,12 @@
-import { ClipboardList, Dog, Home, Shield, Users } from "lucide-react"
+import {
+  ClipboardList,
+  Dog,
+  FileText,
+  Home,
+  Lightbulb,
+  Shield,
+  Users,
+} from "lucide-react"
 
 import { SidebarAppearance } from "@/components/Common/Appearance"
 import { Logo } from "@/components/Common/Logo"
@@ -15,11 +23,13 @@ import { User } from "./User"
 const baseItems: Item[] = [
   { icon: Home, title: "Home", path: "/" },
   { icon: Dog, title: "Собаки", path: "/dogs" },
-  { icon: ClipboardList, title: "Анкеты", path: "/sessions" },
+  { icon: FileText, title: "Анкеты", path: "/questionnaires" },
+  { icon: ClipboardList, title: "Ответы", path: "/sessions" },
 ]
 
 const adminItems: Item[] = [
   { icon: Users, title: "Владельцы", path: "/owners" },
+  { icon: Lightbulb, title: "Рекомендации", path: "/recommendations" },
   { icon: Shield, title: "Администраторы", path: "/admin" },
 ]
 

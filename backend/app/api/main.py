@@ -7,6 +7,8 @@ from app.api.routes import (
     owners,
     private,
     questionnaire_sessions,
+    questionnaires,
+    recommendations,
     users,
     utils,
 )
@@ -17,10 +19,12 @@ api_router.include_router(login.router)
 api_router.include_router(users.router)
 api_router.include_router(dogs.router)
 api_router.include_router(owners.router)
+api_router.include_router(questionnaires.router)
 api_router.include_router(questionnaire_sessions.router)
+api_router.include_router(recommendations.router)
 api_router.include_router(utils.router)
 api_router.include_router(admin.router)
 
 
-if settings.FASTAPI_ENV == "development":
+if settings.FASTAPI_ENV in {"development", "test"}:
     api_router.include_router(private.router)

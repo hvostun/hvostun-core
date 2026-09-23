@@ -237,6 +237,78 @@ export type PrivateUserCreate = {
 };
 
 /**
+ * QuestionPublic
+ */
+export type QuestionPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Questionnaire Id
+     */
+    questionnaire_id: string;
+    /**
+     * Global Id
+     */
+    global_id: string;
+    /**
+     * Order Number
+     */
+    order_number: number;
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Scale Id
+     */
+    scale_id: string;
+    /**
+     * Scale Name
+     */
+    scale_name: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
+ * QuestionnairePublic
+ */
+export type QuestionnairePublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
  * QuestionnaireSessionPublic
  */
 export type QuestionnaireSessionPublic = {
@@ -284,6 +356,198 @@ export type QuestionnaireSessionsPublic = {
      * Data
      */
     data: Array<QuestionnaireSessionPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * QuestionnairesPublic
+ */
+export type QuestionnairesPublic = {
+    /**
+     * Data
+     */
+    data: Array<QuestionnairePublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * QuestionsPublic
+ */
+export type QuestionsPublic = {
+    /**
+     * Data
+     */
+    data: Array<QuestionPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * RecommendationPublic
+ */
+export type RecommendationPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
+ * RecommendationsPublic
+ */
+export type RecommendationsPublic = {
+    /**
+     * Data
+     */
+    data: Array<RecommendationPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * SessionAnswerPublic
+ */
+export type SessionAnswerPublic = {
+    /**
+     * Question Id
+     */
+    question_id: string;
+    /**
+     * Order Number
+     */
+    order_number: number;
+    /**
+     * Question Text
+     */
+    question_text: string;
+    /**
+     * Value Num
+     */
+    value_num?: string | null;
+    /**
+     * Value Text
+     */
+    value_text?: string | null;
+    /**
+     * Value Date
+     */
+    value_date?: string | null;
+    /**
+     * Answered At
+     */
+    answered_at?: string | null;
+};
+
+/**
+ * SessionAnswersPublic
+ */
+export type SessionAnswersPublic = {
+    /**
+     * Data
+     */
+    data: Array<SessionAnswerPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * SessionRecommendationItemPublic
+ */
+export type SessionRecommendationItemPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * User Id
+     */
+    user_id: string;
+    /**
+     * Session Id
+     */
+    session_id: string;
+    /**
+     * Recomendation Id
+     */
+    recomendation_id: string;
+    /**
+     * Chart Number
+     */
+    chart_number: number;
+    /**
+     * Weight
+     */
+    weight: number;
+    /**
+     * Comment
+     */
+    comment?: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Recommendation Name
+     */
+    recommendation_name: string;
+    /**
+     * Recommendation Slug
+     */
+    recommendation_slug: string;
+    /**
+     * Recommendation Text
+     */
+    recommendation_text: string;
+};
+
+/**
+ * SessionRecommendationItemsPublic
+ */
+export type SessionRecommendationItemsPublic = {
+    /**
+     * Data
+     */
+    data: Array<SessionRecommendationItemPublic>;
     /**
      * Count
      */
@@ -965,6 +1229,108 @@ export type ownersReadOwnersResponses = {
 
 export type ownersReadOwnersResponse = ownersReadOwnersResponses[keyof ownersReadOwnersResponses];
 
+export type questionnairesReadQuestionnairesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Skip
+         */
+        skip?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Name
+         */
+        name?: string | null;
+        /**
+         * Slug
+         */
+        slug?: string | null;
+    };
+    url: '/api/v1/questionnaires/';
+};
+
+export type questionnairesReadQuestionnairesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type questionnairesReadQuestionnairesError = questionnairesReadQuestionnairesErrors[keyof questionnairesReadQuestionnairesErrors];
+
+export type questionnairesReadQuestionnairesResponses = {
+    /**
+     * Successful Response
+     */
+    200: QuestionnairesPublic;
+};
+
+export type questionnairesReadQuestionnairesResponse = questionnairesReadQuestionnairesResponses[keyof questionnairesReadQuestionnairesResponses];
+
+export type questionnairesReadQuestionnaireData = {
+    body?: never;
+    path: {
+        /**
+         * Questionnaire Id
+         */
+        questionnaire_id: string;
+    };
+    query?: never;
+    url: '/api/v1/questionnaires/{questionnaire_id}';
+};
+
+export type questionnairesReadQuestionnaireErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type questionnairesReadQuestionnaireError = questionnairesReadQuestionnaireErrors[keyof questionnairesReadQuestionnaireErrors];
+
+export type questionnairesReadQuestionnaireResponses = {
+    /**
+     * Successful Response
+     */
+    200: QuestionnairePublic;
+};
+
+export type questionnairesReadQuestionnaireResponse = questionnairesReadQuestionnaireResponses[keyof questionnairesReadQuestionnaireResponses];
+
+export type questionnairesReadQuestionnaireQuestionsData = {
+    body?: never;
+    path: {
+        /**
+         * Questionnaire Id
+         */
+        questionnaire_id: string;
+    };
+    query?: never;
+    url: '/api/v1/questionnaires/{questionnaire_id}/questions';
+};
+
+export type questionnairesReadQuestionnaireQuestionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type questionnairesReadQuestionnaireQuestionsError = questionnairesReadQuestionnaireQuestionsErrors[keyof questionnairesReadQuestionnaireQuestionsErrors];
+
+export type questionnairesReadQuestionnaireQuestionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: QuestionsPublic;
+};
+
+export type questionnairesReadQuestionnaireQuestionsResponse = questionnairesReadQuestionnaireQuestionsResponses[keyof questionnairesReadQuestionnaireQuestionsResponses];
+
 export type sessionsReadQuestionnaireSessionsData = {
     body?: never;
     path?: never;
@@ -1014,6 +1380,138 @@ export type sessionsReadQuestionnaireSessionsResponses = {
 };
 
 export type sessionsReadQuestionnaireSessionsResponse = sessionsReadQuestionnaireSessionsResponses[keyof sessionsReadQuestionnaireSessionsResponses];
+
+export type sessionsReadQuestionnaireSessionData = {
+    body?: never;
+    path: {
+        /**
+         * Session Id
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/api/v1/questionnaire-sessions/{session_id}';
+};
+
+export type sessionsReadQuestionnaireSessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type sessionsReadQuestionnaireSessionError = sessionsReadQuestionnaireSessionErrors[keyof sessionsReadQuestionnaireSessionErrors];
+
+export type sessionsReadQuestionnaireSessionResponses = {
+    /**
+     * Successful Response
+     */
+    200: QuestionnaireSessionPublic;
+};
+
+export type sessionsReadQuestionnaireSessionResponse = sessionsReadQuestionnaireSessionResponses[keyof sessionsReadQuestionnaireSessionResponses];
+
+export type sessionsReadQuestionnaireSessionAnswersData = {
+    body?: never;
+    path: {
+        /**
+         * Session Id
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/api/v1/questionnaire-sessions/{session_id}/answers';
+};
+
+export type sessionsReadQuestionnaireSessionAnswersErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type sessionsReadQuestionnaireSessionAnswersError = sessionsReadQuestionnaireSessionAnswersErrors[keyof sessionsReadQuestionnaireSessionAnswersErrors];
+
+export type sessionsReadQuestionnaireSessionAnswersResponses = {
+    /**
+     * Successful Response
+     */
+    200: SessionAnswersPublic;
+};
+
+export type sessionsReadQuestionnaireSessionAnswersResponse = sessionsReadQuestionnaireSessionAnswersResponses[keyof sessionsReadQuestionnaireSessionAnswersResponses];
+
+export type sessionsReadQuestionnaireSessionRecommendationsData = {
+    body?: never;
+    path: {
+        /**
+         * Session Id
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/api/v1/questionnaire-sessions/{session_id}/recommendations';
+};
+
+export type sessionsReadQuestionnaireSessionRecommendationsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type sessionsReadQuestionnaireSessionRecommendationsError = sessionsReadQuestionnaireSessionRecommendationsErrors[keyof sessionsReadQuestionnaireSessionRecommendationsErrors];
+
+export type sessionsReadQuestionnaireSessionRecommendationsResponses = {
+    /**
+     * Successful Response
+     */
+    200: SessionRecommendationItemsPublic;
+};
+
+export type sessionsReadQuestionnaireSessionRecommendationsResponse = sessionsReadQuestionnaireSessionRecommendationsResponses[keyof sessionsReadQuestionnaireSessionRecommendationsResponses];
+
+export type recommendationsReadRecommendationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Skip
+         */
+        skip?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Name
+         */
+        name?: string | null;
+        /**
+         * Slug
+         */
+        slug?: string | null;
+    };
+    url: '/api/v1/recommendations/';
+};
+
+export type recommendationsReadRecommendationsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type recommendationsReadRecommendationsError = recommendationsReadRecommendationsErrors[keyof recommendationsReadRecommendationsErrors];
+
+export type recommendationsReadRecommendationsResponses = {
+    /**
+     * Successful Response
+     */
+    200: RecommendationsPublic;
+};
+
+export type recommendationsReadRecommendationsResponse = recommendationsReadRecommendationsResponses[keyof recommendationsReadRecommendationsResponses];
 
 export type utilsTestEmailData = {
     body?: never;

@@ -23,7 +23,7 @@ class PlacementCode(StrEnum):
 
 
 class Shelter(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "shelters"
+    __tablename__ = "shelters"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str = Field(sa_type=Text)
@@ -33,7 +33,7 @@ class Shelter(TimestampMixin, SQLModel, table=True):
 
 
 class Owner(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "owners"
+    __tablename__ = "owners"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str = Field(sa_type=Text)
@@ -43,7 +43,7 @@ class Owner(TimestampMixin, SQLModel, table=True):
 
 
 class Dog(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "dogs"
+    __tablename__ = "dogs"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str = Field(sa_type=Text)
@@ -64,7 +64,7 @@ class Dog(TimestampMixin, SQLModel, table=True):
 
 
 class DogChip(CreatedAtMixin, SQLModel, table=True):
-    __tablename__ = "dog_chips"
+    __tablename__ = "dog_chips"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     dog_id: uuid.UUID = Field(foreign_key="dogs.id", ondelete="CASCADE")
@@ -73,7 +73,7 @@ class DogChip(CreatedAtMixin, SQLModel, table=True):
 
 
 class PlacementEvent(CreatedAtMixin, SQLModel, table=True):
-    __tablename__ = "placement_events"
+    __tablename__ = "placement_events"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     dog_id: uuid.UUID = Field(foreign_key="dogs.id", ondelete="CASCADE")

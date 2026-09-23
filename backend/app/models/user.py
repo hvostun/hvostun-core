@@ -44,7 +44,7 @@ class UpdatePassword(SQLModel):
 
 
 class User(UserBase, TimestampMixin, table=True):
-    __tablename__ = "users"
+    __tablename__ = "users"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
@@ -84,7 +84,7 @@ class NewPassword(SQLModel):
 
 
 class Consent(SQLModel, table=True):
-    __tablename__ = "consents"
+    __tablename__ = "consents"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
     __table_args__ = (
         UniqueConstraint(
             "user_id", "type", "version", name="uq_consents_user_type_version"

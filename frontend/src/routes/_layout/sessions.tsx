@@ -2,7 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { Suspense } from "react"
 
-import { SessionsService } from "@/client"
+import { type QuestionnaireSessionPublic, SessionsService } from "@/client"
 import { DataTable } from "@/components/Common/DataTable"
 import { fieldColumns, PAGE_SIZE } from "@/components/Common/fieldColumns"
 import { ListFilters } from "@/components/Common/ListFilters"
@@ -23,20 +23,20 @@ export const Route = createFileRoute("/_layout/sessions")({
     user_id: typeof search.user_id === "string" ? search.user_id : "",
     dog_id: typeof search.dog_id === "string" ? search.dog_id : "",
     questionnaire_id:
-      typeof search.questionnaire_id === "string" ? search.questionnaire_id : "",
+      typeof search.questionnaire_id === "string"
+        ? search.questionnaire_id
+        : "",
   }),
-  head: () => ({ meta: [{ title: "Анкеты — Hvostun" }] }),
+  head: () => ({ meta: [{ title: "Ответы — Hvostun" }] }),
 })
 
-const columns = fieldColumns([
+const columns = fieldColumns<QuestionnaireSessionPublic>([
   { key: "id", header: "id" },
   { key: "user_id", header: "user_id" },
   { key: "dog_id", header: "dog_id" },
   { key: "questionnaire_id", header: "questionnaire_id" },
   { key: "status", header: "status" },
   { key: "client_metadata", header: "client_metadata" },
-  { key: "created_at", header: "created_at" },
-  { key: "updated_at", header: "updated_at" },
 ] as const)
 
 function SessionsTable() {
@@ -98,6 +98,12 @@ function SessionsTable() {
         onPageChange={(next) =>
           navigate({ search: (prev) => ({ ...prev, page: next + 1 }) })
         }
+        onRowClick={(row) =>
+          navigate({
+            to: "/sessions/$sessionId",
+            params: { sessionId: row.id },
+          })
+        }
       />
     </>
   )
@@ -106,7 +112,7 @@ function SessionsTable() {
 function SessionsPage() {
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold tracking-tight">Анкеты</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Ответы</h1>
       <Suspense fallback={<p className="text-muted-foreground">Загрузка…</p>}>
         <SessionsTable />
       </Suspense>

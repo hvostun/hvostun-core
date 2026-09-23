@@ -52,8 +52,6 @@ const columns = [
     { key: "contact", header: "contact" },
     { key: "is_active", header: "is_active" },
     { key: "is_superuser", header: "is_superuser" },
-    { key: "created_at", header: "created_at" },
-    { key: "updated_at", header: "updated_at" },
   ]),
   {
     id: "actions",

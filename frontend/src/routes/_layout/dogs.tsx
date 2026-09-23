@@ -2,7 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { Suspense } from "react"
 
-import { DogsService } from "@/client"
+import { type DogPublic, DogsService } from "@/client"
 import { DataTable } from "@/components/Common/DataTable"
 import { fieldColumns, PAGE_SIZE } from "@/components/Common/fieldColumns"
 import { ListFilters } from "@/components/Common/ListFilters"
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_layout/dogs")({
   head: () => ({ meta: [{ title: "Собаки — Hvostun" }] }),
 })
 
-const columns = fieldColumns([
+const columns = fieldColumns<DogPublic>([
   { key: "id", header: "id" },
   { key: "name", header: "name" },
   { key: "sex", header: "sex" },
@@ -42,8 +42,6 @@ const columns = fieldColumns([
   { key: "breed", header: "breed" },
   { key: "mixed", header: "mixed" },
   { key: "created_by_id", header: "created_by_id" },
-  { key: "created_at", header: "created_at" },
-  { key: "updated_at", header: "updated_at" },
 ] as const)
 
 function DogsTable() {

@@ -17,8 +17,12 @@ import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
 import { Route as LayoutDogsRouteImport } from './routes/_layout/dogs'
 import { Route as LayoutOwnersRouteImport } from './routes/_layout/owners'
+import { Route as LayoutQuestionnairesRouteImport } from './routes/_layout/questionnaires'
+import { Route as LayoutRecommendationsRouteImport } from './routes/_layout/recommendations'
 import { Route as LayoutSessionsRouteImport } from './routes/_layout/sessions'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
+import { Route as LayoutQuestionnairesQuestionnaireIdRouteImport } from './routes/_layout/questionnaires_.$questionnaireId'
+import { Route as LayoutSessionsSessionIdRouteImport } from './routes/_layout/sessions_.$sessionId'
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
@@ -59,6 +63,16 @@ const LayoutOwnersRoute = LayoutOwnersRouteImport.update({
   path: '/owners',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutQuestionnairesRoute = LayoutQuestionnairesRouteImport.update({
+  id: '/questionnaires',
+  path: '/questionnaires',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutRecommendationsRoute = LayoutRecommendationsRouteImport.update({
+  id: '/recommendations',
+  path: '/recommendations',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutSessionsRoute = LayoutSessionsRouteImport.update({
   id: '/sessions',
   path: '/sessions',
@@ -67,6 +81,17 @@ const LayoutSessionsRoute = LayoutSessionsRouteImport.update({
 const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutQuestionnairesQuestionnaireIdRoute =
+  LayoutQuestionnairesQuestionnaireIdRouteImport.update({
+    id: '/questionnaires_/$questionnaireId',
+    path: '/questionnaires/$questionnaireId',
+    getParentRoute: () => LayoutRoute,
+  } as any)
+const LayoutSessionsSessionIdRoute = LayoutSessionsSessionIdRouteImport.update({
+  id: '/sessions_/$sessionId',
+  path: '/sessions/$sessionId',
   getParentRoute: () => LayoutRoute,
 } as any)
 
@@ -78,8 +103,12 @@ export interface FileRoutesByFullPath {
   '/admin': typeof LayoutAdminRoute
   '/dogs': typeof LayoutDogsRoute
   '/owners': typeof LayoutOwnersRoute
+  '/questionnaires': typeof LayoutQuestionnairesRoute
+  '/recommendations': typeof LayoutRecommendationsRoute
   '/sessions': typeof LayoutSessionsRoute
   '/settings': typeof LayoutSettingsRoute
+  '/questionnaires/$questionnaireId': typeof LayoutQuestionnairesQuestionnaireIdRoute
+  '/sessions/$sessionId': typeof LayoutSessionsSessionIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -88,9 +117,13 @@ export interface FileRoutesByTo {
   '/admin': typeof LayoutAdminRoute
   '/dogs': typeof LayoutDogsRoute
   '/owners': typeof LayoutOwnersRoute
+  '/questionnaires': typeof LayoutQuestionnairesRoute
+  '/recommendations': typeof LayoutRecommendationsRoute
   '/sessions': typeof LayoutSessionsRoute
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
+  '/questionnaires/$questionnaireId': typeof LayoutQuestionnairesQuestionnaireIdRoute
+  '/sessions/$sessionId': typeof LayoutSessionsSessionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -101,9 +134,13 @@ export interface FileRoutesById {
   '/_layout/admin': typeof LayoutAdminRoute
   '/_layout/dogs': typeof LayoutDogsRoute
   '/_layout/owners': typeof LayoutOwnersRoute
+  '/_layout/questionnaires': typeof LayoutQuestionnairesRoute
+  '/_layout/recommendations': typeof LayoutRecommendationsRoute
   '/_layout/sessions': typeof LayoutSessionsRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/questionnaires_/$questionnaireId': typeof LayoutQuestionnairesQuestionnaireIdRoute
+  '/_layout/sessions_/$sessionId': typeof LayoutSessionsSessionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -115,8 +152,12 @@ export interface FileRouteTypes {
     | '/admin'
     | '/dogs'
     | '/owners'
+    | '/questionnaires'
+    | '/recommendations'
     | '/sessions'
     | '/settings'
+    | '/questionnaires/$questionnaireId'
+    | '/sessions/$sessionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -125,9 +166,13 @@ export interface FileRouteTypes {
     | '/admin'
     | '/dogs'
     | '/owners'
+    | '/questionnaires'
+    | '/recommendations'
     | '/sessions'
     | '/settings'
     | '/'
+    | '/questionnaires/$questionnaireId'
+    | '/sessions/$sessionId'
   id:
     | '__root__'
     | '/_layout'
@@ -137,9 +182,13 @@ export interface FileRouteTypes {
     | '/_layout/admin'
     | '/_layout/dogs'
     | '/_layout/owners'
+    | '/_layout/questionnaires'
+    | '/_layout/recommendations'
     | '/_layout/sessions'
     | '/_layout/settings'
     | '/_layout/'
+    | '/_layout/questionnaires_/$questionnaireId'
+    | '/_layout/sessions_/$sessionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -207,6 +256,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutOwnersRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/questionnaires': {
+      id: '/_layout/questionnaires'
+      path: '/questionnaires'
+      fullPath: '/questionnaires'
+      preLoaderRoute: typeof LayoutQuestionnairesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/recommendations': {
+      id: '/_layout/recommendations'
+      path: '/recommendations'
+      fullPath: '/recommendations'
+      preLoaderRoute: typeof LayoutRecommendationsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/sessions': {
       id: '/_layout/sessions'
       path: '/sessions'
@@ -221,6 +284,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutSettingsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/questionnaires_/$questionnaireId': {
+      id: '/_layout/questionnaires_/$questionnaireId'
+      path: '/questionnaires/$questionnaireId'
+      fullPath: '/questionnaires/$questionnaireId'
+      preLoaderRoute: typeof LayoutQuestionnairesQuestionnaireIdRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/sessions_/$sessionId': {
+      id: '/_layout/sessions_/$sessionId'
+      path: '/sessions/$sessionId'
+      fullPath: '/sessions/$sessionId'
+      preLoaderRoute: typeof LayoutSessionsSessionIdRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
@@ -228,18 +305,27 @@ interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
   LayoutDogsRoute: typeof LayoutDogsRoute
   LayoutOwnersRoute: typeof LayoutOwnersRoute
+  LayoutQuestionnairesRoute: typeof LayoutQuestionnairesRoute
+  LayoutRecommendationsRoute: typeof LayoutRecommendationsRoute
   LayoutSessionsRoute: typeof LayoutSessionsRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutQuestionnairesQuestionnaireIdRoute: typeof LayoutQuestionnairesQuestionnaireIdRoute
+  LayoutSessionsSessionIdRoute: typeof LayoutSessionsSessionIdRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
   LayoutDogsRoute: LayoutDogsRoute,
   LayoutOwnersRoute: LayoutOwnersRoute,
+  LayoutQuestionnairesRoute: LayoutQuestionnairesRoute,
+  LayoutRecommendationsRoute: LayoutRecommendationsRoute,
   LayoutSessionsRoute: LayoutSessionsRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutQuestionnairesQuestionnaireIdRoute:
+    LayoutQuestionnairesQuestionnaireIdRoute,
+  LayoutSessionsSessionIdRoute: LayoutSessionsSessionIdRoute,
 }
 
 const LayoutRouteWithChildren =

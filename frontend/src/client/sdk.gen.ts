@@ -2,7 +2,7 @@
 
 import { type Client, type Options as Options2, type TDataShape, urlSearchParamsBodySerializer } from './client';
 import { client } from './client.gen';
-import type { adminAdminContourStubData, adminAdminContourStubResponses, dogsReadDogsData, dogsReadDogsErrors, dogsReadDogsResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginRecoverPasswordData, loginRecoverPasswordErrors, loginRecoverPasswordHtmlContentData, loginRecoverPasswordHtmlContentErrors, loginRecoverPasswordHtmlContentResponses, loginRecoverPasswordResponses, loginResetPasswordData, loginResetPasswordErrors, loginResetPasswordResponses, loginTestTokenData, loginTestTokenResponses, ownersReadOwnersData, ownersReadOwnersErrors, ownersReadOwnersResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, sessionsReadQuestionnaireSessionsData, sessionsReadQuestionnaireSessionsErrors, sessionsReadQuestionnaireSessionsResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, utilsTestEmailData, utilsTestEmailErrors, utilsTestEmailResponses } from './types.gen';
+import type { adminAdminContourStubData, adminAdminContourStubResponses, dogsReadDogsData, dogsReadDogsErrors, dogsReadDogsResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginRecoverPasswordData, loginRecoverPasswordErrors, loginRecoverPasswordHtmlContentData, loginRecoverPasswordHtmlContentErrors, loginRecoverPasswordHtmlContentResponses, loginRecoverPasswordResponses, loginResetPasswordData, loginResetPasswordErrors, loginResetPasswordResponses, loginTestTokenData, loginTestTokenResponses, ownersReadOwnersData, ownersReadOwnersErrors, ownersReadOwnersResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, questionnairesReadQuestionnaireData, questionnairesReadQuestionnaireErrors, questionnairesReadQuestionnaireQuestionsData, questionnairesReadQuestionnaireQuestionsErrors, questionnairesReadQuestionnaireQuestionsResponses, questionnairesReadQuestionnaireResponses, questionnairesReadQuestionnairesData, questionnairesReadQuestionnairesErrors, questionnairesReadQuestionnairesResponses, recommendationsReadRecommendationsData, recommendationsReadRecommendationsErrors, recommendationsReadRecommendationsResponses, sessionsReadQuestionnaireSessionAnswersData, sessionsReadQuestionnaireSessionAnswersErrors, sessionsReadQuestionnaireSessionAnswersResponses, sessionsReadQuestionnaireSessionData, sessionsReadQuestionnaireSessionErrors, sessionsReadQuestionnaireSessionRecommendationsData, sessionsReadQuestionnaireSessionRecommendationsErrors, sessionsReadQuestionnaireSessionRecommendationsResponses, sessionsReadQuestionnaireSessionResponses, sessionsReadQuestionnaireSessionsData, sessionsReadQuestionnaireSessionsErrors, sessionsReadQuestionnaireSessionsResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, utilsTestEmailData, utilsTestEmailErrors, utilsTestEmailResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -268,6 +268,44 @@ export class OwnersService {
     }
 }
 
+export class QuestionnairesService {
+    /**
+     * Read Questionnaires
+     */
+    public static readQuestionnaires<ThrowOnError extends boolean = true>(options?: Options<questionnairesReadQuestionnairesData, ThrowOnError>) {
+        return (options?.client ?? client).get<questionnairesReadQuestionnairesResponses, questionnairesReadQuestionnairesErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/questionnaires/',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Questionnaire
+     */
+    public static readQuestionnaire<ThrowOnError extends boolean = true>(options: Options<questionnairesReadQuestionnaireData, ThrowOnError>) {
+        return (options.client ?? client).get<questionnairesReadQuestionnaireResponses, questionnairesReadQuestionnaireErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/questionnaires/{questionnaire_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Questionnaire Questions
+     */
+    public static readQuestionnaireQuestions<ThrowOnError extends boolean = true>(options: Options<questionnairesReadQuestionnaireQuestionsData, ThrowOnError>) {
+        return (options.client ?? client).get<questionnairesReadQuestionnaireQuestionsResponses, questionnairesReadQuestionnaireQuestionsErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/questionnaires/{questionnaire_id}/questions',
+            ...options
+        });
+    }
+}
+
 export class SessionsService {
     /**
      * Read Questionnaire Sessions
@@ -277,6 +315,56 @@ export class SessionsService {
             responseType: 'json',
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/questionnaire-sessions/',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Questionnaire Session
+     */
+    public static readQuestionnaireSession<ThrowOnError extends boolean = true>(options: Options<sessionsReadQuestionnaireSessionData, ThrowOnError>) {
+        return (options.client ?? client).get<sessionsReadQuestionnaireSessionResponses, sessionsReadQuestionnaireSessionErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/questionnaire-sessions/{session_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Questionnaire Session Answers
+     */
+    public static readQuestionnaireSessionAnswers<ThrowOnError extends boolean = true>(options: Options<sessionsReadQuestionnaireSessionAnswersData, ThrowOnError>) {
+        return (options.client ?? client).get<sessionsReadQuestionnaireSessionAnswersResponses, sessionsReadQuestionnaireSessionAnswersErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/questionnaire-sessions/{session_id}/answers',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Questionnaire Session Recommendations
+     */
+    public static readQuestionnaireSessionRecommendations<ThrowOnError extends boolean = true>(options: Options<sessionsReadQuestionnaireSessionRecommendationsData, ThrowOnError>) {
+        return (options.client ?? client).get<sessionsReadQuestionnaireSessionRecommendationsResponses, sessionsReadQuestionnaireSessionRecommendationsErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/questionnaire-sessions/{session_id}/recommendations',
+            ...options
+        });
+    }
+}
+
+export class RecommendationsService {
+    /**
+     * Read Recommendations
+     */
+    public static readRecommendations<ThrowOnError extends boolean = true>(options?: Options<recommendationsReadRecommendationsData, ThrowOnError>) {
+        return (options?.client ?? client).get<recommendationsReadRecommendationsResponses, recommendationsReadRecommendationsErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/recommendations/',
             ...options
         });
     }

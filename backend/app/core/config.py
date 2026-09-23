@@ -1,10 +1,12 @@
 import warnings
 from typing import Literal, Self
+from urllib.parse import urlparse, urlunparse
 
 from pydantic import (
     EmailStr,
     HttpUrl,
     PostgresDsn,
+    ValidationInfo,
     computed_field,
     field_validator,
     model_validator,
@@ -24,7 +26,9 @@ class Settings(BaseSettings):
     # 60 minutes * 24 hours * 8 days = 8 days
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     FRONTEND_HOST: str = "http://localhost:5173"
-    FASTAPI_ENV: Literal["development", "staging", "production"] = "development"
+    FASTAPI_ENV: Literal["development", "test", "staging", "production"] = (
+        "development"
+    )
 
     PROJECT_NAME: str
     SENTRY_DSN: HttpUrl | None = None
@@ -37,12 +41,17 @@ class Settings(BaseSettings):
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
-    def _use_psycopg_driver(cls, value: str | PostgresDsn) -> str:
+    def _normalize_database_url(cls, value: str | PostgresDsn, info: ValidationInfo) -> str:
         database_url = str(value)
         for scheme in ("postgres://", "postgresql://"):
             if database_url.startswith(scheme):
-                return database_url.replace(scheme, "postgresql+psycopg://", 1)
-        return database_url
+                database_url = database_url.replace(
+                    scheme, "postgresql+psycopg://", 1
+                )
+                break
+        env = info.data.get("FASTAPI_ENV", "development")
+        parsed = urlparse(database_url)
+        return urlunparse(parsed._replace(path=f"/hvostun_{env}"))
 
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
@@ -76,7 +85,7 @@ class Settings(BaseSettings):
                 f'The value of {var_name} is "changethis", '
                 "for security, please change it, at least for deployments."
             )
-            if self.FASTAPI_ENV == "development":
+            if self.FASTAPI_ENV in {"development", "test"}:
                 warnings.warn(message, stacklevel=1)
             else:
                 raise ValueError(message)

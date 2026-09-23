@@ -2,59 +2,60 @@ import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute, redirect } from "@tanstack/react-router"
 import { Suspense } from "react"
 
-import { type OwnerPublic, OwnersService, UsersService } from "@/client"
+import {
+  type RecommendationPublic,
+  RecommendationsService,
+  UsersService,
+} from "@/client"
 import { DataTable } from "@/components/Common/DataTable"
 import { fieldColumns, PAGE_SIZE } from "@/components/Common/fieldColumns"
 import { ListFilters } from "@/components/Common/ListFilters"
 
-type OwnersSearch = {
+type RecommendationsSearch = {
   page: number
   name: string
-  email: string
-  phone: string
+  slug: string
 }
 
-export const Route = createFileRoute("/_layout/owners")({
-  component: OwnersPage,
+export const Route = createFileRoute("/_layout/recommendations")({
+  component: RecommendationsPage,
   beforeLoad: async () => {
     const { data: user } = await UsersService.readUserMe()
     if (!user.is_superuser) {
       throw redirect({ to: "/" })
     }
   },
-  validateSearch: (search: Record<string, unknown>): OwnersSearch => ({
+  validateSearch: (search: Record<string, unknown>): RecommendationsSearch => ({
     page: Number(search.page) > 0 ? Number(search.page) : 1,
     name: typeof search.name === "string" ? search.name : "",
-    email: typeof search.email === "string" ? search.email : "",
-    phone: typeof search.phone === "string" ? search.phone : "",
+    slug: typeof search.slug === "string" ? search.slug : "",
   }),
-  head: () => ({ meta: [{ title: "Владельцы — Hvostun" }] }),
+  head: () => ({ meta: [{ title: "Рекомендации — Hvostun" }] }),
 })
 
-const columns = fieldColumns<OwnerPublic>([
+const columns = fieldColumns<RecommendationPublic>([
   { key: "id", header: "id" },
   { key: "name", header: "name" },
-  { key: "email", header: "email" },
-  { key: "phone", header: "phone" },
-  { key: "contact", header: "contact" },
+  { key: "slug", header: "slug" },
+  { key: "text", header: "text" },
+  { key: "description", header: "description" },
 ] as const)
 
-function OwnersTable() {
+function RecommendationsTable() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const pageIndex = search.page - 1
 
   const { data } = useSuspenseQuery({
-    queryKey: ["owners", search],
+    queryKey: ["recommendations", search],
     queryFn: async () =>
       (
-        await OwnersService.readOwners({
+        await RecommendationsService.readRecommendations({
           query: {
             skip: pageIndex * PAGE_SIZE,
             limit: PAGE_SIZE,
             name: search.name || null,
-            email: search.email || null,
-            phone: search.phone || null,
+            slug: search.slug || null,
           },
         })
       ).data,
@@ -66,13 +67,11 @@ function OwnersTable() {
         key={JSON.stringify(search)}
         values={{
           name: search.name,
-          email: search.email,
-          phone: search.phone,
+          slug: search.slug,
         }}
         fields={[
-          { name: "name", label: "Имя" },
-          { name: "email", label: "Email" },
-          { name: "phone", label: "Телефон" },
+          { name: "name", label: "Название" },
+          { name: "slug", label: "slug" },
         ]}
         onApply={(next) => navigate({ search: { page: 1, ...next } })}
       />
@@ -91,12 +90,12 @@ function OwnersTable() {
   )
 }
 
-function OwnersPage() {
+function RecommendationsPage() {
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold tracking-tight">Владельцы</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Рекомендации</h1>
       <Suspense fallback={<p className="text-muted-foreground">Загрузка…</p>}>
-        <OwnersTable />
+        <RecommendationsTable />
       </Suspense>
     </div>
   )

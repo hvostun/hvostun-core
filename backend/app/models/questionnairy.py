@@ -24,7 +24,7 @@ class ScaleType(StrEnum):
 
 
 class Questionnaire(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "questionnaires"
+    __tablename__ = "questionnaires"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str = Field(sa_type=Text)
@@ -32,28 +32,61 @@ class Questionnaire(TimestampMixin, SQLModel, table=True):
     description: str | None = Field(default=None, sa_type=Text)
 
 
+class QuestionnairePublic(SQLModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    description: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class QuestionnairesPublic(SQLModel):
+    data: list[QuestionnairePublic]
+    count: int
+
+
 class Scale(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "scales"
+    __tablename__ = "scales"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str = Field(sa_type=Text)
+    description: str | None = Field(default=None, sa_type=Text)
     type: str = Field(sa_type=Text)
     min_value: int | None = None
     max_value: int | None = None
 
 
 class Question(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "questions"
+    __tablename__ = "questions"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     questionnaire_id: uuid.UUID = Field(foreign_key="questionnaires.id")
-    global_number: int
+    global_id: uuid.UUID = Field(default_factory=uuid.uuid4, unique=True, index=True)
     order_number: int
     text: str = Field(sa_type=Text)
     scale_id: uuid.UUID = Field(foreign_key="scales.id")
 
 
+class QuestionPublic(SQLModel):
+    id: uuid.UUID
+    questionnaire_id: uuid.UUID
+    global_id: uuid.UUID
+    order_number: int
+    text: str
+    scale_id: uuid.UUID
+    scale_name: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class QuestionsPublic(SQLModel):
+    data: list[QuestionPublic]
+    count: int
+
+
 class QuestionnaireSession(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "questionnaire_sessions"
+    __tablename__ = "questionnaire_sessions"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="users.id")
@@ -82,8 +115,23 @@ class QuestionnaireSessionsPublic(SQLModel):
     count: int
 
 
+class SessionAnswerPublic(SQLModel):
+    question_id: uuid.UUID
+    order_number: int
+    question_text: str
+    value_num: Decimal | None = None
+    value_text: str | None = None
+    value_date: date | None = None
+    answered_at: datetime | None = None
+
+
+class SessionAnswersPublic(SQLModel):
+    data: list[SessionAnswerPublic]
+    count: int
+
+
 class AnswerEvent(CreatedAtMixin, SQLModel, table=True):
-    __tablename__ = "answer_events"
+    __tablename__ = "answer_events"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     session_id: uuid.UUID = Field(

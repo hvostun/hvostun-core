@@ -17,16 +17,20 @@ export type FilterField = {
   options?: { value: string; label: string }[]
 }
 
-type ListFiltersProps = {
+type ListFiltersProps<T extends Record<string, string>> = {
   fields: FilterField[]
-  values: Record<string, string>
-  onApply: (next: Record<string, string>) => void
+  values: T
+  onApply: (next: T) => void
 }
 
-export function ListFilters({ fields, values, onApply }: ListFiltersProps) {
-  const [draft, setDraft] = useState<Record<string, string>>(values)
+export function ListFilters<T extends Record<string, string>>({
+  fields,
+  values,
+  onApply,
+}: ListFiltersProps<T>) {
+  const [draft, setDraft] = useState<T>(values)
 
-  const setField = (name: string, value: string) => {
+  const setField = (name: keyof T, value: string) => {
     setDraft((current) => ({ ...current, [name]: value }))
   }
 
