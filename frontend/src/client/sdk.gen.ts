@@ -2,7 +2,7 @@
 
 import { type Client, type Options as Options2, type TDataShape, urlSearchParamsBodySerializer } from './client';
 import { client } from './client.gen';
-import type { loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginRecoverPasswordData, loginRecoverPasswordErrors, loginRecoverPasswordHtmlContentData, loginRecoverPasswordHtmlContentErrors, loginRecoverPasswordHtmlContentResponses, loginRecoverPasswordResponses, loginResetPasswordData, loginResetPasswordErrors, loginResetPasswordResponses, loginTestTokenData, loginTestTokenResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, utilsTestEmailData, utilsTestEmailErrors, utilsTestEmailResponses } from './types.gen';
+import type { adminAdminContourStubData, adminAdminContourStubResponses, dogsReadDogsData, dogsReadDogsErrors, dogsReadDogsResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginRecoverPasswordData, loginRecoverPasswordErrors, loginRecoverPasswordHtmlContentData, loginRecoverPasswordHtmlContentErrors, loginRecoverPasswordHtmlContentResponses, loginRecoverPasswordResponses, loginResetPasswordData, loginResetPasswordErrors, loginResetPasswordResponses, loginTestTokenData, loginTestTokenResponses, ownersReadOwnersData, ownersReadOwnersErrors, ownersReadOwnersResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, sessionsReadQuestionnaireSessionsData, sessionsReadQuestionnaireSessionsErrors, sessionsReadQuestionnaireSessionsResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, utilsTestEmailData, utilsTestEmailErrors, utilsTestEmailResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -240,6 +240,48 @@ export class UsersService {
     }
 }
 
+export class DogsService {
+    /**
+     * Read Dogs
+     */
+    public static readDogs<ThrowOnError extends boolean = true>(options?: Options<dogsReadDogsData, ThrowOnError>) {
+        return (options?.client ?? client).get<dogsReadDogsResponses, dogsReadDogsErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/dogs/',
+            ...options
+        });
+    }
+}
+
+export class OwnersService {
+    /**
+     * Read Owners
+     */
+    public static readOwners<ThrowOnError extends boolean = true>(options?: Options<ownersReadOwnersData, ThrowOnError>) {
+        return (options?.client ?? client).get<ownersReadOwnersResponses, ownersReadOwnersErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/owners/',
+            ...options
+        });
+    }
+}
+
+export class SessionsService {
+    /**
+     * Read Questionnaire Sessions
+     */
+    public static readQuestionnaireSessions<ThrowOnError extends boolean = true>(options?: Options<sessionsReadQuestionnaireSessionsData, ThrowOnError>) {
+        return (options?.client ?? client).get<sessionsReadQuestionnaireSessionsResponses, sessionsReadQuestionnaireSessionsErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/questionnaire-sessions/',
+            ...options
+        });
+    }
+}
+
 export class UtilsService {
     /**
      * Test Email
@@ -267,6 +309,18 @@ export class UtilsService {
     }
 }
 
+export class AdminService {
+    /**
+     * Admin Contour Stub
+     */
+    public static adminContourStub<ThrowOnError extends boolean = true>(options?: Options<adminAdminContourStubData, ThrowOnError>) {
+        return (options?.client ?? client).get<adminAdminContourStubResponses, unknown, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/admin/',
+            ...options
+        });
+    }
+}
 
 export class PrivateService {
     /**

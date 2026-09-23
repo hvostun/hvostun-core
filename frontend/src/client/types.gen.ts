@@ -5,6 +5,20 @@ export type ClientOptions = {
 };
 
 /**
+ * AdminContourStub
+ */
+export type AdminContourStub = {
+    /**
+     * Contour
+     */
+    contour?: string;
+    /**
+     * Status
+     */
+    status?: string;
+};
+
+/**
  * Body_login-login_access_token
  */
 export type Body_login_login_access_token = {
@@ -32,6 +46,90 @@ export type Body_login_login_access_token = {
      * Client Secret
      */
     client_secret?: string | null;
+};
+
+/**
+ * DogPublic
+ */
+export type DogPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Sex
+     */
+    sex?: string | null;
+    /**
+     * Neutered
+     */
+    neutered?: boolean | null;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Shelter Id
+     */
+    shelter_id?: string | null;
+    /**
+     * Assigned Volunteer Id
+     */
+    assigned_volunteer_id?: string | null;
+    /**
+     * Owner Id
+     */
+    owner_id?: string | null;
+    /**
+     * Birthday
+     */
+    birthday?: string | null;
+    /**
+     * Adopted At
+     */
+    adopted_at?: string | null;
+    /**
+     * Breed
+     */
+    breed?: string | null;
+    /**
+     * Mixed
+     */
+    mixed?: boolean | null;
+    /**
+     * Created By Id
+     */
+    created_by_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
+ * DogsPublic
+ */
+export type DogsPublic = {
+    /**
+     * Data
+     */
+    data: Array<DogPublic>;
+    /**
+     * Count
+     */
+    count: number;
 };
 
 /**
@@ -69,6 +167,54 @@ export type NewPassword = {
 };
 
 /**
+ * OwnerPublic
+ */
+export type OwnerPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Email
+     */
+    email?: string | null;
+    /**
+     * Phone
+     */
+    phone?: string | null;
+    /**
+     * Contact
+     */
+    contact?: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
+ * OwnersPublic
+ */
+export type OwnersPublic = {
+    /**
+     * Data
+     */
+    data: Array<OwnerPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * PrivateUserCreate
  */
 export type PrivateUserCreate = {
@@ -88,6 +234,60 @@ export type PrivateUserCreate = {
      * Is Verified
      */
     is_verified?: boolean;
+};
+
+/**
+ * QuestionnaireSessionPublic
+ */
+export type QuestionnaireSessionPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * User Id
+     */
+    user_id: string;
+    /**
+     * Dog Id
+     */
+    dog_id: string;
+    /**
+     * Questionnaire Id
+     */
+    questionnaire_id: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Client Metadata
+     */
+    client_metadata?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
+ * QuestionnaireSessionsPublic
+ */
+export type QuestionnaireSessionsPublic = {
+    /**
+     * Data
+     */
+    data: Array<QuestionnaireSessionPublic>;
+    /**
+     * Count
+     */
+    count: number;
 };
 
 /**
@@ -139,6 +339,18 @@ export type UserCreate = {
      */
     full_name?: string | null;
     /**
+     * Group
+     */
+    group?: string | null;
+    /**
+     * Phone
+     */
+    phone?: string | null;
+    /**
+     * Contact
+     */
+    contact?: string | null;
+    /**
      * Password
      */
     password: string;
@@ -165,6 +377,18 @@ export type UserPublic = {
      */
     full_name?: string | null;
     /**
+     * Group
+     */
+    group?: string | null;
+    /**
+     * Phone
+     */
+    phone?: string | null;
+    /**
+     * Contact
+     */
+    contact?: string | null;
+    /**
      * Id
      */
     id: string;
@@ -172,6 +396,10 @@ export type UserPublic = {
      * Created At
      */
     created_at?: string | null;
+    /**
+     * Updated At
+     */
+    updated_at?: string | null;
 };
 
 /**
@@ -194,6 +422,18 @@ export type UserUpdate = {
      * Full Name
      */
     full_name?: string | null;
+    /**
+     * Group
+     */
+    group?: string | null;
+    /**
+     * Phone
+     */
+    phone?: string | null;
+    /**
+     * Contact
+     */
+    contact?: string | null;
     /**
      * Password
      */
@@ -394,6 +634,22 @@ export type usersReadUsersData = {
          * Limit
          */
         limit?: number;
+        /**
+         * Email
+         */
+        email?: string | null;
+        /**
+         * Full Name
+         */
+        full_name?: string | null;
+        /**
+         * Is Superuser
+         */
+        is_superuser?: boolean | null;
+        /**
+         * Is Active
+         */
+        is_active?: boolean | null;
     };
     url: '/api/v1/users/';
 };
@@ -613,6 +869,152 @@ export type usersUpdateUserResponses = {
 
 export type usersUpdateUserResponse = usersUpdateUserResponses[keyof usersUpdateUserResponses];
 
+export type dogsReadDogsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Skip
+         */
+        skip?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Name
+         */
+        name?: string | null;
+        /**
+         * Status
+         */
+        status?: string | null;
+        /**
+         * Shelter Id
+         */
+        shelter_id?: string | null;
+        /**
+         * Owner Id
+         */
+        owner_id?: string | null;
+    };
+    url: '/api/v1/dogs/';
+};
+
+export type dogsReadDogsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type dogsReadDogsError = dogsReadDogsErrors[keyof dogsReadDogsErrors];
+
+export type dogsReadDogsResponses = {
+    /**
+     * Successful Response
+     */
+    200: DogsPublic;
+};
+
+export type dogsReadDogsResponse = dogsReadDogsResponses[keyof dogsReadDogsResponses];
+
+export type ownersReadOwnersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Skip
+         */
+        skip?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Name
+         */
+        name?: string | null;
+        /**
+         * Email
+         */
+        email?: string | null;
+        /**
+         * Phone
+         */
+        phone?: string | null;
+    };
+    url: '/api/v1/owners/';
+};
+
+export type ownersReadOwnersErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type ownersReadOwnersError = ownersReadOwnersErrors[keyof ownersReadOwnersErrors];
+
+export type ownersReadOwnersResponses = {
+    /**
+     * Successful Response
+     */
+    200: OwnersPublic;
+};
+
+export type ownersReadOwnersResponse = ownersReadOwnersResponses[keyof ownersReadOwnersResponses];
+
+export type sessionsReadQuestionnaireSessionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Skip
+         */
+        skip?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Status
+         */
+        status?: string | null;
+        /**
+         * User Id
+         */
+        user_id?: string | null;
+        /**
+         * Dog Id
+         */
+        dog_id?: string | null;
+        /**
+         * Questionnaire Id
+         */
+        questionnaire_id?: string | null;
+    };
+    url: '/api/v1/questionnaire-sessions/';
+};
+
+export type sessionsReadQuestionnaireSessionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type sessionsReadQuestionnaireSessionsError = sessionsReadQuestionnaireSessionsErrors[keyof sessionsReadQuestionnaireSessionsErrors];
+
+export type sessionsReadQuestionnaireSessionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: QuestionnaireSessionsPublic;
+};
+
+export type sessionsReadQuestionnaireSessionsResponse = sessionsReadQuestionnaireSessionsResponses[keyof sessionsReadQuestionnaireSessionsResponses];
+
 export type utilsTestEmailData = {
     body?: never;
     path?: never;
@@ -652,12 +1054,30 @@ export type utilsHealthCheckData = {
 
 export type utilsHealthCheckResponses = {
     /**
+     * Response Utils-Health Check
+     *
      * Successful Response
      */
     200: boolean;
 };
 
 export type utilsHealthCheckResponse = utilsHealthCheckResponses[keyof utilsHealthCheckResponses];
+
+export type adminAdminContourStubData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/';
+};
+
+export type adminAdminContourStubResponses = {
+    /**
+     * Successful Response
+     */
+    200: AdminContourStub;
+};
+
+export type adminAdminContourStubResponse = adminAdminContourStubResponses[keyof adminAdminContourStubResponses];
 
 export type privateCreateUserData = {
     body: PrivateUserCreate;

@@ -14,13 +14,6 @@ import {
 
 import { Button } from "@/components/ui/button"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Table,
   TableBody,
   TableCell,
@@ -32,18 +25,50 @@ import {
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+  pageIndex?: number
+  pageCount?: number
+  pageSize?: number
+  totalCount?: number
+  onPageChange?: (pageIndex: number) => void
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  pageIndex = 0,
+  pageCount,
+  pageSize = 50,
+  totalCount,
+  onPageChange,
 }: DataTableProps<TData, TValue>) {
+  const isServerPaged = pageCount != null && onPageChange != null
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getPaginationRowModel: isServerPaged ? undefined : getPaginationRowModel(),
+    manualPagination: isServerPaged,
+    pageCount: isServerPaged ? pageCount : undefined,
+    state: isServerPaged
+      ? { pagination: { pageIndex, pageSize } }
+      : undefined,
   })
+
+  const currentPage = isServerPaged
+    ? pageIndex
+    : table.getState().pagination.pageIndex
+  const pages = isServerPaged ? pageCount : table.getPageCount()
+  const total = totalCount ?? data.length
+  const from = total === 0 ? 0 : currentPage * pageSize + 1
+  const to = Math.min((currentPage + 1) * pageSize, total)
+
+  const goTo = (next: number) => {
+    if (isServerPaged) {
+      onPageChange(next)
+      return
+    }
+    table.setPageIndex(next)
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -83,65 +108,28 @@ export function DataTable<TData, TValue>({
                 colSpan={columns.length}
                 className="h-32 text-center text-muted-foreground"
               >
-                No results found.
+                Нет записей.
               </TableCell>
             </TableRow>
           )}
         </TableBody>
       </Table>
 
-      {table.getPageCount() > 1 && (
+      {pages > 1 && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 border-t bg-muted/20">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="text-sm text-muted-foreground">
-              Showing{" "}
-              {table.getState().pagination.pageIndex *
-                table.getState().pagination.pageSize +
-                1}{" "}
-              to{" "}
-              {Math.min(
-                (table.getState().pagination.pageIndex + 1) *
-                  table.getState().pagination.pageSize,
-                data.length,
-              )}{" "}
-              of{" "}
-              <span className="font-medium text-foreground">{data.length}</span>{" "}
-              entries
-            </div>
-            <div className="flex items-center gap-x-2">
-              <p className="text-sm text-muted-foreground">Rows per page</p>
-              <Select
-                value={`${table.getState().pagination.pageSize}`}
-                onValueChange={(value) => {
-                  table.setPageSize(Number(value))
-                }}
-              >
-                <SelectTrigger className="h-8 w-[70px]">
-                  <SelectValue
-                    placeholder={table.getState().pagination.pageSize}
-                  />
-                </SelectTrigger>
-                <SelectContent side="top">
-                  {[5, 10, 25, 50].map((pageSize) => (
-                    <SelectItem key={pageSize} value={`${pageSize}`}>
-                      {pageSize}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="text-sm text-muted-foreground">
+            Показаны {from}–{to} из{" "}
+            <span className="font-medium text-foreground">{total}</span>
           </div>
 
           <div className="flex items-center gap-x-6">
             <div className="flex items-center gap-x-1 text-sm text-muted-foreground">
-              <span>Page</span>
+              <span>Страница</span>
               <span className="font-medium text-foreground">
-                {table.getState().pagination.pageIndex + 1}
+                {currentPage + 1}
               </span>
-              <span>of</span>
-              <span className="font-medium text-foreground">
-                {table.getPageCount()}
-              </span>
+              <span>из</span>
+              <span className="font-medium text-foreground">{pages}</span>
             </div>
 
             <div className="flex items-center gap-x-1">
@@ -149,40 +137,40 @@ export function DataTable<TData, TValue>({
                 variant="outline"
                 size="sm"
                 className="h-8 w-8 p-0"
-                onClick={() => table.setPageIndex(0)}
-                disabled={!table.getCanPreviousPage()}
+                onClick={() => goTo(0)}
+                disabled={currentPage === 0}
               >
-                <span className="sr-only">Go to first page</span>
+                <span className="sr-only">Первая страница</span>
                 <ChevronsLeft className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 className="h-8 w-8 p-0"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
+                onClick={() => goTo(currentPage - 1)}
+                disabled={currentPage === 0}
               >
-                <span className="sr-only">Go to previous page</span>
+                <span className="sr-only">Предыдущая страница</span>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 className="h-8 w-8 p-0"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
+                onClick={() => goTo(currentPage + 1)}
+                disabled={currentPage >= pages - 1}
               >
-                <span className="sr-only">Go to next page</span>
+                <span className="sr-only">Следующая страница</span>
                 <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 className="h-8 w-8 p-0"
-                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                disabled={!table.getCanNextPage()}
+                onClick={() => goTo(pages - 1)}
+                disabled={currentPage >= pages - 1}
               >
-                <span className="sr-only">Go to last page</span>
+                <span className="sr-only">Последняя страница</span>
                 <ChevronsRight className="h-4 w-4" />
               </Button>
             </div>

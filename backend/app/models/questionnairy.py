@@ -1,10 +1,10 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import Column, Numeric
+from sqlalchemy import Column, Numeric, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -27,16 +27,16 @@ class Questionnaire(TimestampMixin, SQLModel, table=True):
     __tablename__ = "questionnaires"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    name: str
-    slug: str = Field(unique=True, index=True)
-    description: str | None = None
+    name: str = Field(sa_type=Text)
+    slug: str = Field(unique=True, index=True, sa_type=Text)
+    description: str | None = Field(default=None, sa_type=Text)
 
 
 class Scale(TimestampMixin, SQLModel, table=True):
     __tablename__ = "scales"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    type: str
+    type: str = Field(sa_type=Text)
     min_value: int | None = None
     max_value: int | None = None
 
@@ -48,7 +48,7 @@ class Question(TimestampMixin, SQLModel, table=True):
     questionnaire_id: uuid.UUID = Field(foreign_key="questionnaires.id")
     global_number: int
     order_number: int
-    text: str
+    text: str = Field(sa_type=Text)
     scale_id: uuid.UUID = Field(foreign_key="scales.id")
 
 
@@ -59,11 +59,27 @@ class QuestionnaireSession(TimestampMixin, SQLModel, table=True):
     user_id: uuid.UUID = Field(foreign_key="users.id")
     dog_id: uuid.UUID = Field(foreign_key="dogs.id")
     questionnaire_id: uuid.UUID = Field(foreign_key="questionnaires.id")
-    status: str = Field(default=SessionStatus.DRAFT)
+    status: str = Field(default=SessionStatus.DRAFT, sa_type=Text)
     client_metadata: dict[str, Any] | None = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True),
     )
+
+
+class QuestionnaireSessionPublic(SQLModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    dog_id: uuid.UUID
+    questionnaire_id: uuid.UUID
+    status: str
+    client_metadata: dict[str, Any] | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class QuestionnaireSessionsPublic(SQLModel):
+    data: list[QuestionnaireSessionPublic]
+    count: int
 
 
 class AnswerEvent(CreatedAtMixin, SQLModel, table=True):
@@ -77,5 +93,5 @@ class AnswerEvent(CreatedAtMixin, SQLModel, table=True):
     value_num: Decimal | None = Field(
         default=None, sa_column=Column(Numeric, nullable=True)
     )
-    value_text: str | None = None
+    value_text: str | None = Field(default=None, sa_type=Text)
     value_date: date | None = None

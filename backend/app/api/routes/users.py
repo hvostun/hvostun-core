@@ -32,18 +32,39 @@ router = APIRouter(prefix="/users", tags=["users"])
     dependencies=[Depends(get_current_active_superuser)],
     response_model=UsersPublic,
 )
-def read_users(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
+def read_users(
+    session: SessionDep,
+    skip: int = 0,
+    limit: int = 50,
+    email: str | None = None,
+    full_name: str | None = None,
+    is_superuser: bool | None = None,
+    is_active: bool | None = None,
+) -> Any:
     """
     Retrieve users.
     """
 
-    count_statement = select(func.count()).select_from(User)
-    count = session.exec(count_statement).one()
+    filters = []
+    if email:
+        filters.append(col(User.email).ilike(f"%{email}%"))
+    if full_name:
+        filters.append(col(User.full_name).ilike(f"%{full_name}%"))
+    if is_superuser is not None:
+        filters.append(User.is_superuser == is_superuser)
+    if is_active is not None:
+        filters.append(User.is_active == is_active)
 
-    statement = (
-        select(User).order_by(col(User.created_at).desc()).offset(skip).limit(limit)
-    )
-    users = session.exec(statement).all()
+    count_statement = select(func.count()).select_from(User)
+    statement = select(User)
+    if filters:
+        count_statement = count_statement.where(*filters)
+        statement = statement.where(*filters)
+
+    count = session.exec(count_statement).one()
+    users = session.exec(
+        statement.order_by(col(User.created_at).desc()).offset(skip).limit(limit)
+    ).all()
 
     users_public = [UserPublic.model_validate(user) for user in users]
     return UsersPublic(data=users_public, count=count)

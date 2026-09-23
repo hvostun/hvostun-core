@@ -15,6 +15,9 @@ import { Route as RecoverPasswordRouteImport } from './routes/recover-password'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
+import { Route as LayoutDogsRouteImport } from './routes/_layout/dogs'
+import { Route as LayoutOwnersRouteImport } from './routes/_layout/owners'
+import { Route as LayoutSessionsRouteImport } from './routes/_layout/sessions'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 
 const LayoutRoute = LayoutRouteImport.update({
@@ -46,6 +49,21 @@ const LayoutAdminRoute = LayoutAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutDogsRoute = LayoutDogsRouteImport.update({
+  id: '/dogs',
+  path: '/dogs',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutOwnersRoute = LayoutOwnersRouteImport.update({
+  id: '/owners',
+  path: '/owners',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutSessionsRoute = LayoutSessionsRouteImport.update({
+  id: '/sessions',
+  path: '/sessions',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -58,6 +76,9 @@ export interface FileRoutesByFullPath {
   '/recover-password': typeof RecoverPasswordRoute
   '/reset-password': typeof ResetPasswordRoute
   '/admin': typeof LayoutAdminRoute
+  '/dogs': typeof LayoutDogsRoute
+  '/owners': typeof LayoutOwnersRoute
+  '/sessions': typeof LayoutSessionsRoute
   '/settings': typeof LayoutSettingsRoute
 }
 export interface FileRoutesByTo {
@@ -65,6 +86,9 @@ export interface FileRoutesByTo {
   '/recover-password': typeof RecoverPasswordRoute
   '/reset-password': typeof ResetPasswordRoute
   '/admin': typeof LayoutAdminRoute
+  '/dogs': typeof LayoutDogsRoute
+  '/owners': typeof LayoutOwnersRoute
+  '/sessions': typeof LayoutSessionsRoute
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
 }
@@ -75,6 +99,9 @@ export interface FileRoutesById {
   '/recover-password': typeof RecoverPasswordRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_layout/admin': typeof LayoutAdminRoute
+  '/_layout/dogs': typeof LayoutDogsRoute
+  '/_layout/owners': typeof LayoutOwnersRoute
+  '/_layout/sessions': typeof LayoutSessionsRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
 }
@@ -86,6 +113,9 @@ export interface FileRouteTypes {
     | '/recover-password'
     | '/reset-password'
     | '/admin'
+    | '/dogs'
+    | '/owners'
+    | '/sessions'
     | '/settings'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -93,6 +123,9 @@ export interface FileRouteTypes {
     | '/recover-password'
     | '/reset-password'
     | '/admin'
+    | '/dogs'
+    | '/owners'
+    | '/sessions'
     | '/settings'
     | '/'
   id:
@@ -102,6 +135,9 @@ export interface FileRouteTypes {
     | '/recover-password'
     | '/reset-password'
     | '/_layout/admin'
+    | '/_layout/dogs'
+    | '/_layout/owners'
+    | '/_layout/sessions'
     | '/_layout/settings'
     | '/_layout/'
   fileRoutesById: FileRoutesById
@@ -157,6 +193,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/dogs': {
+      id: '/_layout/dogs'
+      path: '/dogs'
+      fullPath: '/dogs'
+      preLoaderRoute: typeof LayoutDogsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/owners': {
+      id: '/_layout/owners'
+      path: '/owners'
+      fullPath: '/owners'
+      preLoaderRoute: typeof LayoutOwnersRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/sessions': {
+      id: '/_layout/sessions'
+      path: '/sessions'
+      fullPath: '/sessions'
+      preLoaderRoute: typeof LayoutSessionsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/settings': {
       id: '/_layout/settings'
       path: '/settings'
@@ -169,12 +226,18 @@ declare module '@tanstack/react-router' {
 
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
+  LayoutDogsRoute: typeof LayoutDogsRoute
+  LayoutOwnersRoute: typeof LayoutOwnersRoute
+  LayoutSessionsRoute: typeof LayoutSessionsRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
+  LayoutDogsRoute: LayoutDogsRoute,
+  LayoutOwnersRoute: LayoutOwnersRoute,
+  LayoutSessionsRoute: LayoutSessionsRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
 }

@@ -1,11 +1,23 @@
 from fastapi import APIRouter
 
-from app.api.routes import admin, login, private, users, utils
+from app.api.routes import (
+    admin,
+    dogs,
+    login,
+    owners,
+    private,
+    questionnaire_sessions,
+    users,
+    utils,
+)
 from app.core.config import settings
 
 api_router = APIRouter()
 api_router.include_router(login.router)
 api_router.include_router(users.router)
+api_router.include_router(dogs.router)
+api_router.include_router(owners.router)
+api_router.include_router(questionnaire_sessions.router)
 api_router.include_router(utils.router)
 api_router.include_router(admin.router)
 

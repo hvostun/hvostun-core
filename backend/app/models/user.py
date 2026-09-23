@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from pydantic import EmailStr
-from sqlalchemy import Column, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, String, Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from app.models.base import TimestampMixin
@@ -57,6 +57,7 @@ class User(UserBase, TimestampMixin, table=True):
 class UserPublic(UserBase):
     id: uuid.UUID
     created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class UsersPublic(SQLModel):
@@ -92,6 +93,6 @@ class Consent(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="users.id", ondelete="CASCADE")
-    type: str
-    accepted_at: datetime
-    version: str
+    type: str = Field(sa_type=Text)
+    accepted_at: datetime = Field(sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    version: str = Field(sa_type=Text)
