@@ -5,6 +5,7 @@ from sqlmodel import col, func, select
 
 from app.api.deps import SessionDep, get_current_active_superuser
 from app.models import Recommendation, RecommendationPublic, RecommendationsPublic
+from app.pagination import execute_page, normalize_offset_limit
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
@@ -33,12 +34,14 @@ def read_recommendations(
         count_statement = count_statement.where(*filters)
         statement = statement.where(*filters)
 
-    count = session.exec(count_statement).one()
-    recommendations = session.exec(
-        statement.order_by(col(Recommendation.slug), col(Recommendation.created_at))
-        .offset(skip)
-        .limit(limit)
-    ).all()
+    skip, limit = normalize_offset_limit(skip, limit)
+    recommendations, count = execute_page(
+        session,
+        count_statement,
+        statement.order_by(col(Recommendation.slug), col(Recommendation.created_at)),
+        offset=skip,
+        limit=limit,
+    )
     return RecommendationsPublic(
         data=[RecommendationPublic.model_validate(item) for item in recommendations],
         count=count,

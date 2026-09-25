@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, event, func
+from sqlalchemy import DateTime, event, func, text
 from sqlalchemy.orm import Session as SASession
 from sqlmodel import Field, SQLModel
+
+UUID_PK_KWARGS = {"server_default": text("uuid_generate_v4()")}
 
 
 def get_datetime_utc() -> datetime:
@@ -30,7 +32,9 @@ class TimestampMixin(CreatedAtMixin):
 
 
 @event.listens_for(SASession, "before_flush")
-def _set_timestamps(session: SASession, flush_context: object, instances: object) -> None:
+def _set_timestamps(
+    session: SASession, _flush_context: object, _instances: object
+) -> None:
     now = get_datetime_utc()
     for obj in session.dirty:
         if isinstance(obj, TimestampMixin) and session.is_modified(

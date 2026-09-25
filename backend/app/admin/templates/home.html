@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Hvostun Admin{% endblock %}
+{% block content %}
+<h1 class="h3">{{ user.full_name or user.email }}</h1>
+<p class="text-muted">Админка Hvostun. Списки слева в меню.</p>
+{% endblock %}

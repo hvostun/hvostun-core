@@ -1,11 +1,4 @@
 {
   "name": "hvostun-core",
-  "private": true,
-  "workspaces": [
-    "admin"
-  ],
-  "scripts": {
-    "dev": "bun run --filter admin dev",
-    "lint": "bun run --filter admin lint"
-  }
+  "private": true
 }

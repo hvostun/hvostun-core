@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ survey.name }} — Hvostun Admin{% endblock %}
+{% block content %}
+<p><a href="/surveys">← Анкеты</a></p>
+<h1 class="h3">{{ survey.name }}</h1>
+<p class="text-muted">
+  {{ survey.slug }} · версия {{ version.version_num }}
+  {% if version.description %} — {{ version.description }}{% elif survey.description %} — {{ survey.description }}{% endif %}
+</p>
+<table class="table table-sm table-striped">
+  <thead>
+    <tr>
+      <th>order</th>
+      <th>text</th>
+      <th>scale_name</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in questions %}
+    <tr>
+      <td>{{ item.order_number }}</td>
+      <td>{{ item.text }}</td>
+      <td>{{ item.scale_name }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

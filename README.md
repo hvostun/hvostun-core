@@ -1,28 +1,30 @@
 # hvostun-core
 
-Реализация продукта **Hvostun**: backend, admin UI, пользовательский `web` и ML-пакет в одном репозитории.
+Реализация продукта **Hvostun**. Текущий runtime — backend и HTML-админка.
+`frontend/` хранится только как заготовка будущего пользовательского интерфейса.
 
 ## Архитектура
 
-**Modular monolith:** один backend, один `docker compose up`. Admin UI — `admin/`; фронт сервиса для пользователей — `web/` (пока нет).
+**Modular monolith:** один backend, один `docker compose up`. Админка — Jinja +
+Bootstrap в `backend/app/admin`. `frontend/` не собирается, не запускается, не
+деплоится и не имеет активной интеграции с backend. Его API-клиент и маршруты
+могут не соответствовать текущему `/api/v1`.
 
-Bootstrap: [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template).
+Bootstrap проекта: [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template).
 
 ```text
 hvostun-core/
   compose.yml
   backend/
     app/
-      api/routes/
-      admin/             # domain admin
+      api/routes/        # JSON /api/v1; HTML-админка его не использует
+      admin/             # Jinja + Bootstrap
       ml-plan/           # ingest, export, baseline K3
       llm-chat/          # LLM client, RAG, prompt/safety policies
       alembic/
     notebooks/
     pyproject.toml
-  admin/                 # React admin UI
-    src/
-  web/                   # user-facing service UI (planned)
+  frontend/              # неактивная React-заготовка будущего user UI
   data/
     parquet/             # open subsets / K3 export
     kb/                  # curated knowledge base для RAG (llm-chat)
@@ -31,9 +33,8 @@ hvostun-core/
 | Сервис Compose | Роль |
 |----------------|------|
 | `db` | PostgreSQL 18 — OLTP `hvostun_{FASTAPI_ENV}` (local: `hvostun_development`) |
-| `backend` | FastAPI admin-контур (пустышка: auth шаблона + `GET /api/v1/admin/`) |
-| admin UI | React build из `admin/`, обслуживается backend (не отдельный prod-контейнер) |
-| `db-ui` / `proxy` / `mailpit` | вспомогательные local-сервисы; `db-ui` — образ Adminer, не контур `admin` |
+| `backend` | FastAPI: HTML-админка + JSON `/api/v1` |
+| `db-ui` / `proxy` / `mailpit` | вспомогательные local-сервисы; `db-ui` — образ Adminer, не продуктовая админка |
 | `redis` / `jupyter` / `worker` | позже, в Compose сейчас нет |
 
 Проверка стека: скопировать `.env.example` → `.env`, затем `docker compose up -d db backend`.
@@ -43,9 +44,10 @@ hvostun-core/
 | Слой | Выбор |
 |------|--------|
 | Backend | FastAPI, Pydantic, SQLModel/SQLAlchemy, Alembic |
-| Auth | JWT из шаблона; `is_superuser` |
-| API | OpenAPI + generated admin client |
-| UI | React, TypeScript, Tailwind, shadcn/ui |
-| Admin | dashboard шаблона; spike FastAdmin для domain CRUD |
+| Auth | JWT: cookie для HTML-админки, Bearer для `/api/v1`; `is_superuser` |
+| API | OpenAPI `/api/v1`; активного frontend-клиента сейчас нет |
+| Admin UI | Jinja2 + Bootstrap в `backend/app/admin` |
+| Web UI | Не реализован; `frontend/` — неподключённая заготовка |
+| DB UI | Adminer (`db-ui`), только local |
 | ML | scikit-learn tabular (`RandomForest` + `LogisticRegression`); lockfile `uv.lock` |
-| Deploy | Compose: `backend` + `db` |
+| Deploy | `compose.yml` + `compose.deploy.yml`: HTTPS `proxy` + `backend` + `db`; `db-ui` отключён |

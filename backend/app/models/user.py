@@ -1,11 +1,17 @@
 import uuid
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import EmailStr
-from sqlalchemy import Column, DateTime, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, DateTime, String, Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
-from app.models.base import TimestampMixin
+from app.models.base import UUID_PK_KWARGS, TimestampMixin
+
+
+class UserGroup(StrEnum):
+    ADMIN = "admin"
+    EXPERT = "expert"
 
 
 class UserBase(SQLModel):
@@ -13,7 +19,7 @@ class UserBase(SQLModel):
     is_active: bool = True
     is_superuser: bool = False
     full_name: str | None = Field(default=None, max_length=255)
-    group: str | None = Field(default=None, max_length=255)
+    group: UserGroup = Field(default=UserGroup.EXPERT, max_length=255)
     phone: str | None = Field(default=None, max_length=64)
     contact: str | None = Field(default=None, max_length=255)
 
@@ -27,7 +33,7 @@ class UserUpdate(SQLModel):
     is_active: bool | None = None
     is_superuser: bool | None = None
     full_name: str | None = Field(default=None, max_length=255)
-    group: str | None = None
+    group: UserGroup | None = None
     phone: str | None = Field(default=None, max_length=64)
     contact: str | None = Field(default=None, max_length=255)
     password: str | None = Field(default=None, min_length=8, max_length=128)
@@ -44,13 +50,25 @@ class UpdatePassword(SQLModel):
 
 
 class User(UserBase, TimestampMixin, table=True):
-    __tablename__ = "users"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
+    __tablename__ = "users"  # pyright: ignore[reportAssignmentType]
+    __table_args__ = (
+        CheckConstraint("\"group\" IN ('admin', 'expert')", name="ck_users_group"),
+    )
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_column_kwargs=UUID_PK_KWARGS,
+    )
     hashed_password: str
-    group: str | None = Field(
-        default=None,
-        sa_column=Column("group", String(255), nullable=True),
+    group: UserGroup = Field(
+        default=UserGroup.EXPERT,
+        sa_column=Column(
+            "group",
+            String(255),
+            nullable=False,
+            server_default="expert",
+        ),
     )
 
 
@@ -78,21 +96,20 @@ class TokenPayload(SQLModel):
     sub: str | None = None
 
 
-class NewPassword(SQLModel):
-    token: str
-    new_password: str = Field(min_length=8, max_length=128)
-
-
 class Consent(SQLModel, table=True):
-    __tablename__ = "consents"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
+    __tablename__ = "consents"  # pyright: ignore[reportAssignmentType]
     __table_args__ = (
         UniqueConstraint(
             "user_id", "type", "version", name="uq_consents_user_type_version"
         ),
     )
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: uuid.UUID = Field(foreign_key="users.id", ondelete="CASCADE")
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_column_kwargs=UUID_PK_KWARGS,
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", ondelete="RESTRICT")
     type: str = Field(sa_type=Text)
     accepted_at: datetime = Field(sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
     version: str = Field(sa_type=Text)

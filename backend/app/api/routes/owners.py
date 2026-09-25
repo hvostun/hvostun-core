@@ -5,6 +5,7 @@ from sqlmodel import col, func, select
 
 from app.api.deps import SessionDep, get_current_active_superuser
 from app.models import Owner, OwnerPublic, OwnersPublic
+from app.pagination import execute_page, normalize_offset_limit
 
 router = APIRouter(prefix="/owners", tags=["owners"])
 
@@ -36,10 +37,14 @@ def read_owners(
         count_statement = count_statement.where(*filters)
         statement = statement.where(*filters)
 
-    count = session.exec(count_statement).one()
-    owners = session.exec(
-        statement.order_by(col(Owner.created_at).desc()).offset(skip).limit(limit)
-    ).all()
+    skip, limit = normalize_offset_limit(skip, limit)
+    owners, count = execute_page(
+        session,
+        count_statement,
+        statement.order_by(col(Owner.created_at).desc()),
+        offset=skip,
+        limit=limit,
+    )
     return OwnersPublic(
         data=[OwnerPublic.model_validate(owner) for owner in owners],
         count=count,

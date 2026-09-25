@@ -2,7 +2,7 @@
 
 ## Local Development
 
-For local development, run PostgreSQL and Mailpit with Docker Compose, and run the FastAPI and Vite development servers locally.
+For local development, run PostgreSQL and Mailpit with Docker Compose, and run the FastAPI development server locally. The HTML admin is served by FastAPI.
 
 Copy `.env.example` to `.env` before `docker compose up`.
 
@@ -25,38 +25,23 @@ Start the FastAPI development server:
 uv run fastapi dev
 ```
 
-In another terminal, from the project root, install the admin UI dependencies and start the Vite development server:
-
-```bash
-bun install
-bun run dev
-```
-
 Now you can open these URLs:
 
-Admin UI development server: <http://localhost:5173>
+HTML admin: <http://localhost:8000>
 
-Backend API: <http://localhost:8000>
+Backend API: <http://localhost:8000/api/v1>
 
 Automatic interactive API documentation with Swagger UI: <http://localhost:8000/docs>
 
 Mailpit: <http://localhost:8025>
 
-The admin UI development server uses the backend at `http://localhost:8000`, as configured in `admin/.env`.
-
-### Admin UI Served by FastAPI
-
-Build the admin UI from the `admin` directory:
-
-```bash
-bun run build
-```
-
-The build is written to `backend/app/admin` and served by FastAPI at <http://localhost:8000>. Rebuild the admin UI after making admin changes.
+The catalog `frontend/` is an inactive React template for a future user UI. It
+is not served, built, deployed, or allowed through CORS by the backend. Its
+generated client is not kept in sync with the current API.
 
 ## Full Stack with Docker Compose
 
-To run the backend and built admin UI in Docker Compose:
+To run the backend (HTML admin + API) in Docker Compose:
 
 ```bash
 docker compose run --rm backend bash scripts/prestart.sh
@@ -65,7 +50,7 @@ docker compose watch
 
 Now you can open these URLs:
 
-Application, with the admin UI and API served by FastAPI: <http://localhost:8000>
+Application, with the HTML admin and API served by FastAPI: <http://localhost:8000>
 
 Automatic interactive API documentation with Swagger UI: <http://localhost:8000/docs>
 
@@ -90,6 +75,16 @@ The main `compose.yml` file contains the configuration shared by the whole stack
 The `compose.override.yml` file adds local development settings, such as mounting the source code as a volume. Docker Compose also loads it automatically and applies it on top of `compose.yml`.
 
 The `compose.deploy.yml` file contains the deployment-specific settings, including HTTPS and automatic certificate handling. It is explicitly combined with `compose.yml` when deploying the application.
+
+Set a public `DOMAIN`, `LETSENCRYPT_EMAIL`, and production secrets, then deploy with:
+
+```bash
+docker compose -f compose.yml -f compose.deploy.yml up -d --build
+```
+
+The deployment override forces `FASTAPI_ENV=production`, uses the
+`hvostun_production` database, runs Alembic and initial superuser setup in a
+one-shot `prestart` service, and does not start or expose `db-ui`.
 
 The backend reads local settings from the `.env` file (copy from `.env.example`). Docker Compose also uses it for variable interpolation and passes the settings each container needs.
 

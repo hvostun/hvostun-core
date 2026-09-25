@@ -6,6 +6,7 @@ from sqlmodel import col, func, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.models import Dog, DogPublic, DogsPublic
+from app.pagination import execute_page, normalize_offset_limit
 
 router = APIRouter(prefix="/dogs", tags=["dogs"])
 
@@ -22,15 +23,15 @@ def read_dogs(
     owner_id: uuid.UUID | None = None,
 ) -> Any:
     _ = current_user
-    filters = []
+    filters: list[Any] = []
     if name:
         filters.append(col(Dog.name).ilike(f"%{name}%"))
     if status:
-        filters.append(Dog.status == status)
+        filters.append(col(Dog.status) == status)
     if shelter_id:
-        filters.append(Dog.shelter_id == shelter_id)
+        filters.append(col(Dog.shelter_id) == shelter_id)
     if owner_id:
-        filters.append(Dog.owner_id == owner_id)
+        filters.append(col(Dog.owner_id) == owner_id)
 
     count_statement = select(func.count()).select_from(Dog)
     statement = select(Dog)
@@ -38,10 +39,14 @@ def read_dogs(
         count_statement = count_statement.where(*filters)
         statement = statement.where(*filters)
 
-    count = session.exec(count_statement).one()
-    dogs = session.exec(
-        statement.order_by(col(Dog.created_at).desc()).offset(skip).limit(limit)
-    ).all()
+    skip, limit = normalize_offset_limit(skip, limit)
+    dogs, count = execute_page(
+        session,
+        count_statement,
+        statement.order_by(col(Dog.created_at).desc()),
+        offset=skip,
+        limit=limit,
+    )
     return DogsPublic(
         data=[DogPublic.model_validate(dog) for dog in dogs],
         count=count,

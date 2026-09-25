@@ -4,13 +4,17 @@ from datetime import datetime
 from sqlalchemy import Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
-from app.models.base import TimestampMixin
+from app.models.base import UUID_PK_KWARGS, TimestampMixin
 
 
 class Recommendation(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "recommendations"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
+    __tablename__ = "recommendations"  # pyright: ignore[reportAssignmentType]
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_column_kwargs=UUID_PK_KWARGS,
+    )
     name: str = Field(sa_type=Text)
     slug: str = Field(unique=True, index=True, sa_type=Text)
     text: str = Field(sa_type=Text)
@@ -33,7 +37,7 @@ class RecommendationsPublic(SQLModel):
 
 
 class SessionRecommendation(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "session_recomendations"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
+    __tablename__ = "session_recomendations"  # pyright: ignore[reportAssignmentType]
     __table_args__ = (
         UniqueConstraint(
             "user_id",
@@ -43,15 +47,20 @@ class SessionRecommendation(TimestampMixin, SQLModel, table=True):
         ),
     )
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_column_kwargs=UUID_PK_KWARGS,
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", ondelete="RESTRICT", index=True)
     session_id: uuid.UUID = Field(
-        foreign_key="questionnaire_sessions.id",
-        ondelete="CASCADE",
+        foreign_key="survey_sessions.id",
+        ondelete="RESTRICT",
         index=True,
     )
     recomendation_id: uuid.UUID = Field(
         foreign_key="recommendations.id",
+        ondelete="RESTRICT",
         index=True,
     )
     chart_number: int

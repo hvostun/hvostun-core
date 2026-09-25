@@ -1,5 +1,3 @@
-import tests.envbootstrap  # noqa: F401
-
 from collections.abc import Generator
 from pathlib import Path
 
@@ -9,18 +7,12 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.url import make_url
-from sqlmodel import Session, delete
+from sqlmodel import Session
 
+import tests.envbootstrap  # noqa: F401
 from app.core.config import settings
 from app.core.db import engine, init_db
 from app.main import app
-from app.models import (
-    AnswerEvent,
-    Consent,
-    QuestionnaireSession,
-    SessionRecommendation,
-    User,
-)
 from tests.utils.user import authentication_token_from_email
 from tests.utils.utils import get_superuser_token_headers
 
@@ -54,17 +46,41 @@ _ensure_test_database()
 _upgrade_test_database()
 
 
+def _truncate_test_data(session: Session) -> None:
+    session.execute(
+        text(
+            """
+            TRUNCATE TABLE
+                session_recomendations,
+                answer_events,
+                survey_sessions,
+                surveys_questions,
+                survey_versions,
+                placement_events,
+                dog_chips,
+                consents,
+                questions,
+                scales,
+                recommendations,
+                dogs,
+                shelters,
+                owners,
+                surveys,
+                users
+            RESTART IDENTITY CASCADE
+            """
+        )
+    )
+    session.commit()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def db() -> Generator[Session]:
     with Session(engine) as session:
+        _truncate_test_data(session)
         init_db(session)
         yield session
-        session.execute(delete(SessionRecommendation))
-        session.execute(delete(AnswerEvent))
-        session.execute(delete(QuestionnaireSession))
-        session.execute(delete(Consent))
-        session.execute(delete(User))
-        session.commit()
+        _truncate_test_data(session)
 
 
 @pytest.fixture(scope="module")

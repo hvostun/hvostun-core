@@ -25,10 +25,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     # 60 minutes * 24 hours * 8 days = 8 days
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
-    FRONTEND_HOST: str = "http://localhost:5173"
-    FASTAPI_ENV: Literal["development", "test", "staging", "production"] = (
-        "development"
-    )
+    FASTAPI_ENV: Literal["development", "test", "staging", "production"] = "development"
 
     PROJECT_NAME: str
     SENTRY_DSN: HttpUrl | None = None
@@ -41,13 +38,13 @@ class Settings(BaseSettings):
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
-    def _normalize_database_url(cls, value: str | PostgresDsn, info: ValidationInfo) -> str:
+    def _normalize_database_url(
+        cls, value: str | PostgresDsn, info: ValidationInfo
+    ) -> str:
         database_url = str(value)
         for scheme in ("postgres://", "postgresql://"):
             if database_url.startswith(scheme):
-                database_url = database_url.replace(
-                    scheme, "postgresql+psycopg://", 1
-                )
+                database_url = database_url.replace(scheme, "postgresql+psycopg://", 1)
                 break
         env = info.data.get("FASTAPI_ENV", "development")
         parsed = urlparse(database_url)
@@ -67,8 +64,6 @@ class Settings(BaseSettings):
         if not self.EMAILS_FROM_NAME:
             self.EMAILS_FROM_NAME = self.PROJECT_NAME
         return self
-
-    EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 48
 
     @computed_field  # type: ignore[prop-decorator]
     @property

@@ -54,13 +54,6 @@ services:
             - .venv
         - path: ./backend/pyproject.toml
           action: rebuild
-        - path: ./admin
-          action: rebuild
-          ignore:
-            - ./admin/node_modules
-            - ./admin/dist
-            - ./admin/blob-report
-            - ./admin/test-results
     # TODO: remove once coverage is done locally
     volumes:
       - ./backend/htmlcov:/app/backend/htmlcov

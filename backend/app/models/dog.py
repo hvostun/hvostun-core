@@ -2,15 +2,16 @@ import uuid
 from datetime import date, datetime
 from enum import StrEnum
 
-from sqlalchemy import Text
+from sqlalchemy import Index, Text
 from sqlmodel import Field, SQLModel
 
-from app.models.base import CreatedAtMixin, TimestampMixin
+from app.models.base import UUID_PK_KWARGS, CreatedAtMixin, TimestampMixin
 
 
 class DogStatus(StrEnum):
     SHELTER = "shelter"
     HOME = "home"
+    BACK_SHELTER = "back_shelter"
     OVEREXPOSURE = "overexposure"
     UNKNOWN = "unknown"
 
@@ -18,14 +19,18 @@ class DogStatus(StrEnum):
 class PlacementCode(StrEnum):
     SHELTER_STARTED = "shelter_started"
     HOME_STARTED = "home_started"
+    BACK_SHELTER = "back_shelter"
     OVEREXPOSURE_STARTED = "overexposure_started"
-    UNKNOWN = "unknown"
 
 
 class Shelter(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "shelters"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
+    __tablename__ = "shelters"  # pyright: ignore[reportAssignmentType]
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_column_kwargs=UUID_PK_KWARGS,
+    )
     name: str = Field(sa_type=Text)
     description: str | None = Field(default=None, sa_type=Text)
     address: str | None = Field(default=None, sa_type=Text)
@@ -33,9 +38,13 @@ class Shelter(TimestampMixin, SQLModel, table=True):
 
 
 class Owner(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "owners"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
+    __tablename__ = "owners"  # pyright: ignore[reportAssignmentType]
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_column_kwargs=UUID_PK_KWARGS,
+    )
     name: str = Field(sa_type=Text)
     email: str | None = Field(default=None, max_length=255, unique=True)
     phone: str | None = Field(default=None, max_length=64)
@@ -43,41 +52,67 @@ class Owner(TimestampMixin, SQLModel, table=True):
 
 
 class Dog(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "dogs"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
+    __tablename__ = "dogs"  # pyright: ignore[reportAssignmentType]
+    __table_args__ = (
+        Index("ix_dogs_shelter_id", "shelter_id"),
+        Index("ix_dogs_owner_id", "owner_id"),
+        Index("ix_dogs_assigned_volunteer_id", "assigned_volunteer_id"),
+        Index("ix_dogs_created_by_id", "created_by_id"),
+    )
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_column_kwargs=UUID_PK_KWARGS,
+    )
     name: str = Field(sa_type=Text)
     sex: str | None = Field(default=None, sa_type=Text)
     neutered: bool | None = None
-    status: str = Field(default=DogStatus.UNKNOWN, sa_type=Text)
+    status: DogStatus = Field(default=DogStatus.UNKNOWN, sa_type=Text)
     description: str | None = Field(default=None, sa_type=Text)
-    shelter_id: uuid.UUID | None = Field(default=None, foreign_key="shelters.id")
-    assigned_volunteer_id: uuid.UUID | None = Field(
-        default=None, foreign_key="users.id"
+    shelter_id: uuid.UUID | None = Field(
+        default=None, foreign_key="shelters.id", ondelete="RESTRICT"
     )
-    owner_id: uuid.UUID | None = Field(default=None, foreign_key="owners.id")
+    assigned_volunteer_id: uuid.UUID | None = Field(
+        default=None, foreign_key="users.id", ondelete="RESTRICT"
+    )
+    owner_id: uuid.UUID | None = Field(
+        default=None, foreign_key="owners.id", ondelete="RESTRICT"
+    )
     birthday: date | None = None
     adopted_at: date | None = None
     breed: str | None = Field(default=None, sa_type=Text)
     mixed: bool | None = None
-    created_by_id: uuid.UUID | None = Field(default=None, foreign_key="users.id")
+    created_by_id: uuid.UUID | None = Field(
+        default=None, foreign_key="users.id", ondelete="RESTRICT"
+    )
 
 
 class DogChip(CreatedAtMixin, SQLModel, table=True):
-    __tablename__ = "dog_chips"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
+    __tablename__ = "dog_chips"  # pyright: ignore[reportAssignmentType]
+    __table_args__ = (Index("ix_dog_chips_dog_id", "dog_id"),)
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    dog_id: uuid.UUID = Field(foreign_key="dogs.id", ondelete="CASCADE")
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_column_kwargs=UUID_PK_KWARGS,
+    )
+    dog_id: uuid.UUID = Field(foreign_key="dogs.id", ondelete="RESTRICT")
     system: str = Field(sa_type=Text)
     code: str = Field(sa_type=Text)
 
 
 class PlacementEvent(CreatedAtMixin, SQLModel, table=True):
-    __tablename__ = "placement_events"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
+    __tablename__ = "placement_events"  # pyright: ignore[reportAssignmentType]
+    __table_args__ = (Index("ix_placement_events_dog_id", "dog_id"),)
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    dog_id: uuid.UUID = Field(foreign_key="dogs.id", ondelete="CASCADE")
-    code: str = Field(sa_type=Text)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_column_kwargs=UUID_PK_KWARGS,
+    )
+    dog_id: uuid.UUID = Field(foreign_key="dogs.id", ondelete="RESTRICT")
+    code: PlacementCode = Field(sa_type=Text)
 
 
 class OwnerPublic(SQLModel):
@@ -100,7 +135,7 @@ class DogPublic(SQLModel):
     name: str
     sex: str | None = None
     neutered: bool | None = None
-    status: str
+    status: DogStatus
     description: str | None = None
     shelter_id: uuid.UUID | None = None
     assigned_volunteer_id: uuid.UUID | None = None

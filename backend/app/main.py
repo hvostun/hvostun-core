@@ -1,14 +1,10 @@
-from pathlib import Path
-
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
-from starlette.middleware.cors import CORSMiddleware
 
+from app.admin.router import router as admin_router
 from app.api.main import api_router
 from app.core.config import settings
-
-ADMIN_UI_DIR = Path(__file__).parent / "admin"
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
@@ -24,13 +20,5 @@ app = FastAPI(
     generate_unique_id_function=custom_generate_unique_id,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[settings.FRONTEND_HOST],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 app.include_router(api_router, prefix=settings.API_V1_STR)
-app.frontend("/", directory=ADMIN_UI_DIR)
+app.include_router(admin_router)

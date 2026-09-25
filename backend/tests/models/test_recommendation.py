@@ -1,15 +1,16 @@
 import pytest
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app import crud
 from app.core.config import settings
 from app.models import (
     Dog,
-    Questionnaire,
-    QuestionnaireSession,
     Recommendation,
     SessionRecommendation,
+    Survey,
+    SurveySession,
+    SurveyVersion,
 )
 from tests.utils.utils import random_lower_string
 
@@ -30,17 +31,12 @@ def test_recommendation_persists_guid_and_text(db: Session) -> None:
     assert row.created_at is not None
     assert row.updated_at is not None
 
-    db.delete(row)
-    db.commit()
-
 
 def _session_recommendation_deps(db: Session) -> tuple:
     user = crud.get_user_by_email(session=db, email=settings.FIRST_SUPERUSER)
     assert user
     dog = Dog(name="Session Rec Dog")
-    questionnaire = Questionnaire(
-        name="C-BARQ", slug=f"session-rec-{random_lower_string()}"
-    )
+    questionnaire = Survey(name="C-BARQ", slug=f"session-rec-{random_lower_string()}")
     recommendation = Recommendation(
         name="Прогулка",
         slug=f"leash-{random_lower_string()}",
@@ -53,11 +49,19 @@ def _session_recommendation_deps(db: Session) -> tuple:
     db.refresh(dog)
     db.refresh(questionnaire)
     db.refresh(recommendation)
+    version = SurveyVersion(
+        survey_id=questionnaire.id,
+        version_num=1,
+        description=questionnaire.description,
+    )
+    db.add(version)
+    db.commit()
+    db.refresh(version)
 
-    session_row = QuestionnaireSession(
-        user_id=user.id,
+    session_row = SurveySession(
+        owner_id=user.id,
         dog_id=dog.id,
-        questionnaire_id=questionnaire.id,
+        survey_version_id=version.id,
         status="draft",
     )
     db.add(session_row)
@@ -92,15 +96,6 @@ def test_session_recommendation_persists_fields(db: Session) -> None:
     assert row.created_at is not None
     assert row.updated_at is not None
 
-    db.delete(row)
-    db.commit()
-    db.delete(session_row)
-    db.commit()
-    db.delete(recommendation)
-    db.delete(questionnaire)
-    db.delete(dog)
-    db.commit()
-
 
 def test_session_recommendation_unique_user_session_recomendation(
     db: Session,
@@ -132,17 +127,3 @@ def test_session_recommendation_unique_user_session_recomendation(
     with pytest.raises(IntegrityError):
         db.commit()
     db.rollback()
-
-    for item in db.exec(
-        select(SessionRecommendation).where(
-            SessionRecommendation.session_id == session_row.id
-        )
-    ).all():
-        db.delete(item)
-    db.commit()
-    db.delete(session_row)
-    db.commit()
-    db.delete(recommendation)
-    db.delete(questionnaire)
-    db.delete(dog)
-    db.commit()

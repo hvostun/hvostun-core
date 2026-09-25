@@ -10,7 +10,6 @@ from app.api.deps import (
     SessionDep,
     get_current_active_superuser,
 )
-from app.core.config import settings
 from app.core.security import get_password_hash, verify_password
 from app.models import (
     Message,
@@ -22,7 +21,7 @@ from app.models import (
     UserUpdate,
     UserUpdateMe,
 )
-from app.utils import generate_new_account_email, send_email
+from app.pagination import execute_page, normalize_offset_limit
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -45,15 +44,15 @@ def read_users(
     Retrieve users.
     """
 
-    filters = []
+    filters: list[Any] = []
     if email:
         filters.append(col(User.email).ilike(f"%{email}%"))
     if full_name:
         filters.append(col(User.full_name).ilike(f"%{full_name}%"))
     if is_superuser is not None:
-        filters.append(User.is_superuser == is_superuser)
+        filters.append(col(User.is_superuser) == is_superuser)
     if is_active is not None:
-        filters.append(User.is_active == is_active)
+        filters.append(col(User.is_active) == is_active)
 
     count_statement = select(func.count()).select_from(User)
     statement = select(User)
@@ -61,10 +60,14 @@ def read_users(
         count_statement = count_statement.where(*filters)
         statement = statement.where(*filters)
 
-    count = session.exec(count_statement).one()
-    users = session.exec(
-        statement.order_by(col(User.created_at).desc()).offset(skip).limit(limit)
-    ).all()
+    skip, limit = normalize_offset_limit(skip, limit)
+    users, count = execute_page(
+        session,
+        count_statement,
+        statement.order_by(col(User.created_at).desc()),
+        offset=skip,
+        limit=limit,
+    )
 
     users_public = [UserPublic.model_validate(user) for user in users]
     return UsersPublic(data=users_public, count=count)
@@ -85,15 +88,6 @@ def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
         )
 
     user = crud.create_user(session=session, user_create=user_in)
-    if settings.emails_enabled and user_in.email:
-        email_data = generate_new_account_email(
-            email_to=user_in.email, username=user_in.email, password=user_in.password
-        )
-        send_email(
-            email_to=user_in.email,
-            subject=email_data.subject,
-            html_content=email_data.html_content,
-        )
     return user
 
 

@@ -23,13 +23,13 @@ $ uv run bash scripts/prestart.sh
 $ uv run fastapi dev
 ```
 
-The API is available at `http://localhost:8000`, with automatic interactive docs at `http://localhost:8000/docs`.
+The HTML admin is at `http://localhost:8000`. The JSON API is at `http://localhost:8000/api/v1`, with automatic interactive docs at `http://localhost:8000/docs`.
 
 ## General Workflow
 
 Run backend commands from `./backend/` with `uv run`. Make sure your editor uses the Python interpreter at `.venv/bin/python` in the project root.
 
-Modify or add SQLModel models for data and SQL tables in `./backend/app/models.py`, API endpoints in `./backend/app/api/`, CRUD (Create, Read, Update, Delete) utils in `./backend/app/crud.py`.
+Modify or add SQLModel models in `./backend/app/models/`, JSON API endpoints in `./backend/app/api/` (for future `web/`), HTML admin pages in `./backend/app/admin/`, CRUD utils in `./backend/app/crud.py`.
 
 ## VS Code
 
@@ -39,7 +39,7 @@ The setup is also already configured so you can run the tests through the VS Cod
 
 ## Full Stack with Docker Compose
 
-To run the backend and built admin UI in Docker Compose:
+To run the backend and HTML admin in Docker Compose:
 
 ```console
 $ docker compose run --rm backend bash scripts/prestart.sh

@@ -12,11 +12,11 @@ repos:
       - id: end-of-file-fixer
         exclude: |
             (?x)^(
-                admin/src/client/.*|
+                frontend/src/client/.*|
                 backend/app/email-templates/.*
             )$
       - id: trailing-whitespace
-        exclude: ^admin/src/client/.*
+        exclude: ^frontend/src/client/.*
   - repo: https://github.com/crate-ci/typos
     rev: 8a48f81b6c64dcfea44b3633223084c4be58ac5f # frozen: v1.49.0
     hooks:
@@ -24,13 +24,6 @@ repos:
         args: [--force-exclude]
   - repo: local
     hooks:
-      - id: local-biome-check
-        name: biome check
-        entry: npm run lint
-        language: system
-        types: [text]
-        files: ^admin/
-
       - id: local-ruff-check
         name: ruff check
         entry: uv run ruff check --force-exclude --fix --exit-non-zero-on-fix
@@ -58,10 +51,3 @@ repos:
         require_serial: true
         language: unsupported
         pass_filenames: false
-
-      - id: generate-admin-sdk
-        name: Generate Admin SDK
-        entry: bash ./scripts/generate-client.sh
-        pass_filenames: false
-        language: unsupported
-        files: ^backend/app/.*\.py$|^backend/pyproject\.toml$|^uv\.lock$|^admin/openapi-ts\.config\.ts$|^scripts/generate-client\.sh$

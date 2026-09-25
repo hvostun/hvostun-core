@@ -47,5 +47,6 @@ def test_created_at_mixin_has_no_updated_at(db: Session) -> None:
     assert "updated_at" not in DogChip.__table__.c
 
     db.delete(chip)
+    db.commit()
     db.delete(dog)
     db.commit()
