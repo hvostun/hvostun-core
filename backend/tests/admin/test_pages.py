@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
+from app import crud
 from app.admin.deps import COOKIE_NAME
 from app.core.config import settings
 from app.models import (
@@ -17,6 +18,8 @@ from app.models import (
     SurveySession,
     SurveyVersion,
     User,
+    UserCreate,
+    UserGroup,
 )
 from tests.utils.utils import random_lower_string
 
@@ -385,6 +388,92 @@ def test_session_recommendation_rejects_duplicate(
     )
     assert response.status_code == 400
     assert "уже добавлена" in response.text
+
+
+def _login_admin(client: TestClient, db: Session) -> User:
+    password = f"Adm1n-{random_lower_string()[:8]}"
+    user = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"admin-{random_lower_string()}@example.com",
+            password=password,
+            group=UserGroup.ADMIN,
+        ),
+    )
+    client.post("/login", data={"email": user.email, "password": password})
+    return user
+
+
+def test_scales_page_visible_to_logged_in_user(client: TestClient, db: Session) -> None:
+    scale = Scale(
+        name="Частота лая",
+        type="integer",
+        config={"min_value": 0, "max_value": 4},
+    )
+    db.add(scale)
+    db.commit()
+    db.refresh(scale)
+    _login_superuser(client)
+    page = client.get("/scales")
+    assert page.status_code == 200
+    assert "Шкалы" in page.text
+    assert "Частота лая" in page.text
+    detail = client.get(f"/scales/{scale.id}")
+    assert detail.status_code == 200
+    assert "Редактирование доступно группе admin." in detail.text
+    assert "Сохранить" not in detail.text
+
+
+def test_scale_update_forbidden_for_expert(client: TestClient, db: Session) -> None:
+    scale = Scale(
+        name="Expert scale",
+        type="integer",
+        config={"min_value": 0, "max_value": 4},
+    )
+    db.add(scale)
+    db.commit()
+    db.refresh(scale)
+    _login_superuser(client)
+    response = client.post(
+        f"/scales/{scale.id}",
+        data={
+            "name": "Changed",
+            "type": "integer",
+            "description": "",
+            "config": "",
+        },
+    )
+    assert response.status_code == 403
+
+
+def test_scale_update_allowed_for_admin(client: TestClient, db: Session) -> None:
+    scale = Scale(
+        name="Admin scale",
+        type="integer",
+        config={"min_value": 0, "max_value": 4},
+    )
+    db.add(scale)
+    db.commit()
+    db.refresh(scale)
+    _login_admin(client, db)
+    page = client.get(f"/scales/{scale.id}")
+    assert page.status_code == 200
+    assert "Сохранить" in page.text
+    response = client.post(
+        f"/scales/{scale.id}",
+        data={
+            "name": "Updated scale",
+            "type": "integer",
+            "description": "после правки",
+            "config": '{"min_value": 0, "max_value": 5}',
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    db.refresh(scale)
+    assert scale.name == "Updated scale"
+    assert scale.description == "после правки"
+    assert scale.config == {"min_value": 0, "max_value": 5}
 
 
 def test_json_api_is_gone(client: TestClient) -> None:

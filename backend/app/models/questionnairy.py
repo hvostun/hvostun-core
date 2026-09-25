@@ -30,6 +30,17 @@ class ScaleType(StrEnum):
     DATE = "date"
 
 
+class QuestionType(StrEnum):
+    EXCITABILITY = "Excitability"
+    AGGRESSION = "Aggression"
+    FEAR_ANXIETY = "Fear_Anxiety"
+    SEPARATION = "Separation"
+    ATTACHMENT = "Attachment"
+    TRAINING = "Training"
+    MISCELLANEOUS = "Miscellaneous"
+    UNKNOWN = "Unknown"
+
+
 class ScaleConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -174,14 +185,26 @@ class SurveyQuestion(CreatedAtMixin, SQLModel, table=True):
 
 class Question(TimestampMixin, SQLModel, table=True):
     __tablename__ = "questions"  # pyright: ignore[reportAssignmentType]
-    __table_args__ = (Index("ix_questions_scale_id", "scale_id"),)
+    __table_args__ = (
+        Index("ix_questions_scale_id", "scale_id"),
+        CheckConstraint(
+            "type IN ("
+            "'Excitability', 'Aggression', 'Fear_Anxiety', 'Separation', "
+            "'Attachment', 'Training', 'Miscellaneous', 'Unknown'"
+            ")",
+            name="ck_questions_type",
+        ),
+    )
 
     id: uuid.UUID = Field(
         default_factory=uuid.uuid4,
         primary_key=True,
         sa_column_kwargs=UUID_PK_KWARGS,
     )
-    global_id: uuid.UUID = Field(default_factory=uuid.uuid4, unique=True, index=True)
+    type: QuestionType = Field(
+        default=QuestionType.UNKNOWN,
+        sa_column=Column(Text, nullable=False, server_default="Unknown"),
+    )
     text: str = Field(sa_type=Text)
     scale_id: uuid.UUID = Field(foreign_key="scales.id", ondelete="RESTRICT")
 
@@ -189,7 +212,7 @@ class Question(TimestampMixin, SQLModel, table=True):
 class QuestionPublic(SQLModel):
     id: uuid.UUID
     survey_version_id: uuid.UUID
-    global_id: uuid.UUID
+    type: QuestionType
     order_number: int
     text: str
     scale_id: uuid.UUID

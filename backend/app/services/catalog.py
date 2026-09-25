@@ -3,11 +3,45 @@ from collections.abc import Sequence
 
 from sqlmodel import Session, col, func, select
 
-from app.models import Question, Scale, Survey, SurveyQuestion, SurveyVersion
+from app.models import (
+    Question,
+    Scale,
+    ScaleType,
+    Survey,
+    SurveyQuestion,
+    SurveyVersion,
+)
 
 
 class CatalogNotFoundError(LookupError):
     pass
+
+
+def get_scale(session: Session, scale_id: uuid.UUID) -> Scale:
+    scale = session.get(Scale, scale_id)
+    if scale is None:
+        raise CatalogNotFoundError("Scale not found")
+    return scale
+
+
+def update_scale(
+    session: Session,
+    scale_id: uuid.UUID,
+    *,
+    name: str,
+    description: str | None,
+    type: ScaleType,
+    config: dict[str, object] | None,
+) -> Scale:
+    scale = get_scale(session, scale_id)
+    scale.name = name
+    scale.description = description or None
+    scale.type = type
+    scale.config = config
+    session.add(scale)
+    session.commit()
+    session.refresh(scale)
+    return scale
 
 
 def get_survey(session: Session, survey_id: uuid.UUID) -> Survey:
@@ -57,7 +91,7 @@ def get_version_questions(
         .where(SurveyQuestion.survey_version_id == survey_version_id)
         .where(SurveyQuestion.question_id == Question.id)
         .where(Question.scale_id == Scale.id)
-        .order_by(col(SurveyQuestion.order_num), col(Question.global_id))
+        .order_by(col(SurveyQuestion.order_num), col(Question.id))
     ).all()
     return list(rows)
 

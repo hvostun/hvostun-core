@@ -150,7 +150,7 @@ def get_session_answers(
         .where(SurveyQuestion.survey_version_id == session_row.survey_version_id)
         .where(SurveyQuestion.question_id == Question.id)
         .where(Question.scale_id == Scale.id)
-        .order_by(col(SurveyQuestion.order_num), col(Question.global_id))
+        .order_by(col(SurveyQuestion.order_num), col(Question.id))
     ).all()
     events = session.exec(
         select(AnswerEvent)

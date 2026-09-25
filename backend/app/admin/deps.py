@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, Request, status
 
 from app.core import security
 from app.core.deps import SessionDep as SessionDep
-from app.models import User
+from app.models import User, UserGroup
 
 COOKIE_NAME = "admin_access_token"
 
@@ -40,6 +40,19 @@ def get_current_user(request: Request, session: SessionDep) -> User:
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def is_admin(user: User) -> bool:
+    return user.group == UserGroup.ADMIN
+
+
+def get_current_admin(current_user: CurrentUser) -> User:
+    if not is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return current_user
+
+
+AdminUser = Annotated[User, Depends(get_current_admin)]
 
 
 def get_current_superuser(current_user: CurrentUser) -> User:

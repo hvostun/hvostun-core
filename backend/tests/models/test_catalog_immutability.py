@@ -98,25 +98,35 @@ def _session_with_answer(
     return version, question, row, event
 
 
-@pytest.mark.parametrize("entity_name", ["version", "question", "scale"])
+@pytest.mark.parametrize("entity_name", ["version", "question"])
 def test_catalog_rows_are_immutable(db: Session, entity_name: str) -> None:
-    _user, _dog, _survey, version, scale, question, _link = _catalog(db)
+    _user, _dog, _survey, version, _scale, question, _link = _catalog(db)
     entity = {
         "version": version,
         "question": question,
-        "scale": scale,
     }[entity_name]
     if entity_name == "version":
         version.description = "changed"
-    elif entity_name == "question":
-        question.text = "changed"
     else:
-        scale.name = "changed"
+        question.text = "changed"
     with pytest.raises(CatalogImmutableError):
         db.commit()
     db.rollback()
 
     db.delete(entity)
+    with pytest.raises(CatalogImmutableError):
+        db.commit()
+    db.rollback()
+
+
+def test_scale_can_be_updated_but_not_deleted(db: Session) -> None:
+    _user, _dog, _survey, _version, scale, _question, _link = _catalog(db)
+    scale.name = "changed scale"
+    db.commit()
+    db.refresh(scale)
+    assert scale.name == "changed scale"
+
+    db.delete(scale)
     with pytest.raises(CatalogImmutableError):
         db.commit()
     db.rollback()
@@ -264,6 +274,7 @@ def test_scale_config_validation(
         (Scale, "type", "invalid"),
         (PlacementEvent, "code", "unknown"),
         (User, "group", "invalid"),
+        (Question, "type", "invalid"),
     ],
 )
 def test_domain_values_reject_invalid_assignments(
@@ -282,6 +293,15 @@ def test_domain_values_reject_invalid_assignments(
             type="integer",
             config={"min_value": 0, "max_value": 1},
         )
+    elif model is Question:
+        scale = Scale(
+            name="Question scale",
+            type="integer",
+            config={"min_value": 0, "max_value": 1},
+        )
+        db.add(scale)
+        db.commit()
+        obj = Question(text="Invalid type", scale_id=scale.id)
     elif model is PlacementEvent:
         dog = Dog(name="Placement dog")
         db.add(dog)
