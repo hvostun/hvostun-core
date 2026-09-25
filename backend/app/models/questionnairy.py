@@ -267,6 +267,20 @@ class SessionAnswersPublic(SQLModel):
     count: int
 
 
+class AnswerEventPublic(SQLModel):
+    id: uuid.UUID
+    surveys_session_id: uuid.UUID
+    survey_version_id: uuid.UUID
+    question_id: uuid.UUID
+    value: Any | None = None
+    created_at: datetime
+
+
+class AnswerEventsPublic(SQLModel):
+    data: list[AnswerEventPublic]
+    count: int
+
+
 class AnswerEvent(CreatedAtMixin, SQLModel, table=True):
     __tablename__ = "answer_events"  # pyright: ignore[reportAssignmentType]
     __table_args__ = (

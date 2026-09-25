@@ -16,6 +16,8 @@ from app.models.dog import (
 )
 from app.models.questionnairy import (
     AnswerEvent,
+    AnswerEventPublic,
+    AnswerEventsPublic,
     AnswerValue,
     Question,
     QuestionPublic,
@@ -64,6 +66,8 @@ from app.models.user import (
 
 __all__ = [
     "AnswerEvent",
+    "AnswerEventPublic",
+    "AnswerEventsPublic",
     "AnswerValue",
     "Consent",
     "CreatedAtMixin",

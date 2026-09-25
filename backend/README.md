@@ -23,13 +23,13 @@ $ uv run bash scripts/prestart.sh
 $ uv run fastapi dev
 ```
 
-The HTML admin is at `http://localhost:8000`. The JSON API is at `http://localhost:8000/api/v1`, with automatic interactive docs at `http://localhost:8000/docs`.
+The HTML admin is at `http://localhost:8000`. There is no JSON `/api/v1`; liveness is `http://localhost:8000/health`.
 
 ## General Workflow
 
 Run backend commands from `./backend/` with `uv run`. Make sure your editor uses the Python interpreter at `.venv/bin/python` in the project root.
 
-Modify or add SQLModel models in `./backend/app/models/`, JSON API endpoints in `./backend/app/api/` (for future `web/`), HTML admin pages in `./backend/app/admin/`, CRUD utils in `./backend/app/crud.py`.
+Modify or add SQLModel models in `./backend/app/models/`, HTML admin pages in `./backend/app/admin/`, CRUD utils in `./backend/app/crud.py`.
 
 ## VS Code
 

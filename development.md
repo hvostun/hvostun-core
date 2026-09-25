@@ -29,9 +29,7 @@ Now you can open these URLs:
 
 HTML admin: <http://localhost:8000>
 
-Backend API: <http://localhost:8000/api/v1>
-
-Automatic interactive API documentation with Swagger UI: <http://localhost:8000/docs>
+Health: <http://localhost:8000/health>
 
 Mailpit: <http://localhost:8025>
 
@@ -41,7 +39,7 @@ generated client is not kept in sync with the current API.
 
 ## Full Stack with Docker Compose
 
-To run the backend (HTML admin + API) in Docker Compose:
+To run the backend (HTML admin) in Docker Compose:
 
 ```bash
 docker compose run --rm backend bash scripts/prestart.sh
@@ -50,9 +48,7 @@ docker compose watch
 
 Now you can open these URLs:
 
-Application, with the HTML admin and API served by FastAPI: <http://localhost:8000>
-
-Automatic interactive API documentation with Swagger UI: <http://localhost:8000/docs>
+Application, with the HTML admin served by FastAPI: <http://localhost:8000>
 
 db-ui - database web administration: <http://localhost:8080>
 
@@ -99,6 +95,18 @@ docker compose watch
 `.env` is not committed. Start from `.env.example`: local development defaults, passwords, and other configuration. Its hostnames use `localhost` for processes running on your machine. Docker Compose overrides hostnames such as the database and SMTP server with their Compose service names.
 
 The Postgres database name is `hvostun_{FASTAPI_ENV}` (local default: `hvostun_development`). Settings rewrites `DATABASE_URL` to that name, so `FASTAPI_ENV=test` always uses `hvostun_test`. Backend tests set `FASTAPI_ENV=test` and create/migrate `hvostun_test` on first run (`uv run pytest` from `backend/`, or `uv run bash scripts/test.sh`).
+
+Dump the local development database (catalog and PII stay out of git):
+
+```bash
+bash scripts/db_backup.sh
+```
+
+The script writes `.data/backup/hvostun_development_YYYY-MM-DD_HHMMSS.sql` and copies it to `.data/backup/hvostun_development.sql`. Restore with:
+
+```bash
+docker compose exec -T db psql -U postgres -d hvostun_development < .data/backup/hvostun_development.sql
+```
 
 Do not store deployment secrets in `.env`. Keep production secrets in your host/CI secret store.
 

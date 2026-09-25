@@ -47,7 +47,7 @@ services:
       # Define the port inside of the Docker service to use
       - traefik.http.services.db-ui.loadbalancer.server.port=8080
 
-  # Admin-контур (пустышка): тот же FastAPI, без второго HTTP-сервиса.
+  # Admin-контур: FastAPI HTML-админка, без второго HTTP-сервиса.
   backend:
     image: backend:latest
     depends_on:
@@ -68,7 +68,7 @@ services:
       SENTRY_DSN: ${SENTRY_DSN:-}
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 5

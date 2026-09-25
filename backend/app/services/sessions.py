@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.models import (
@@ -20,10 +21,17 @@ from app.models import (
     User,
 )
 
+MANUAL_CHART_NUMBER = 0
+MANUAL_WEIGHT = 1.0
+
 _LEGEND_LINE = re.compile(r"^(-?\d+)\s*(?:[-–]\s+)?(.*)$")
 
 
 class SessionNotFoundError(LookupError):
+    pass
+
+
+class SessionRecommendationError(ValueError):
     pass
 
 
@@ -93,9 +101,25 @@ def get_session(session: Session, session_id: uuid.UUID) -> SurveySession:
 def get_accessible_session(
     session: Session, session_id: uuid.UUID, current_user: User
 ) -> SurveySession:
-    # Current product policy allows every active authenticated user to read sessions.
+    # Any active authenticated user can read every session and its answers.
     _ = current_user
     return get_session(session, session_id)
+
+
+def answer_event_filters(
+    *,
+    surveys_session_id: uuid.UUID | None = None,
+    survey_version_id: uuid.UUID | None = None,
+    question_id: uuid.UUID | None = None,
+) -> list[Any]:
+    filters: list[Any] = []
+    if surveys_session_id:
+        filters.append(AnswerEvent.surveys_session_id == surveys_session_id)
+    if survey_version_id:
+        filters.append(AnswerEvent.survey_version_id == survey_version_id)
+    if question_id:
+        filters.append(AnswerEvent.question_id == question_id)
+    return filters
 
 
 def get_session_context(
@@ -173,6 +197,68 @@ def get_session_recommendations(
     )
 
 
+def list_catalog_recommendations(session: Session) -> list[Recommendation]:
+    return list(
+        session.exec(
+            select(Recommendation).order_by(
+                col(Recommendation.name),
+                col(Recommendation.slug),
+            )
+        ).all()
+    )
+
+
+def available_recommendations_for_user(
+    session: Session,
+    *,
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> list[Recommendation]:
+    assigned_ids = set(
+        session.exec(
+            select(SessionRecommendation.recomendation_id)
+            .where(SessionRecommendation.session_id == session_id)
+            .where(SessionRecommendation.user_id == user_id)
+        ).all()
+    )
+    return [
+        row
+        for row in list_catalog_recommendations(session)
+        if row.id not in assigned_ids
+    ]
+
+
+def add_session_recommendation(
+    session: Session,
+    *,
+    session_id: uuid.UUID,
+    current_user: User,
+    recomendation_id: uuid.UUID,
+    comment: str | None = None,
+) -> SessionRecommendation:
+    get_accessible_session(session, session_id, current_user)
+    catalog = session.get(Recommendation, recomendation_id)
+    if catalog is None:
+        raise SessionRecommendationError("Рекомендация не найдена")
+    text = comment.strip() if comment else None
+    row = SessionRecommendation(
+        user_id=current_user.id,
+        session_id=session_id,
+        recomendation_id=recomendation_id,
+        chart_number=MANUAL_CHART_NUMBER,
+        weight=MANUAL_WEIGHT,
+        comment=text or None,
+    )
+    session.add(row)
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise SessionRecommendationError("Эта рекомендация уже добавлена") from exc
+    session.refresh(row)
+    return row
+
+
 def group_recommendations(
     rows: list[tuple[SessionRecommendation, Recommendation]],
 ) -> list[dict[str, Any]]:
@@ -187,7 +273,7 @@ def group_recommendations(
             "comment": item.comment,
         }
         if groups and groups[-1]["user_id"] == item.user_id:
-            groups[-1]["items"].append(entry)
+            groups[-1]["recommendations"].append(entry)
         else:
-            groups.append({"user_id": item.user_id, "items": [entry]})
+            groups.append({"user_id": item.user_id, "recommendations": [entry]})
     return groups

@@ -1,1 +1,1 @@
-"""Shared application services used by JSON API and HTML admin."""
+"""Shared application services used by the HTML admin."""

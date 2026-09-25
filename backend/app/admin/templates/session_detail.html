@@ -36,7 +36,7 @@
 {% endif %}
 {% for group in rec_groups %}
 <h3 class="h6 mt-3">user_id {{ group.user_id }}</h3>
-{% for item in group.items %}
+{% for item in group.recommendations %}
 <div class="card mb-2">
   <div class="card-body">
     <strong>{{ item.recommendation_name }}</strong>
@@ -47,4 +47,35 @@
 </div>
 {% endfor %}
 {% endfor %}
+<h3 class="h6 mt-4">Добавить рекомендацию</h3>
+{% if not available_recommendations %}
+<p class="text-muted">Нет доступных рекомендаций для добавления.</p>
+{% else %}
+<form method="post" action="/sessions/{{ session_row.id }}/recommendations" class="mt-2">
+  <div class="mb-3">
+    <label class="form-label" for="recomendation_id">Рекомендация</label>
+    <select
+      class="form-select"
+      id="recomendation_id"
+      name="recomendation_id"
+      required
+    >
+      <option value="">Выберите рекомендацию</option>
+      {% for rec in available_recommendations %}
+      <option value="{{ rec.id }}">{{ rec.name }}{% if rec.slug %} · {{ rec.slug }}{% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="comment">Комментарий</label>
+    <textarea
+      class="form-control"
+      id="comment"
+      name="comment"
+      rows="3"
+    ></textarea>
+  </div>
+  <button class="btn btn-primary" type="submit">Добавить</button>
+</form>
+{% endif %}
 {% endblock %}

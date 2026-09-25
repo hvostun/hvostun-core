@@ -32,7 +32,7 @@ services:
     ports:
       - "8080:8080"
 
-  # Admin-contour stub (service name stays backend).
+  # Admin-contour (service name stays backend).
   backend:
     ports:
       - "8000:8000"

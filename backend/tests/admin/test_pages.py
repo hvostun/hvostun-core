@@ -8,7 +8,9 @@ from app.models import (
     Dog,
     Owner,
     Question,
+    Recommendation,
     Scale,
+    SessionRecommendation,
     Shelter,
     Survey,
     SurveyQuestion,
@@ -16,6 +18,7 @@ from app.models import (
     SurveyVersion,
     User,
 )
+from tests.utils.utils import random_lower_string
 
 
 def test_login_page_is_html(client: TestClient) -> None:
@@ -202,6 +205,69 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
     assert "<td>1</td>" in page.text
 
 
+def test_answer_events_page_is_visible_to_logged_in_user(
+    client: TestClient, db: Session
+) -> None:
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    assert user
+    dog = Dog(name="Answer Event Dog")
+    survey = Survey(name="Answer Event Survey", slug="answer-events-admin")
+    scale = Scale(
+        name="Тест",
+        type="integer",
+        config={"min_value": 0, "max_value": 4},
+    )
+    db.add(dog)
+    db.add(survey)
+    db.add(scale)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(survey)
+    db.refresh(scale)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    question = Question(text="Вопрос события", scale_id=scale.id)
+    db.add(version)
+    db.add(question)
+    db.commit()
+    db.refresh(version)
+    db.refresh(question)
+    db.add(
+        SurveyQuestion(
+            survey_version_id=version.id,
+            question_id=question.id,
+            order_num=1,
+        )
+    )
+    session_row = SurveySession(
+        owner_id=user.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+    event = AnswerEvent(
+        surveys_session_id=session_row.id,
+        survey_version_id=version.id,
+        question_id=question.id,
+        value={"value": 1},
+    )
+    db.add(event)
+    db.commit()
+    client.post(
+        "/login",
+        data={
+            "email": settings.FIRST_SUPERUSER,
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
+        },
+    )
+    page = client.get("/answer-events")
+    assert page.status_code == 200
+    assert "События ответов" in page.text
+    assert str(event.id) in page.text
+
+
 def test_users_page_shows_group(client: TestClient) -> None:
     client.post(
         "/login",
@@ -216,6 +282,117 @@ def test_users_page_shows_group(client: TestClient) -> None:
     assert "expert" in page.text
 
 
-def test_surveys_api_still_json(client: TestClient) -> None:
-    response = client.get(f"{settings.API_V1_STR}/surveys/")
-    assert response.status_code == 401
+def _login_superuser(client: TestClient) -> None:
+    client.post(
+        "/login",
+        data={
+            "email": settings.FIRST_SUPERUSER,
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
+        },
+    )
+
+
+def _session_with_recommendation_catalog(
+    db: Session,
+) -> tuple[SurveySession, Recommendation, User]:
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    assert user
+    dog = Dog(name="Rec Form Dog")
+    survey = Survey(name="Rec Form Survey", slug=f"rec-form-{random_lower_string()}")
+    recommendation = Recommendation(
+        name="Короткая прогулка",
+        slug=f"short-walk-{random_lower_string()}",
+        text="Выходите на 10 минут.",
+    )
+    db.add(dog)
+    db.add(survey)
+    db.add(recommendation)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(survey)
+    db.refresh(recommendation)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    session_row = SurveySession(
+        owner_id=user.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+    return session_row, recommendation, user
+
+
+def test_session_detail_can_add_recommendation(client: TestClient, db: Session) -> None:
+    session_row, recommendation, user = _session_with_recommendation_catalog(db)
+    _login_superuser(client)
+    page = client.get(f"/sessions/{session_row.id}")
+    assert page.status_code == 200
+    assert "Добавить рекомендацию" in page.text
+    assert recommendation.name in page.text
+
+    response = client.post(
+        f"/sessions/{session_row.id}/recommendations",
+        data={
+            "recomendation_id": str(recommendation.id),
+            "comment": "приоритет на первую неделю",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/sessions/{session_row.id}"
+
+    saved = db.exec(
+        select(SessionRecommendation).where(
+            SessionRecommendation.session_id == session_row.id
+        )
+    ).first()
+    assert saved is not None
+    assert saved.user_id == user.id
+    assert saved.recomendation_id == recommendation.id
+    assert saved.comment == "приоритет на первую неделю"
+
+    detail = client.get(f"/sessions/{session_row.id}")
+    assert detail.status_code == 200
+    assert "Короткая прогулка" in detail.text
+    assert "приоритет на первую неделю" in detail.text
+    assert str(user.id) in detail.text
+    assert "Нет доступных рекомендаций для добавления." in detail.text
+
+
+def test_session_recommendation_rejects_duplicate(
+    client: TestClient, db: Session
+) -> None:
+    session_row, recommendation, user = _session_with_recommendation_catalog(db)
+    db.add(
+        SessionRecommendation(
+            user_id=user.id,
+            session_id=session_row.id,
+            recomendation_id=recommendation.id,
+            chart_number=0,
+            weight=1.0,
+        )
+    )
+    db.commit()
+    _login_superuser(client)
+    response = client.post(
+        f"/sessions/{session_row.id}/recommendations",
+        data={"recomendation_id": str(recommendation.id), "comment": ""},
+    )
+    assert response.status_code == 400
+    assert "уже добавлена" in response.text
+
+
+def test_json_api_is_gone(client: TestClient) -> None:
+    response = client.get("/api/v1/surveys/")
+    assert response.status_code == 404
+
+
+def test_health_check(client: TestClient) -> None:
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
