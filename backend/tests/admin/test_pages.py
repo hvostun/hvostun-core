@@ -1,3 +1,6 @@
+import uuid
+from datetime import date
+
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
@@ -20,6 +23,11 @@ from app.models import (
     User,
     UserCreate,
     UserGroup,
+)
+from app.services.sessions import (
+    days_since_status,
+    format_dog_age,
+    session_calendar_date,
 )
 from tests.utils.utils import random_lower_string
 
@@ -79,13 +87,121 @@ def test_dogs_page_shows_owner_name(client: TestClient, db: Session) -> None:
     assert dogs.status_code == 200
     assert "Teacher" in dogs.text
     assert "Приют Север" in dogs.text
-    assert str(dog.id) not in dogs.text
+    assert f"/dogs/{dog.id}" in dogs.text
     assert str(owner.id) not in dogs.text
     assert str(shelter.id) not in dogs.text
     db.delete(dog)
     db.delete(owner)
     db.delete(shelter)
     db.commit()
+
+
+def test_dog_detail_shows_edit_form(client: TestClient, db: Session) -> None:
+    owner = Owner(name="Edit Owner")
+    shelter = Shelter(name="Приют Юг")
+    db.add(owner)
+    db.add(shelter)
+    db.commit()
+    db.refresh(owner)
+    db.refresh(shelter)
+    dog = Dog(
+        name="Edit Dog",
+        sex="female",
+        breed="метис",
+        status="home",
+        owner_id=owner.id,
+        shelter_id=shelter.id,
+        birthday=date(2024, 6, 20),
+        status_at=date(2026, 9, 10),
+    )
+    db.add(dog)
+    db.commit()
+    db.refresh(dog)
+    _login_superuser(client)
+    page = client.get(f"/dogs/{dog.id}")
+    assert page.status_code == 200
+    assert "Edit Dog" in page.text
+    assert "Сохранить" in page.text
+    assert "Приют Юг" in page.text
+    assert "Edit Owner" in page.text
+    assert 'name="status_at"' in page.text
+    missing = client.get(f"/dogs/{uuid.uuid4()}")
+    assert missing.status_code == 404
+
+
+def test_dog_update_saves_fields(client: TestClient, db: Session) -> None:
+    owner = Owner(name="New Owner")
+    shelter = Shelter(name="Новый приют")
+    db.add(owner)
+    db.add(shelter)
+    db.commit()
+    db.refresh(owner)
+    db.refresh(shelter)
+    dog = Dog(name="Before", status="unknown")
+    db.add(dog)
+    db.commit()
+    db.refresh(dog)
+    _login_superuser(client)
+    response = client.post(
+        f"/dogs/{dog.id}",
+        data={
+            "name": "After",
+            "sex": "male",
+            "neutered": "true",
+            "status": "shelter",
+            "description": "после правки",
+            "shelter_id": str(shelter.id),
+            "assigned_volunteer_id": "",
+            "owner_id": str(owner.id),
+            "birthday": "2023-01-15",
+            "status_at": "2026-09-01",
+            "breed": "лабрадор",
+            "mixed": "false",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    db.refresh(dog)
+    assert dog.name == "After"
+    assert dog.sex == "male"
+    assert dog.neutered is True
+    assert dog.status == "shelter"
+    assert dog.description == "после правки"
+    assert dog.shelter_id == shelter.id
+    assert dog.owner_id == owner.id
+    assert dog.birthday == date(2023, 1, 15)
+    assert dog.status_at == date(2026, 9, 1)
+    assert dog.breed == "лабрадор"
+    assert dog.mixed is False
+
+
+def test_dog_update_rejects_empty_name(client: TestClient, db: Session) -> None:
+    dog = Dog(name="Keep Name", status="unknown")
+    db.add(dog)
+    db.commit()
+    db.refresh(dog)
+    _login_superuser(client)
+    response = client.post(
+        f"/dogs/{dog.id}",
+        data={
+            "name": "   ",
+            "sex": "",
+            "neutered": "",
+            "status": "unknown",
+            "description": "",
+            "shelter_id": "",
+            "assigned_volunteer_id": "",
+            "owner_id": "",
+            "birthday": "",
+            "status_at": "",
+            "breed": "",
+            "mixed": "",
+        },
+    )
+    assert response.status_code == 400
+    assert "Имя обязательно" in response.text
+    db.refresh(dog)
+    assert dog.name == "Keep Name"
 
 
 def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> None:
@@ -206,6 +322,58 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
     assert "Значение" in page.text
     assert "№" in page.text
     assert "<td>1</td>" in page.text
+    assert "Собака" in page.text
+    assert "Legend Dog" in page.text
+
+
+def test_session_detail_shows_dog_facts(client: TestClient, db: Session) -> None:
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    assert user
+    dog = Dog(
+        name="Facts Dog",
+        sex="female",
+        breed="метис",
+        status="home",
+        birthday=date(2024, 6, 20),
+        status_at=date(2026, 9, 10),
+    )
+    survey = Survey(name="Facts Survey", slug=f"facts-{random_lower_string()}")
+    db.add(dog)
+    db.add(survey)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(survey)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    session_row = SurveySession(
+        owner_id=user.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+    expected_age = format_dog_age(
+        dog.birthday, session_calendar_date(session_row.created_at)
+    )
+    expected_days = days_since_status(dog.status_at, session_row.created_at)
+    client.post(
+        "/login",
+        data={
+            "email": settings.FIRST_SUPERUSER,
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
+        },
+    )
+    page = client.get(f"/sessions/{session_row.id}")
+    assert page.status_code == 200
+    assert "female" in page.text
+    assert "метис" in page.text
+    assert "home" in page.text
+    assert expected_age in page.text
+    assert str(expected_days) in page.text
 
 
 def test_answer_events_page_is_visible_to_logged_in_user(
@@ -342,6 +510,8 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
         f"/sessions/{session_row.id}/recommendations",
         data={
             "recomendation_id": str(recommendation.id),
+            "chart_number": "2",
+            "weight": "0.75",
             "comment": "приоритет на первую неделю",
         },
         follow_redirects=False,
@@ -358,6 +528,8 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert saved.user_id == user.id
     assert saved.recomendation_id == recommendation.id
     assert saved.comment == "приоритет на первую неделю"
+    assert saved.chart_number == 2
+    assert saved.weight == 0.75
 
     detail = client.get(f"/sessions/{session_row.id}")
     assert detail.status_code == 200
@@ -388,6 +560,68 @@ def test_session_recommendation_rejects_duplicate(
     )
     assert response.status_code == 400
     assert "уже добавлена" in response.text
+
+
+def test_session_recommendation_can_be_updated(
+    client: TestClient, db: Session
+) -> None:
+    session_row, recommendation, user = _session_with_recommendation_catalog(db)
+    row = SessionRecommendation(
+        user_id=user.id,
+        session_id=session_row.id,
+        recomendation_id=recommendation.id,
+        chart_number=0,
+        weight=1.0,
+        comment="черновик",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _login_superuser(client)
+    page = client.get(f"/sessions/{session_row.id}")
+    assert page.status_code == 200
+    assert 'name="chart_number"' in page.text
+    assert 'type="range"' in page.text
+    assert "Критичность" in page.text
+    response = client.post(
+        f"/sessions/{session_row.id}/recommendations/{row.id}",
+        data={
+            "chart_number": "3",
+            "weight": "0.4",
+            "comment": "обновлено",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    db.refresh(row)
+    assert row.chart_number == 3
+    assert row.weight == 0.4
+    assert row.comment == "обновлено"
+
+
+def test_session_recommendation_update_rejects_bad_weight(
+    client: TestClient, db: Session
+) -> None:
+    session_row, recommendation, user = _session_with_recommendation_catalog(db)
+    row = SessionRecommendation(
+        user_id=user.id,
+        session_id=session_row.id,
+        recomendation_id=recommendation.id,
+        chart_number=1,
+        weight=0.5,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _login_superuser(client)
+    response = client.post(
+        f"/sessions/{session_row.id}/recommendations/{row.id}",
+        data={"chart_number": "1", "weight": "2", "comment": ""},
+    )
+    assert response.status_code == 400
+    assert "от 0 до 1" in response.text
+    db.refresh(row)
+    assert row.weight == 0.5
 
 
 def _login_admin(client: TestClient, db: Session) -> User:

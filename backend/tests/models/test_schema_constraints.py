@@ -1,8 +1,6 @@
 from sqlalchemy import inspect
 from sqlmodel import Session
 
-from app.models import Question, QuestionType, Scale
-
 
 def test_all_foreign_keys_use_restrict(db: Session) -> None:
     inspector = inspect(db.get_bind())
@@ -27,31 +25,16 @@ def test_users_group_check_constraint_exists(db: Session) -> None:
     assert "ck_users_group" in names
 
 
-def test_questions_type_check_constraint_exists(db: Session) -> None:
+def test_questions_have_no_type_column(db: Session) -> None:
     inspector = inspect(db.get_bind())
+    columns = {column["name"] for column in inspector.get_columns("questions")}
+    assert "type" not in columns
+    assert "global_id" not in columns
     names = {
         constraint["name"]
         for constraint in inspector.get_check_constraints("questions")
     }
-    assert "ck_questions_type" in names
-    columns = {column["name"] for column in inspector.get_columns("questions")}
-    assert "type" in columns
-    assert "global_id" not in columns
-
-
-def test_question_type_defaults_to_unknown(db: Session) -> None:
-    scale = Scale(
-        name="Default type scale",
-        type="integer",
-        config={"min_value": 0, "max_value": 1},
-    )
-    db.add(scale)
-    db.commit()
-    question = Question(text="Default type question", scale_id=scale.id)
-    db.add(question)
-    db.commit()
-    db.refresh(question)
-    assert question.type == QuestionType.UNKNOWN
+    assert "ck_questions_type" not in names
 
 
 def test_version_indexes_exist_without_duplicates(db: Session) -> None:

@@ -20,23 +20,10 @@ def upgrade() -> None:
     op.create_table(
         "questions",
         uuid_pk(),
-        sa.Column(
-            "type",
-            sa.Text(),
-            nullable=False,
-            server_default="Unknown",
-        ),
         sa.Column("text", sa.Text(), nullable=False),
         sa.Column("scale_id", postgresql.UUID(as_uuid=True), nullable=False),
         created_at(),
         updated_at(),
-        sa.CheckConstraint(
-            "type IN ("
-            "'Excitability', 'Aggression', 'Fear_Anxiety', 'Separation', "
-            "'Attachment', 'Training', 'Miscellaneous', 'Unknown'"
-            ")",
-            name="ck_questions_type",
-        ),
         sa.ForeignKeyConstraint(["scale_id"], ["scales.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
     )

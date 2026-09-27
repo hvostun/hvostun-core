@@ -274,7 +274,6 @@ def test_scale_config_validation(
         (Scale, "type", "invalid"),
         (PlacementEvent, "code", "unknown"),
         (User, "group", "invalid"),
-        (Question, "type", "invalid"),
     ],
 )
 def test_domain_values_reject_invalid_assignments(
@@ -293,15 +292,6 @@ def test_domain_values_reject_invalid_assignments(
             type="integer",
             config={"min_value": 0, "max_value": 1},
         )
-    elif model is Question:
-        scale = Scale(
-            name="Question scale",
-            type="integer",
-            config={"min_value": 0, "max_value": 1},
-        )
-        db.add(scale)
-        db.commit()
-        obj = Question(text="Invalid type", scale_id=scale.id)
     elif model is PlacementEvent:
         dog = Dog(name="Placement dog")
         db.add(dog)

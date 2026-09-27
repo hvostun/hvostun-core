@@ -31,7 +31,7 @@ def upgrade() -> None:
         ),
         sa.Column("owner_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("birthday", sa.Date(), nullable=True),
-        sa.Column("adopted_at", sa.Date(), nullable=True),
+        sa.Column("status_at", sa.Date(), nullable=True),
         sa.Column("breed", sa.Text(), nullable=True),
         sa.Column("mixed", sa.Boolean(), nullable=True),
         sa.Column("created_by_id", postgresql.UUID(as_uuid=True), nullable=True),

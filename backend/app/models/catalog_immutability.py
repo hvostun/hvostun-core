@@ -11,7 +11,6 @@ from app.models.questionnairy import (
     AnswerEvent,
     AnswerValue,
     Question,
-    QuestionType,
     Scale,
     ScaleConfig,
     ScaleType,
@@ -71,8 +70,6 @@ def _validate_domain_values(session: SASession) -> None:
                 obj.status = SessionStatus(obj.status)
             elif isinstance(obj, Scale):
                 obj.type = ScaleType(obj.type)
-            elif isinstance(obj, Question):
-                obj.type = QuestionType(obj.type)
             elif isinstance(obj, User):
                 obj.group = UserGroup(obj.group)
         except ValueError as exc:

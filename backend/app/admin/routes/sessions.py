@@ -236,6 +236,7 @@ def _session_detail_response(
             "session_row": context.row,
             "survey": context.survey,
             "version": context.version,
+            "dog": session_service.dog_session_facts(context.dog, context.row),
             "answers": [
                 {
                     "order_number": item.link.order_num,
@@ -270,6 +271,8 @@ def add_session_recommendation(
     user: CurrentUser,
     session_id: uuid.UUID,
     recomendation_id: str = Form(""),
+    chart_number: str = Form(""),
+    weight: str = Form(""),
     comment: str = Form(""),
 ) -> Any:
     try:
@@ -289,6 +292,43 @@ def add_session_recommendation(
             session_id=session_id,
             current_user=user,
             recomendation_id=parsed_id,
+            comment=comment,
+            chart_number=session_service.parse_chart_number(chart_number),
+            weight=session_service.parse_weight(weight),
+        )
+    except session_service.SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except session_service.SessionRecommendationError as exc:
+        return _session_detail_response(
+            request,
+            session,
+            user,
+            session_id,
+            error=str(exc),
+            status_code=400,
+        )
+    return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+
+
+@router.post("/sessions/{session_id}/recommendations/{recommendation_id}")
+def update_session_recommendation(
+    request: Request,
+    session: SessionDep,
+    user: CurrentUser,
+    session_id: uuid.UUID,
+    recommendation_id: uuid.UUID,
+    chart_number: str = Form(""),
+    weight: str = Form(""),
+    comment: str = Form(""),
+) -> Any:
+    try:
+        session_service.update_session_recommendation(
+            session,
+            session_id=session_id,
+            current_user=user,
+            recommendation_id=recommendation_id,
+            chart_number=session_service.parse_chart_number(chart_number),
+            weight=session_service.parse_weight(weight),
             comment=comment,
         )
     except session_service.SessionNotFoundError as exc:

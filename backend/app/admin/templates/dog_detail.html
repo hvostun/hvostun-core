@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}{{ dog.name }} — Собаки{% endblock %}
+{% block content %}
+<p><a href="/dogs">← Собаки</a></p>
+<h1 class="h3">{{ dog.name }}</h1>
+<p class="font-monospace text-muted">{{ dog.id }}</p>
+<form method="post" action="/dogs/{{ dog.id }}" class="mt-3">
+  <div class="mb-3">
+    <label class="form-label" for="name">Имя</label>
+    <input class="form-control" id="name" name="name" required value="{{ form.name }}" />
+  </div>
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label class="form-label" for="sex">Пол</label>
+      <input class="form-control" id="sex" name="sex" value="{{ form.sex }}" />
+    </div>
+    <div class="col-md-6 mb-3">
+      <label class="form-label" for="breed">Порода</label>
+      <input class="form-control" id="breed" name="breed" value="{{ form.breed }}" />
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      <label class="form-label" for="status">Статус</label>
+      <select class="form-select" id="status" name="status" required>
+        {% for item in statuses %}
+        <option value="{{ item }}" {% if form.status == item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4 mb-3">
+      <label class="form-label" for="status_at">Дата статуса</label>
+      <input class="form-control" id="status_at" name="status_at" type="date" value="{{ form.status_at }}" />
+    </div>
+    <div class="col-md-4 mb-3">
+      <label class="form-label" for="birthday">День рождения</label>
+      <input class="form-control" id="birthday" name="birthday" type="date" value="{{ form.birthday }}" />
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label class="form-label" for="neutered">Стерилизация</label>
+      <select class="form-select" id="neutered" name="neutered">
+        <option value="" {% if form.neutered == "" %}selected{% endif %}>—</option>
+        <option value="true" {% if form.neutered == "true" %}selected{% endif %}>да</option>
+        <option value="false" {% if form.neutered == "false" %}selected{% endif %}>нет</option>
+      </select>
+    </div>
+    <div class="col-md-6 mb-3">
+      <label class="form-label" for="mixed">Метис</label>
+      <select class="form-select" id="mixed" name="mixed">
+        <option value="" {% if form.mixed == "" %}selected{% endif %}>—</option>
+        <option value="true" {% if form.mixed == "true" %}selected{% endif %}>да</option>
+        <option value="false" {% if form.mixed == "false" %}selected{% endif %}>нет</option>
+      </select>
+    </div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="description">Описание</label>
+    <textarea class="form-control" id="description" name="description" rows="3">{{ form.description }}</textarea>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="shelter_id">Приют</label>
+    <select class="form-select" id="shelter_id" name="shelter_id">
+      <option value="">—</option>
+      {% for shelter in shelters %}
+      <option value="{{ shelter.id }}" {% if form.shelter_id == shelter.id|string %}selected{% endif %}>{{ shelter.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="owner_id">Владелец</label>
+    <select class="form-select" id="owner_id" name="owner_id">
+      <option value="">—</option>
+      {% for owner in owners %}
+      <option value="{{ owner.id }}" {% if form.owner_id == owner.id|string %}selected{% endif %}>{{ owner.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="assigned_volunteer_id">Волонтёр</label>
+    <select class="form-select" id="assigned_volunteer_id" name="assigned_volunteer_id">
+      <option value="">—</option>
+      {% for volunteer in volunteers %}
+      <option value="{{ volunteer.id }}" {% if form.assigned_volunteer_id == volunteer.id|string %}selected{% endif %}>{{ volunteer.full_name or volunteer.email }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="btn btn-primary" type="submit">Сохранить</button>
+</form>
+<dl class="row mt-4 text-muted">
+  <dt class="col-sm-3">Создал</dt>
+  <dd class="col-sm-9">{% if created_by %}{{ created_by.full_name or created_by.email }}{% else %}—{% endif %}</dd>
+  <dt class="col-sm-3">created_at</dt>
+  <dd class="col-sm-9">{{ dog.created_at or "—" }}</dd>
+  <dt class="col-sm-3">updated_at</dt>
+  <dd class="col-sm-9">{{ dog.updated_at or "—" }}</dd>
+</dl>
+{% endblock %}

@@ -80,7 +80,7 @@ class Dog(TimestampMixin, SQLModel, table=True):
         default=None, foreign_key="owners.id", ondelete="RESTRICT"
     )
     birthday: date | None = None
-    adopted_at: date | None = None
+    status_at: date | None = None
     breed: str | None = Field(default=None, sa_type=Text)
     mixed: bool | None = None
     created_by_id: uuid.UUID | None = Field(
@@ -141,7 +141,7 @@ class DogPublic(SQLModel):
     assigned_volunteer_id: uuid.UUID | None = None
     owner_id: uuid.UUID | None = None
     birthday: date | None = None
-    adopted_at: date | None = None
+    status_at: date | None = None
     breed: str | None = None
     mixed: bool | None = None
     created_by_id: uuid.UUID | None = None

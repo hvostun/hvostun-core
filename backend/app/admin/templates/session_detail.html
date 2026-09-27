@@ -5,6 +5,26 @@
 <h1 class="h3">Ответ</h1>
 <p class="font-monospace text-muted">{{ session_row.id }}</p>
 <p class="text-muted">{{ survey.name }} · версия {{ version.version_num }}</p>
+<h2 class="h5 mt-4">Собака</h2>
+<dl class="row mb-0">
+  <dt class="col-sm-3">Имя</dt>
+  <dd class="col-sm-9">{% if dog.id %}<a href="/dogs/{{ dog.id }}">{{ dog.name or "—" }}</a>{% else %}{{ dog.name or "—"
+    }}{% endif %}</dd>
+  <dt class="col-sm-3">Пол</dt>
+  <dd class="col-sm-9">{{ dog.sex or "—" }}</dd>
+  <dt class="col-sm-3">Возраст</dt>
+  <dd class="col-sm-9">{{ dog.age or "—" }}</dd>
+  <dt class="col-sm-3">Порода</dt>
+  <dd class="col-sm-9">{{ dog.breed or "—" }}</dd>
+  <dt class="col-sm-3">Метис</dt>
+  <dd class="col-sm-9">{{ "Да" if dog.mixed else "Нет" }}</dd>
+  <dt class="col-sm-3">Стерилизован</dt>
+  <dd class="col-sm-9">{{ "Да" if dog.neutered else "Нет" }}</dd>
+  <dt class="col-sm-3">Статус</dt>
+  <dd class="col-sm-9">{{ dog.status or "—" }}</dd>
+  <dt class="col-sm-3">В течение последних {% if dog.days_since_status is not none %}{{ dog.days_since_status }}{% else
+    %}—{% endif %} дней</dt>
+</dl>
 <h2 class="h5 mt-4">Вопросы и ответы</h2>
 {% if not answers %}
 <p class="text-muted">Нет вопросов.</p>
@@ -37,14 +57,31 @@
 {% for group in rec_groups %}
 <h3 class="h6 mt-3">user_id {{ group.user_id }}</h3>
 {% for item in group.recommendations %}
-<div class="card mb-2">
+<form method="post" action="/sessions/{{ session_row.id }}/recommendations/{{ item.id }}" class="card mb-2">
   <div class="card-body">
     <strong>{{ item.recommendation_name }}</strong>
-    <div class="text-muted small">{{ item.recommendation_slug }} · chart {{ item.chart_number }} · weight {{ item.weight }}</div>
+    <div class="text-muted small">{{ item.recommendation_slug }}</div>
     <p class="mb-0 mt-2">{{ item.recommendation_text }}</p>
-    {% if item.comment %}<p class="mb-0 mt-1"><em>{{ item.comment }}</em></p>{% endif %}
+    <div class="mb-3 mt-3">
+      <label class="form-label" for="chart_number-{{ item.id }}">Очередность</label>
+      <input class="form-control" id="chart_number-{{ item.id }}" name="chart_number" type="number" min="0" step="1"
+        required value="{{ item.chart_number }}" />
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="weight-{{ item.id }}">Критичность (<span id="weight-value-{{ item.id }}">{{
+          item.weight }}</span>)</label>
+      <input type="range" class="form-range" id="weight-{{ item.id }}" name="weight" min="0" max="1" step="0.05"
+        value="{{ item.weight }}"
+        oninput="document.getElementById('weight-value-{{ item.id }}').textContent = this.value" />
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="comment-{{ item.id }}">Комментарий</label>
+      <textarea class="form-control" id="comment-{{ item.id }}" name="comment"
+        rows="2">{{ item.comment or "" }}</textarea>
+    </div>
+    <button class="btn btn-primary btn-sm" type="submit">Сохранить</button>
   </div>
-</div>
+</form>
 {% endfor %}
 {% endfor %}
 <h3 class="h6 mt-4">Добавить рекомендацию</h3>
@@ -54,12 +91,7 @@
 <form method="post" action="/sessions/{{ session_row.id }}/recommendations" class="mt-2">
   <div class="mb-3">
     <label class="form-label" for="recomendation_id">Рекомендация</label>
-    <select
-      class="form-select"
-      id="recomendation_id"
-      name="recomendation_id"
-      required
-    >
+    <select class="form-select" id="recomendation_id" name="recomendation_id" required>
       <option value="">Выберите рекомендацию</option>
       {% for rec in available_recommendations %}
       <option value="{{ rec.id }}">{{ rec.name }}{% if rec.slug %} · {{ rec.slug }}{% endif %}</option>
@@ -67,13 +99,18 @@
     </select>
   </div>
   <div class="mb-3">
+    <label class="form-label" for="chart_number">Очередность</label>
+    <input class="form-control" id="chart_number" name="chart_number" type="number" min="0" step="1" required
+      value="0" />
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="weight">Критичность (<span id="weight-value">1</span>)</label>
+    <input type="range" class="form-range" id="weight" name="weight" min="0" max="1" step="0.05" value="1"
+      oninput="document.getElementById('weight-value').textContent = this.value" />
+  </div>
+  <div class="mb-3">
     <label class="form-label" for="comment">Комментарий</label>
-    <textarea
-      class="form-control"
-      id="comment"
-      name="comment"
-      rows="3"
-    ></textarea>
+    <textarea class="form-control" id="comment" name="comment" rows="3"></textarea>
   </div>
   <button class="btn btn-primary" type="submit">Добавить</button>
 </form>
