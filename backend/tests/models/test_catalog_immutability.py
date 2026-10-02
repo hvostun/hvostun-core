@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.models import (
     AnswerEvent,
     Dog,
+    Owner,
     PlacementEvent,
     Question,
     Recommendation,
@@ -30,6 +31,14 @@ from tests.utils.utils import random_lower_string
 def _admin(db: Session) -> User:
     user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).one()
     return user
+
+
+def _owner_id(db: Session) -> uuid.UUID:
+    owner = Owner(name="Survey session owner")
+    db.add(owner)
+    db.commit()
+    db.refresh(owner)
+    return owner.id
 
 
 def _catalog(
@@ -78,9 +87,9 @@ def _catalog(
 def _session_with_answer(
     db: Session,
 ) -> tuple[SurveyVersion, Question, SurveySession, AnswerEvent]:
-    user, dog, _survey, version, _scale, question, _link = _catalog(db)
+    _user, dog, _survey, version, _scale, question, _link = _catalog(db)
     row = SurveySession(
-        owner_id=user.id,
+        owner_id=_owner_id(db),
         dog_id=dog.id,
         survey_version_id=version.id,
         status="draft",
@@ -161,12 +170,12 @@ def test_recommendation_and_answer_are_immutable(db: Session) -> None:
 
 
 def test_version_composition_closes_after_first_session(db: Session) -> None:
-    user, dog, _survey, version, scale, _question, link = _catalog(db)
+    _user, dog, _survey, version, scale, _question, link = _catalog(db)
     second = Question(text="Second", scale_id=scale.id)
     db.add(second)
     db.commit()
     row = SurveySession(
-        owner_id=user.id,
+        owner_id=_owner_id(db),
         dog_id=dog.id,
         survey_version_id=version.id,
     )
@@ -195,9 +204,9 @@ def test_version_composition_closes_after_first_session(db: Session) -> None:
 
 
 def test_session_cannot_move_to_another_version(db: Session) -> None:
-    user, dog, survey, version, _scale, _question, _link = _catalog(db)
+    _user, dog, survey, version, _scale, _question, _link = _catalog(db)
     row = SurveySession(
-        owner_id=user.id,
+        owner_id=_owner_id(db),
         dog_id=dog.id,
         survey_version_id=version.id,
     )
@@ -217,7 +226,7 @@ def test_new_version_has_independent_order_and_preserves_old_session(
 ) -> None:
     user, dog, survey, version_one, scale, question, _link = _catalog(db)
     session_row = SurveySession(
-        owner_id=user.id,
+        owner_id=_owner_id(db),
         dog_id=dog.id,
         survey_version_id=version_one.id,
     )
@@ -316,9 +325,9 @@ def test_domain_values_reject_invalid_assignments(
             text="text",
         )
     else:
-        user, dog, _survey, version, _scale, _question, _link = _catalog(db)
+        _user, dog, _survey, version, _scale, _question, _link = _catalog(db)
         obj = SurveySession(
-            owner_id=user.id,
+            owner_id=_owner_id(db),
             dog_id=dog.id,
             survey_version_id=version.id,
         )

@@ -31,7 +31,12 @@ def upgrade() -> None:
         ),
         created_at(),
         updated_at(),
-        sa.ForeignKeyConstraint(["owner_id"], ["users.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["owner_id"],
+            ["owners.id"],
+            name="fk_survey_sessions_owner_id",
+            ondelete="RESTRICT",
+        ),
         sa.ForeignKeyConstraint(["dog_id"], ["dogs.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["survey_version_id"], ["survey_versions.id"], ondelete="RESTRICT"

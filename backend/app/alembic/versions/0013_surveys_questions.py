@@ -22,6 +22,7 @@ def upgrade() -> None:
         sa.Column("survey_version_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("question_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("order_num", sa.Integer(), nullable=False),
+        sa.Column("display_num", sa.Integer(), nullable=False),
         sa.Column(
             sa.quoted_name("group", True),
             sa.Text(),

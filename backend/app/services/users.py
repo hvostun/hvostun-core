@@ -99,7 +99,7 @@ def update_admin_user(
     next_superuser = _parse_bool(is_superuser, default=user.is_superuser)
     if user.id == current_user.id and not next_active:
         raise UserFormError("Нельзя деактивировать свою учётную запись")
-    if user.id == current_user.id and not next_superuser:
+    if user.id == current_user.id and current_user.is_superuser and not next_superuser:
         raise UserFormError("Нельзя снять у себя флаг superuser")
     existing = crud.get_user_by_email(session=session, email=email.strip())
     if existing is not None and existing.id != user.id:

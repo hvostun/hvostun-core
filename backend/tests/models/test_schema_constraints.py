@@ -17,12 +17,32 @@ def test_all_foreign_keys_use_restrict(db: Session) -> None:
     )
 
 
+def test_dogs_have_measurement_columns(db: Session) -> None:
+    inspector = inspect(db.get_bind())
+    columns = {column["name"]: column for column in inspector.get_columns("dogs")}
+    assert columns["firstdog"]["nullable"] is False
+    assert columns["weight"]["nullable"] is True
+    assert columns["height"]["nullable"] is True
+
+
 def test_users_group_check_constraint_exists(db: Session) -> None:
     inspector = inspect(db.get_bind())
     names = {
         constraint["name"] for constraint in inspector.get_check_constraints("users")
     }
     assert "ck_users_group" in names
+
+
+def test_survey_session_owner_references_owners(db: Session) -> None:
+    inspector = inspect(db.get_bind())
+    owner_fk = next(
+        foreign_key
+        for foreign_key in inspector.get_foreign_keys("survey_sessions")
+        if foreign_key["constrained_columns"] == ["owner_id"]
+    )
+    assert owner_fk["name"] == "fk_survey_sessions_owner_id"
+    assert owner_fk["referred_table"] == "owners"
+    assert owner_fk["referred_columns"] == ["id"]
 
 
 def test_catalog_group_check_constraints_exist(db: Session) -> None:

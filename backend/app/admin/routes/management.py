@@ -6,7 +6,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
-from app.admin.deps import SessionDep, SuperUser
+from app.admin.deps import AdminUser, SessionDep, SuperUser
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
 from app.models import Owner, Recommendation, User, UserGroup
 from app.pagination import execute_page, page_window
@@ -123,7 +123,7 @@ def owners_page(
 def recommendations_page(
     request: Request,
     session: SessionDep,
-    user: SuperUser,
+    user: AdminUser,
     page: int = 1,
     name: str = "",
     slug: str = "",
@@ -164,7 +164,7 @@ def recommendations_page(
 def users_page(
     request: Request,
     session: SessionDep,
-    user: SuperUser,
+    user: AdminUser,
     page: int = 1,
     email: str = "",
     full_name: str = "",
@@ -249,7 +249,7 @@ def _user_form_from_row(row: User) -> dict[str, str]:
 
 def _user_form_response(
     request: Request,
-    user: SuperUser,
+    user: User,
     *,
     form: dict[str, str],
     target: User | None = None,
@@ -266,13 +266,14 @@ def _user_form_response(
             "groups": [item.value for item in UserGroup],
             "error": error,
             "is_create": target is None,
+            "can_manage_superusers": user.is_superuser,
         },
         status_code=status_code,
     )
 
 
 @router.get("/users/new")
-def user_new(request: Request, user: SuperUser) -> Any:
+def user_new(request: Request, user: AdminUser) -> Any:
     return _user_form_response(request, user, form=_user_form())
 
 
@@ -280,7 +281,7 @@ def user_new(request: Request, user: SuperUser) -> Any:
 def user_create(
     request: Request,
     session: SessionDep,
-    user: SuperUser,
+    user: AdminUser,
     email: str = Form(""),
     password: str = Form(""),
     full_name: str = Form(""),
@@ -300,6 +301,14 @@ def user_create(
         is_superuser=is_superuser,
         password=password,
     )
+    if not user.is_superuser and is_superuser == "true":
+        return _user_form_response(
+            request,
+            user,
+            form=form,
+            error="Только superuser может назначать флаг superuser",
+            status_code=403,
+        )
     try:
         created = user_service.create_admin_user(
             session,
@@ -323,13 +332,15 @@ def user_create(
 def user_detail(
     request: Request,
     session: SessionDep,
-    user: SuperUser,
+    user: AdminUser,
     user_id: uuid.UUID,
 ) -> Any:
     try:
         target = user_service.get_user(session, user_id)
     except user_service.UserNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if target.is_superuser and not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Forbidden")
     return _user_form_response(request, user, form=_user_form_from_row(target), target=target)
 
 
@@ -337,7 +348,7 @@ def user_detail(
 def user_update(
     request: Request,
     session: SessionDep,
-    user: SuperUser,
+    user: AdminUser,
     user_id: uuid.UUID,
     email: str = Form(""),
     password: str = Form(""),
@@ -352,6 +363,8 @@ def user_update(
         target = user_service.get_user(session, user_id)
     except user_service.UserNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if target.is_superuser and not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Forbidden")
     form = _user_form(
         email=email,
         full_name=full_name,
@@ -362,6 +375,15 @@ def user_update(
         is_superuser=is_superuser,
         password=password,
     )
+    if not user.is_superuser and is_superuser == "true":
+        return _user_form_response(
+            request,
+            user,
+            form=form,
+            target=target,
+            error="Только superuser может назначать флаг superuser",
+            status_code=403,
+        )
     try:
         user_service.update_admin_user(
             session,

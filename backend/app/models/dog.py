@@ -83,6 +83,12 @@ class Dog(TimestampMixin, SQLModel, table=True):
     status_at: date | None = None
     breed: str | None = Field(default=None, sa_type=Text)
     mixed: bool | None = None
+    firstdog: bool = Field(
+        default=True,
+        sa_column_kwargs={"nullable": False, "server_default": "true"},
+    )
+    weight: float | None = None
+    height: int | None = None
     created_by_id: uuid.UUID | None = Field(
         default=None, foreign_key="users.id", ondelete="RESTRICT"
     )
@@ -144,6 +150,9 @@ class DogPublic(SQLModel):
     status_at: date | None = None
     breed: str | None = None
     mixed: bool | None = None
+    firstdog: bool = True
+    weight: float | None = None
+    height: int | None = None
     created_by_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime

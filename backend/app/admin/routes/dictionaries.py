@@ -5,7 +5,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
-from app.admin.deps import CurrentUser, SessionDep
+from app.admin.deps import CurrentUser, SessionDep, SuperUser
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
 from app.models import Dictionary
 from app.pagination import execute_page, page_window
@@ -60,7 +60,7 @@ def _detail_response(
 def dictionaries_page(
     request: Request,
     session: SessionDep,
-    user: CurrentUser,
+    user: SuperUser,
     page: int = 1,
     key: str = "",
 ) -> Any:
@@ -113,7 +113,7 @@ def dictionaries_page(
 def dictionary_detail(
     request: Request,
     session: SessionDep,
-    user: CurrentUser,
+    user: SuperUser,
     key: str,
 ) -> Any:
     try:
@@ -127,7 +127,7 @@ def dictionary_detail(
 def dictionary_update(
     request: Request,
     session: SessionDep,
-    user: CurrentUser,
+    user: SuperUser,
     key: str,
     value: str = Form(""),
 ) -> Any:

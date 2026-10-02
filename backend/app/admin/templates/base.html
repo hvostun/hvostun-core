@@ -16,16 +16,20 @@
       <div class="container">
         <a class="navbar-brand" href="/">Hvostun</a>
         <div class="navbar-nav me-auto">
+          {% if user.is_superuser or user.group == "admin" %}
           <a class="nav-link" href="/dogs">Собаки</a>
+          {% endif %}
           <a class="nav-link" href="/surveys">Анкеты</a>
           <a class="nav-link" href="/scales">Шкалы</a>
-          <a class="nav-link" href="/dictionaries">Справочники</a>
           <a class="nav-link" href="/sessions">Ответы</a>
-          <a class="nav-link" href="/answer-events">События ответов</a>
-          {% if user.is_superuser %}
-          <a class="nav-link" href="/owners">Владельцы</a>
+          {% if user.is_superuser or user.group == "admin" %}
           <a class="nav-link" href="/recommendations">Рекомендации</a>
           <a class="nav-link" href="/users">Администраторы</a>
+          {% endif %}
+          {% if user.is_superuser %}
+          <a class="nav-link" href="/dictionaries">Справочники</a>
+          <a class="nav-link" href="/answer-events">События ответов</a>
+          <a class="nav-link" href="/owners">Владельцы</a>
           {% endif %}
         </div>
         <span class="navbar-text me-3">{{ user.email }}</span>

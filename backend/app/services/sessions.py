@@ -11,6 +11,7 @@ from sqlmodel import Session, col, func, select
 from app.models import (
     AnswerEvent,
     Dog,
+    Owner,
     Question,
     Recommendation,
     Scale,
@@ -21,6 +22,7 @@ from app.models import (
     SurveySession,
     SurveyVersion,
     User,
+    UserGroup,
 )
 from app.services import dictionaries as dictionary_service
 
@@ -51,6 +53,14 @@ class SessionNotFoundError(LookupError):
 
 class SessionRecommendationError(ValueError):
     pass
+
+
+class SessionRecommendationPermissionError(PermissionError):
+    pass
+
+
+def can_manage_all_session_recommendations(user: User) -> bool:
+    return user.is_superuser or user.group == UserGroup.ADMIN
 
 
 def parse_chart_number(raw: str) -> int:
@@ -142,7 +152,7 @@ def dog_session_facts(
 @dataclass(frozen=True)
 class SessionContext:
     row: SurveySession
-    owner: User
+    owner: Owner
     dog: Dog
     version: SurveyVersion
     survey: Survey
@@ -270,10 +280,10 @@ def get_session_context(
     get_accessible_session(session, session_id, current_user)
     result = session.exec(
         select(  # type: ignore[call-overload]
-            SurveySession, User, Dog, SurveyVersion, Survey
+            SurveySession, Owner, Dog, SurveyVersion, Survey
         )
         .where(SurveySession.id == session_id)
-        .where(SurveySession.owner_id == User.id)
+        .where(SurveySession.owner_id == Owner.id)
         .where(SurveySession.dog_id == Dog.id)
         .where(SurveySession.survey_version_id == SurveyVersion.id)
         .where(SurveyVersion.survey_id == Survey.id)
@@ -292,7 +302,7 @@ def get_session_answers(
         .where(SurveyQuestion.survey_version_id == session_row.survey_version_id)
         .where(SurveyQuestion.question_id == Question.id)
         .where(Question.scale_id == Scale.id)
-        .order_by(col(SurveyQuestion.order_num), col(Question.id))
+        .order_by(col(SurveyQuestion.display_num), col(Question.id))
     ).all()
     events = session.exec(
         select(AnswerEvent)
@@ -360,14 +370,19 @@ def filter_session_answers(
 
 
 def get_session_recommendations(
-    session: Session, session_id: uuid.UUID
-) -> list[tuple[SessionRecommendation, Recommendation]]:
+    session: Session, session_id: uuid.UUID, current_user: User
+) -> list[tuple[SessionRecommendation, Recommendation, User]]:
+    statement = (
+        select(SessionRecommendation, Recommendation, User)
+        .where(SessionRecommendation.session_id == session_id)
+        .where(SessionRecommendation.recomendation_id == Recommendation.id)
+        .where(SessionRecommendation.user_id == User.id)
+    )
+    if not can_manage_all_session_recommendations(current_user):
+        statement = statement.where(SessionRecommendation.user_id == current_user.id)
     return list(
         session.exec(
-            select(SessionRecommendation, Recommendation)
-            .where(SessionRecommendation.session_id == session_id)
-            .where(SessionRecommendation.recomendation_id == Recommendation.id)
-            .order_by(
+            statement.order_by(
                 col(SessionRecommendation.user_id),
                 col(SessionRecommendation.chart_number),
                 col(SessionRecommendation.created_at),
@@ -377,20 +392,22 @@ def get_session_recommendations(
 
 
 def session_recommendation_counts(
-    session: Session, session_ids: list[uuid.UUID]
+    session: Session, session_ids: list[uuid.UUID], current_user: User
 ) -> dict[uuid.UUID, tuple[int, int]]:
     counts = dict.fromkeys(session_ids, (0, 0))
     if not session_ids:
         return counts
-    rows = session.exec(
+    statement = (
         select(
             SessionRecommendation.session_id,
             func.count(),
             func.count(func.distinct(SessionRecommendation.user_id)),
         )
         .where(col(SessionRecommendation.session_id).in_(session_ids))
-        .group_by(SessionRecommendation.session_id)
-    ).all()
+    )
+    if not can_manage_all_session_recommendations(current_user):
+        statement = statement.where(SessionRecommendation.user_id == current_user.id)
+    rows = session.exec(statement.group_by(SessionRecommendation.session_id)).all()
     for session_id, rec_count, user_count in rows:
         counts[session_id] = (int(rec_count), int(user_count))
     return counts
@@ -478,11 +495,19 @@ def _apply_session_recommendation_update(
     *,
     session_id: uuid.UUID,
     recommendation_id: uuid.UUID,
+    current_user: User,
     chart_number: int,
     weight: float,
     comment: str | None,
 ) -> SessionRecommendation:
     row = get_session_recommendation(session, session_id, recommendation_id)
+    if (
+        not can_manage_all_session_recommendations(current_user)
+        and row.user_id != current_user.id
+    ):
+        raise SessionRecommendationPermissionError(
+            "Можно изменять только свои рекомендации"
+        )
     if chart_number < 0:
         raise SessionRecommendationError("Очередность не может быть отрицательной")
     if weight < WEIGHT_MIN or weight > WEIGHT_MAX:
@@ -509,6 +534,7 @@ def update_session_recommendations(
                 session,
                 session_id=session_id,
                 recommendation_id=recommendation_id,
+                current_user=current_user,
                 chart_number=chart_number,
                 weight=weight,
                 comment=comment,
@@ -542,16 +568,38 @@ def update_session_recommendation(
     )[0]
 
 
+def delete_session_recommendation(
+    session: Session,
+    *,
+    session_id: uuid.UUID,
+    current_user: User,
+    recommendation_id: uuid.UUID,
+) -> None:
+    get_accessible_session(session, session_id, current_user)
+    row = get_session_recommendation(session, session_id, recommendation_id)
+    if (
+        not can_manage_all_session_recommendations(current_user)
+        and row.user_id != current_user.id
+    ):
+        raise SessionRecommendationPermissionError(
+            "Можно удалить только свою рекомендацию"
+        )
+    session.delete(row)
+    session.commit()
+
+
 def group_recommendations(
-    rows: list[tuple[SessionRecommendation, Recommendation]],
+    rows: list[tuple[SessionRecommendation, Recommendation, User]],
 ) -> list[dict[str, Any]]:
     groups: list[dict[str, Any]] = []
-    for item, catalog in rows:
+    for item, catalog, author in rows:
         entry = {
             "id": item.id,
             "recommendation_name": catalog.name,
             "recommendation_slug": catalog.slug,
             "recommendation_text": catalog.text,
+            "author_name": author.full_name or author.email,
+            "user_id": item.user_id,
             "chart_number": item.chart_number,
             "weight": item.weight,
             "comment": item.comment,

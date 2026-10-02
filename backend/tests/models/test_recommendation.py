@@ -6,6 +6,7 @@ from app import crud
 from app.core.config import settings
 from app.models import (
     Dog,
+    Owner,
     Recommendation,
     SessionRecommendation,
     Survey,
@@ -35,6 +36,7 @@ def test_recommendation_persists_guid_and_text(db: Session) -> None:
 def _session_recommendation_deps(db: Session) -> tuple:
     user = crud.get_user_by_email(session=db, email=settings.FIRST_SUPERUSER)
     assert user
+    owner = Owner(name="Session Rec Owner")
     dog = Dog(name="Session Rec Dog")
     questionnaire = Survey(name="C-BARQ", slug=f"session-rec-{random_lower_string()}")
     recommendation = Recommendation(
@@ -42,6 +44,7 @@ def _session_recommendation_deps(db: Session) -> tuple:
         slug=f"leash-{random_lower_string()}",
         text="Короткие прогулки.",
     )
+    db.add(owner)
     db.add(dog)
     db.add(questionnaire)
     db.add(recommendation)
@@ -59,7 +62,7 @@ def _session_recommendation_deps(db: Session) -> tuple:
     db.refresh(version)
 
     session_row = SurveySession(
-        owner_id=user.id,
+        owner_id=owner.id,
         dog_id=dog.id,
         survey_version_id=version.id,
         status="draft",

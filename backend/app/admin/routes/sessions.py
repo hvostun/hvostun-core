@@ -5,9 +5,17 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
-from app.admin.deps import CurrentUser, SessionDep
-from app.admin.templating import PAGE_SIZE, cell, list_context, templates
-from app.models import AnswerEvent, Dog, Survey, SurveySession, SurveyVersion, User
+from app.admin.deps import CurrentUser, SessionDep, SuperUser
+from app.admin.templating import PAGE_SIZE, cell, filter_qs, list_context, templates
+from app.models import (
+    AnswerEvent,
+    Dog,
+    Owner,
+    SessionRecommendation,
+    Survey,
+    SurveySession,
+    SurveyVersion,
+)
 from app.pagination import execute_page, page_window
 from app.services import dictionaries as dictionary_service
 from app.services import sessions as session_service
@@ -34,6 +42,7 @@ def sessions_page(
     owner_id: str = "",
     dog_id: str = "",
     survey_version_id: str = "",
+    users_sort: str = "",
 ) -> Any:
     offset, limit, page = page_window(page, PAGE_SIZE)
     filters: list[Any] = []
@@ -48,31 +57,64 @@ def sessions_page(
         filters.append(SurveySession.dog_id == parsed_dog_id)
     if parsed_version_id:
         filters.append(SurveySession.survey_version_id == parsed_version_id)
+    my_recommendation = (
+        select(SessionRecommendation.id)
+        .where(SessionRecommendation.session_id == SurveySession.id)
+        .where(SessionRecommendation.user_id == user.id)
+        .exists()
+    )
+    recommendation_users = select(
+        SessionRecommendation.session_id.label("session_id"),
+        func.count(func.distinct(SessionRecommendation.user_id)).label("user_count"),
+    )
+    if not session_service.can_manage_all_session_recommendations(user):
+        recommendation_users = recommendation_users.where(
+            SessionRecommendation.user_id == user.id
+        )
+    recommendation_users_subquery = recommendation_users.group_by(
+        SessionRecommendation.session_id
+    ).subquery()
     count_stmt = select(func.count()).select_from(SurveySession)
     stmt = (
         select(  # type: ignore[call-overload]
-            SurveySession, User, Dog, SurveyVersion, Survey
+            SurveySession,
+            Owner,
+            Dog,
+            SurveyVersion,
+            Survey,
+            my_recommendation,
         )
-        .join(User, col(SurveySession.owner_id) == User.id)
+        .join(Owner, col(SurveySession.owner_id) == Owner.id)
         .join(Dog, col(SurveySession.dog_id) == Dog.id)
         .join(
             SurveyVersion,
             col(SurveySession.survey_version_id) == SurveyVersion.id,
         )
         .join(Survey, col(SurveyVersion.survey_id) == Survey.id)
+        .outerjoin(
+            recommendation_users_subquery,
+            col(SurveySession.id) == recommendation_users_subquery.c.session_id,
+        )
     )
     if filters:
         count_stmt = count_stmt.where(*filters)
         stmt = stmt.where(*filters)
+    user_count = func.coalesce(recommendation_users_subquery.c.user_count, 0)
+    if users_sort == "asc":
+        ordering = (user_count.asc(), col(SurveySession.created_at).desc())
+    elif users_sort == "desc":
+        ordering = (user_count.desc(), col(SurveySession.created_at).desc())
+    else:
+        ordering = (col(SurveySession.created_at).desc(),)
     rows, count = execute_page(
         session,
         count_stmt,
-        stmt.order_by(col(SurveySession.created_at).desc()),
+        stmt.order_by(*ordering),
         offset=offset,
         limit=limit,
     )
     rec_counts = session_service.session_recommendation_counts(
-        session, [row.id for row, *_ in rows]
+        session, [row.id for row, *_ in rows], user
     )
     return templates.TemplateResponse(
         request,
@@ -82,28 +124,57 @@ def sessions_page(
             user=user,
             title="Ответы",
             columns=[
-                {"key": "id", "label": "id"},
-                {"key": "status", "label": "status"},
-                {"key": "owner", "label": "Пользователь"},
                 {"key": "dog", "label": "Собака"},
+                {"key": "status", "label": "status"},
+                {"key": "owner", "label": "Заполнил"},
                 {"key": "survey", "label": "Анкета"},
-                {"key": "recommendations", "label": "Рекомендации"},
-                {"key": "users", "label": "Пользователи"},
+                {"key": "recommendations", "label": "Рекомендации (кол-во)"},
+                {
+                    "key": "users",
+                    "label": (
+                        "Пользователи (кол-во) ↑"
+                        if users_sort == "asc"
+                        else (
+                            "Пользователи (кол-во) ↓"
+                            if users_sort == "desc"
+                            else "Пользователи (кол-во)"
+                        )
+                    ),
+                    "sort_href": (
+                        "?"
+                        + filter_qs(
+                            {
+                                "status": status,
+                                "owner_id": owner_id,
+                                "dog_id": dog_id,
+                                "survey_version_id": survey_version_id,
+                                "users_sort": (
+                                    "asc" if users_sort == "desc" else "desc"
+                                ),
+                            }
+                        )
+                    ),
+                },
+                {
+                    "key": "has_mine",
+                    "label": "Моя рекомендация",
+                    "type": "checkbox",
+                },
             ],
             rows=[
                 {
                     "href": f"/sessions/{row.id}",
                     "cells": {
-                        "id": cell(row.id),
-                        "status": cell(row.status),
-                        "owner": cell(owner.full_name or owner.email),
                         "dog": cell(dog.name),
+                        "status": cell(row.status),
+                        "owner": cell(owner.name),
                         "survey": f"{survey.name} · v{version.version_num}",
                         "recommendations": cell(rec_counts[row.id][0]),
                         "users": cell(rec_counts[row.id][1]),
+                        "has_mine": has_mine,
                     },
                 }
-                for row, owner, dog, version, survey in rows
+                for row, owner, dog, version, survey, has_mine in rows
             ],
             count=count,
             page=page,
@@ -126,6 +197,7 @@ def sessions_page(
                 "owner_id": owner_id,
                 "dog_id": dog_id,
                 "survey_version_id": survey_version_id,
+                "users_sort": users_sort,
             },
         ),
     )
@@ -135,7 +207,7 @@ def sessions_page(
 def answer_events_page(
     request: Request,
     session: SessionDep,
-    user: CurrentUser,
+    user: SuperUser,
     page: int = 1,
     surveys_session_id: str = "",
     survey_version_id: str = "",
@@ -234,7 +306,7 @@ def _session_detail_response(
         answers, category=category, answer=answer
     )
     rec_groups = session_service.group_recommendations(
-        session_service.get_session_recommendations(session, session_id)
+        session_service.get_session_recommendations(session, session_id, user)
     )
     available = session_service.available_recommendations_for_user(
         session,
@@ -255,6 +327,7 @@ def _session_detail_response(
             "answers": [
                 {
                     "order_number": item.link.order_num,
+                    "display_num": item.link.display_num,
                     "question_text": item.question.text,
                     "category_name": dictionary_service.label_for(
                         session,
@@ -276,6 +349,9 @@ def _session_detail_response(
             "unanswered_filter": session_service.UNANSWERED_FILTER,
             "has_questions": bool(answers),
             "rec_groups": rec_groups,
+            "can_manage_all_recommendations": (
+                session_service.can_manage_all_session_recommendations(user)
+            ),
             "available_recommendations": available,
             "error": error,
         },
@@ -348,6 +424,27 @@ def add_session_recommendation(
     return RedirectResponse(f"/sessions/{session_id}", status_code=303)
 
 
+@router.post("/sessions/{session_id}/recommendations/{recommendation_id}/delete")
+def delete_session_recommendation(
+    session: SessionDep,
+    user: CurrentUser,
+    session_id: uuid.UUID,
+    recommendation_id: uuid.UUID,
+) -> RedirectResponse:
+    try:
+        session_service.delete_session_recommendation(
+            session,
+            session_id=session_id,
+            current_user=user,
+            recommendation_id=recommendation_id,
+        )
+    except session_service.SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except session_service.SessionRecommendationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+
+
 @router.post("/sessions/{session_id}/recommendations/save")
 def save_session_recommendations(
     request: Request,
@@ -406,6 +503,8 @@ def save_session_recommendations(
             error=str(exc),
             status_code=400,
         )
+    except session_service.SessionRecommendationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError:
         return _session_detail_response(
             request,

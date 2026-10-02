@@ -182,6 +182,7 @@ class SurveyQuestion(CreatedAtMixin, SQLModel, table=True):
         ondelete="RESTRICT",
     )
     order_num: int
+    display_num: int | None = None
     group: SurveyQuestionGroup = Field(
         default=SurveyQuestionGroup.OTHER,
         sa_column=Column(
@@ -248,7 +249,7 @@ class SurveySession(TimestampMixin, SQLModel, table=True):
         primary_key=True,
         sa_column_kwargs=UUID_PK_KWARGS,
     )
-    owner_id: uuid.UUID = Field(foreign_key="users.id", ondelete="RESTRICT")
+    owner_id: uuid.UUID = Field(foreign_key="owners.id", ondelete="RESTRICT")
     dog_id: uuid.UUID = Field(foreign_key="dogs.id", ondelete="RESTRICT")
     survey_version_id: uuid.UUID = Field(
         foreign_key="survey_versions.id", ondelete="RESTRICT"

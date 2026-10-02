@@ -106,6 +106,7 @@ def survey_detail(
             "questions": [
                 {
                     "order_number": link.order_num,
+                    "display_num": link.display_num,
                     "group": dictionary_service.label_for(
                         session,
                         dictionary_service.SURVEYS_QUESTIONS_GROUP_KEY,

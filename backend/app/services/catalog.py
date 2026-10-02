@@ -91,7 +91,11 @@ def get_version_questions(
         .where(SurveyQuestion.survey_version_id == survey_version_id)
         .where(SurveyQuestion.question_id == Question.id)
         .where(Question.scale_id == Scale.id)
-        .order_by(col(SurveyQuestion.order_num), col(Question.id))
+        .order_by(
+            col(SurveyQuestion.display_num),
+            col(SurveyQuestion.order_num),
+            col(Question.id),
+        )
     ).all()
     return list(rows)
 

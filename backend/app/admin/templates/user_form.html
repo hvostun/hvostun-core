@@ -54,6 +54,7 @@
         <option value="false" {% if form.is_active == "false" %}selected{% endif %}>нет</option>
       </select>
     </div>
+    {% if can_manage_superusers %}
     <div class="col-md-6 mb-3">
       <label class="form-label" for="is_superuser">Superuser</label>
       <select class="form-select" id="is_superuser" name="is_superuser">
@@ -61,6 +62,9 @@
         <option value="false" {% if form.is_superuser == "false" %}selected{% endif %}>нет</option>
       </select>
     </div>
+    {% else %}
+    <input type="hidden" name="is_superuser" value="false" />
+    {% endif %}
   </div>
   <button class="btn btn-primary" type="submit">{% if is_create %}Создать{% else %}Сохранить{% endif %}</button>
 </form>

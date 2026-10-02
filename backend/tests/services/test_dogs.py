@@ -61,3 +61,13 @@ def test_update_dog_sets_optional_fields(db: Session) -> None:
     assert updated.birthday == date(2025, 1, 1)
     assert updated.status_at == date(2026, 2, 2)
     assert updated.mixed is True
+    assert updated.firstdog is True
+    updated.weight = 12.5
+    updated.height = 48
+    updated.firstdog = False
+    db.add(updated)
+    db.commit()
+    db.refresh(updated)
+    assert updated.weight == 12.5
+    assert updated.height == 48
+    assert updated.firstdog is False

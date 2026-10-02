@@ -214,8 +214,10 @@ def test_dog_update_rejects_empty_name(client: TestClient, db: Session) -> None:
 def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> None:
     user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
     assert user
+    owner = Owner(name="Владелец сессии")
     dog = Dog(name="Rex Sessions")
     survey = Survey(name="C-BARQ Sessions", slug="cbarq-sessions-admin")
+    db.add(owner)
     db.add(dog)
     db.add(survey)
     db.commit()
@@ -228,7 +230,7 @@ def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> N
     db.commit()
     db.refresh(version)
     session_row = SurveySession(
-        owner_id=user.id,
+        owner_id=owner.id,
         dog_id=dog.id,
         survey_version_id=version.id,
         status="draft",
@@ -250,7 +252,7 @@ def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> N
     assert "Анкета" in sessions.text
     assert "Рекомендации" in sessions.text
     assert "Пользователи" in sessions.text
-    assert (user.full_name or user.email) in sessions.text
+    assert owner.name in sessions.text
     assert "Rex Sessions" in sessions.text
     assert "C-BARQ Sessions" in sessions.text
     assert str(session_row.id) in sessions.text
@@ -268,6 +270,7 @@ def test_sessions_page_shows_recommendation_counts(
 ) -> None:
     owner = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
     assert owner
+    session_owner = Owner(name="Владелец рекомендаций")
     other = crud.create_user(
         session=db,
         user_create=UserCreate(
@@ -287,6 +290,7 @@ def test_sessions_page_shows_recommendation_counts(
         slug=f"second-{random_lower_string()}",
         text="Два.",
     )
+    db.add(session_owner)
     db.add(dog)
     db.add(survey)
     db.add(first)
@@ -303,7 +307,7 @@ def test_sessions_page_shows_recommendation_counts(
     db.commit()
     db.refresh(version)
     session_row = SurveySession(
-        owner_id=owner.id,
+        owner_id=session_owner.id,
         dog_id=dog.id,
         survey_version_id=version.id,
         status="draft",
@@ -339,6 +343,16 @@ def test_sessions_page_shows_recommendation_counts(
         )
     )
     db.commit()
+    empty_dog = Dog(name="Rex Without Recommendations")
+    empty_session = SurveySession(
+        owner_id=session_owner.id,
+        dog_id=empty_dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    db.add(empty_dog)
+    db.add(empty_session)
+    db.commit()
     client.post(
         "/login",
         data={
@@ -352,6 +366,20 @@ def test_sessions_page_shows_recommendation_counts(
     assert re.search(
         r"C-BARQ Rec Counts · v1\s*</td>\s*<td>\s*3\s*</td>\s*<td>\s*2\s*</td>",
         sessions.text,
+    )
+    assert 'name="has_my_recommendation"' not in sessions.text
+    mine_row = re.search(r"Rex Rec Counts.*?</tr>", sessions.text, re.S)
+    empty_row = re.search(r"Rex Without Recommendations.*?</tr>", sessions.text, re.S)
+    assert mine_row is not None and "checked" in mine_row.group(0)
+    assert empty_row is not None and "checked" not in empty_row.group(0)
+
+    ascending = client.get("/sessions", params={"users_sort": "asc"})
+    assert ascending.text.index("Rex Without Recommendations") < ascending.text.index(
+        "Rex Rec Counts"
+    )
+    descending = client.get("/sessions", params={"users_sort": "desc"})
+    assert descending.text.index("Rex Rec Counts") < descending.text.index(
+        "Rex Without Recommendations"
     )
 
 
@@ -405,7 +433,7 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
     )
     db.add(link)
     session_row = SurveySession(
-        owner_id=user.id,
+        owner_id=_create_owner(db).id,
         dog_id=dog.id,
         survey_version_id=version.id,
         status="draft",
@@ -481,7 +509,7 @@ def test_session_detail_hides_progress_for_missing_answer(
         )
     )
     session_row = SurveySession(
-        owner_id=user.id,
+        owner_id=_create_owner(db).id,
         dog_id=dog.id,
         survey_version_id=version.id,
         status="draft",
@@ -553,7 +581,7 @@ def test_session_detail_filters_questions_by_category_and_answer(
         )
     )
     session_row = SurveySession(
-        owner_id=user.id,
+        owner_id=_create_owner(db).id,
         dog_id=dog.id,
         survey_version_id=version.id,
         status="draft",
@@ -635,7 +663,7 @@ def test_session_detail_shows_dog_facts(client: TestClient, db: Session) -> None
     db.commit()
     db.refresh(version)
     session_row = SurveySession(
-        owner_id=user.id,
+        owner_id=_create_owner(db).id,
         dog_id=dog.id,
         survey_version_id=version.id,
         status="draft",
@@ -699,7 +727,7 @@ def test_answer_events_page_is_visible_to_logged_in_user(
         )
     )
     session_row = SurveySession(
-        owner_id=user.id,
+        owner_id=_create_owner(db).id,
         dog_id=dog.id,
         survey_version_id=version.id,
         status="draft",
@@ -769,6 +797,45 @@ def test_users_new_forbidden_for_non_superuser(
         follow_redirects=False,
     )
     assert create.status_code == 403
+
+
+def test_admin_can_manage_regular_users_but_cannot_grant_superuser(
+    client: TestClient, db: Session
+) -> None:
+    _login_admin(client, db)
+    form = client.get("/users/new")
+    assert form.status_code == 200
+    assert 'name="is_superuser" value="false"' in form.text
+
+    regular_email = f"regular-{random_lower_string()}@example.com"
+    created = client.post(
+        "/users/new",
+        data={
+            "email": regular_email,
+            "password": "Secret12",
+            "group": "expert",
+            "is_active": "true",
+            "is_superuser": "false",
+        },
+        follow_redirects=False,
+    )
+    assert created.status_code == 303
+    regular = db.exec(select(User).where(User.email == regular_email)).first()
+    assert regular is not None
+    assert regular.is_superuser is False
+
+    blocked = client.post(
+        "/users/new",
+        data={
+            "email": f"blocked-super-{random_lower_string()}@example.com",
+            "password": "Secret12",
+            "group": "admin",
+            "is_active": "true",
+            "is_superuser": "true",
+        },
+    )
+    assert blocked.status_code == 403
+    assert "Только superuser" in blocked.text
 
 
 def test_user_create_and_update(client: TestClient, db: Session) -> None:
@@ -877,6 +944,14 @@ def _login_superuser(client: TestClient) -> None:
     )
 
 
+def _create_owner(db: Session, name: str = "Владелец сессии") -> Owner:
+    owner = Owner(name=name)
+    db.add(owner)
+    db.commit()
+    db.refresh(owner)
+    return owner
+
+
 def _session_with_recommendation_catalog(
     db: Session,
 ) -> tuple[SurveySession, Recommendation, User]:
@@ -901,7 +976,7 @@ def _session_with_recommendation_catalog(
     db.commit()
     db.refresh(version)
     session_row = SurveySession(
-        owner_id=user.id,
+        owner_id=_create_owner(db, "Владелец рекомендаций").id,
         dog_id=dog.id,
         survey_version_id=version.id,
         status="draft",
@@ -949,6 +1024,7 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert detail.status_code == 200
     assert "Короткая прогулка" in detail.text
     assert "приоритет на первую неделю" in detail.text
+    assert f"Автор рекомендации: {user.full_name or user.email}" in detail.text
     assert f'value="{recommendation.id}"' not in detail.text
 
 
@@ -975,6 +1051,71 @@ def test_session_recommendation_rejects_duplicate(
     assert "уже добавлена" in response.text
 
 
+def test_user_can_delete_own_session_recommendation(
+    client: TestClient, db: Session
+) -> None:
+    session_row, recommendation, user = _session_with_recommendation_catalog(db)
+    row = SessionRecommendation(
+        user_id=user.id,
+        session_id=session_row.id,
+        recomendation_id=recommendation.id,
+        chart_number=0,
+        weight=1.0,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _login_superuser(client)
+    row_id = row.id
+    delete_path = f"/sessions/{session_row.id}/recommendations/{row_id}/delete"
+
+    page = client.get(f"/sessions/{session_row.id}")
+    assert delete_path in page.text
+    response = client.post(delete_path, follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/sessions/{session_row.id}"
+    db.expire_all()
+    assert db.get(SessionRecommendation, row_id) is None
+
+
+def test_user_cannot_delete_another_users_session_recommendation(
+    client: TestClient, db: Session
+) -> None:
+    session_row, recommendation, author = _session_with_recommendation_catalog(db)
+    row = SessionRecommendation(
+        user_id=author.id,
+        session_id=session_row.id,
+        recomendation_id=recommendation.id,
+        chart_number=0,
+        weight=1.0,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _login_expert(client, db)
+    delete_path = f"/sessions/{session_row.id}/recommendations/{row.id}/delete"
+
+    page = client.get(f"/sessions/{session_row.id}")
+    assert delete_path not in page.text
+    assert f'name="recommendation_id" value="{row.id}"' not in page.text
+    response = client.post(delete_path, follow_redirects=False)
+
+    assert response.status_code == 403
+    assert db.get(SessionRecommendation, row.id) is not None
+    forged_update = client.post(
+        f"/sessions/{session_row.id}/recommendations/save",
+        data={
+            "recommendation_id": [str(row.id)],
+            "chart_number": ["2"],
+            "weight": ["0.5"],
+            "comment": ["чужое изменение"],
+        },
+        follow_redirects=False,
+    )
+    assert forged_update.status_code == 403
+
+
 def test_session_recommendation_can_be_updated(
     client: TestClient, db: Session
 ) -> None:
@@ -998,7 +1139,7 @@ def test_session_recommendation_can_be_updated(
     assert "Критичность" in page.text
     assert page.text.count("Сохранить") == 1
     assert f"/sessions/{session_row.id}/recommendations/save" in page.text
-    assert f"/sessions/{session_row.id}/recommendations/{row.id}" not in page.text
+    assert f'/sessions/{session_row.id}/recommendations/{row.id}"' not in page.text
     response = client.post(
         f"/sessions/{session_row.id}/recommendations/save",
         data={
@@ -1115,6 +1256,72 @@ def _login_admin(client: TestClient, db: Session) -> User:
     return user
 
 
+def _login_expert(client: TestClient, db: Session) -> User:
+    password = f"Exp1-{random_lower_string()[:8]}"
+    user = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"expert-{random_lower_string()}@example.com",
+            password=password,
+            group=UserGroup.EXPERT,
+        ),
+    )
+    client.post("/login", data={"email": user.email, "password": password})
+    return user
+
+
+def test_expert_access_matrix(client: TestClient, db: Session) -> None:
+    _login_expert(client, db)
+    for path in ("/surveys", "/scales", "/sessions"):
+        assert client.get(path).status_code == 200
+    for path in (
+        "/dogs",
+        "/recommendations",
+        "/users",
+        "/dictionaries",
+        "/answer-events",
+        "/owners",
+    ):
+        assert client.get(path, follow_redirects=False).status_code == 403
+
+    home = client.get("/")
+    assert 'href="/surveys"' in home.text
+    assert 'href="/scales"' in home.text
+    assert 'href="/sessions"' in home.text
+    assert 'href="/dogs"' not in home.text
+    assert 'href="/recommendations"' not in home.text
+    assert 'href="/users"' not in home.text
+
+
+def test_admin_access_matrix(client: TestClient, db: Session) -> None:
+    _login_admin(client, db)
+    for path in (
+        "/dogs",
+        "/surveys",
+        "/scales",
+        "/sessions",
+        "/recommendations",
+        "/users",
+    ):
+        assert client.get(path).status_code == 200
+    for path in ("/dictionaries", "/answer-events", "/owners"):
+        assert client.get(path, follow_redirects=False).status_code == 403
+
+    home = client.get("/")
+    for path in (
+        "/dogs",
+        "/surveys",
+        "/scales",
+        "/sessions",
+        "/recommendations",
+        "/users",
+    ):
+        assert f'href="{path}"' in home.text
+    assert 'href="/dictionaries"' not in home.text
+    assert 'href="/answer-events"' not in home.text
+    assert 'href="/owners"' not in home.text
+
+
 def test_scales_page_visible_to_logged_in_user(client: TestClient, db: Session) -> None:
     scale = Scale(
         name="Частота лая",
@@ -1131,8 +1338,7 @@ def test_scales_page_visible_to_logged_in_user(client: TestClient, db: Session) 
     assert "Частота лая" in page.text
     detail = client.get(f"/scales/{scale.id}")
     assert detail.status_code == 200
-    assert "Редактирование доступно группе admin." in detail.text
-    assert "Сохранить" not in detail.text
+    assert "Сохранить" in detail.text
 
 
 def test_scale_update_forbidden_for_expert(client: TestClient, db: Session) -> None:
@@ -1144,7 +1350,7 @@ def test_scale_update_forbidden_for_expert(client: TestClient, db: Session) -> N
     db.add(scale)
     db.commit()
     db.refresh(scale)
-    _login_superuser(client)
+    _login_expert(client, db)
     response = client.post(
         f"/scales/{scale.id}",
         data={
@@ -1263,6 +1469,49 @@ def test_dictionary_update_rejects_invalid_json(
     assert "Некорректный JSON" in response.text
     db.refresh(row)
     assert row.value == {"ok": True}
+
+
+def test_survey_detail_sorts_questions_by_display_num(
+    client: TestClient, db: Session
+) -> None:
+    survey = Survey(name="Display order", slug=f"display-order-{random_lower_string()}")
+    scale = Scale(name="Балл", type="integer", config={"min_value": 0, "max_value": 4})
+    db.add(survey)
+    db.add(scale)
+    db.commit()
+    db.refresh(survey)
+    db.refresh(scale)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    later = Question(text="Показывается вторым", scale_id=scale.id)
+    earlier = Question(text="Показывается первым", scale_id=scale.id)
+    db.add(version)
+    db.add(later)
+    db.add(earlier)
+    db.commit()
+    db.refresh(version)
+    db.refresh(later)
+    db.refresh(earlier)
+    db.add(
+        SurveyQuestion(
+            survey_version_id=version.id,
+            question_id=later.id,
+            order_num=1,
+            display_num=2,
+        )
+    )
+    db.add(
+        SurveyQuestion(
+            survey_version_id=version.id,
+            question_id=earlier.id,
+            order_num=2,
+            display_num=1,
+        )
+    )
+    db.commit()
+    _login_superuser(client)
+    page = client.get(f"/surveys/{survey.id}")
+    assert page.status_code == 200
+    assert page.text.index("Показывается первым") < page.text.index("Показывается вторым")
 
 
 def test_json_api_is_gone(client: TestClient) -> None:

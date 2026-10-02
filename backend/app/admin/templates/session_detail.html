@@ -53,7 +53,8 @@
       <thead>
         <tr>
           <th>Категория</th>
-          <th>№</th>
+          <th>Порядковый номер</th>
+          <th>Отображаемый номер</th>
           <th>Вопрос</th>
           <th>Ответ</th>
           <th>Значение</th>
@@ -64,6 +65,7 @@
         <tr>
           <td>{{ item.category_name }}</td>
           <td>{{ item.order_number }}</td>
+          <td>{{ item.display_num }}</td>
           <td>{{ item.question_text }}</td>
           <td>
             {% if item.show_bar %}
@@ -142,6 +144,18 @@
                 <textarea class="form-control" id="comment-{{ item.id }}" name="comment"
                   rows="2">{{ item.comment or "" }}</textarea>
               </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-sm-10">
+              Автор рекомендации: {{ item.author_name }}
+            </div>
+            <div class="col-sm-2">
+              {% if item.user_id == user.id or can_manage_all_recommendations %}
+              <button class="btn btn-danger" type="submit"
+                formaction="/sessions/{{ session_row.id }}/recommendations/{{ item.id }}/delete" formmethod="post"
+                onclick="return confirm('Удалить рекомендацию?')">Удалить</button>
+              {% endif %}
             </div>
           </div>
         </div>

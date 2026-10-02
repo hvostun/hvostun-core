@@ -32,7 +32,7 @@
     <thead>
       <tr>
         {% for column in columns %}
-        <th>{{ column.label }}</th>
+        <th>{% if column.sort_href %}<a href="{{ column.sort_href }}">{{ column.label }}</a>{% else %}{{ column.label }}{% endif %}</th>
         {% endfor %}
       </tr>
     </thead>
@@ -41,7 +41,9 @@
       <tr>
         {% for column in columns %}
         <td>
-          {% if row.href and loop.first %}
+          {% if column.type == "checkbox" %}
+          <input type="checkbox" disabled {% if row.cells[column.key] %}checked{% endif %} aria-label="{{ column.label }}" />
+          {% elif row.href and loop.first %}
           <a href="{{ row.href }}">{{ row.cells[column.key] }}</a>
           {% else %}
           {{ row.cells[column.key] }}

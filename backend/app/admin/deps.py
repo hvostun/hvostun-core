@@ -43,7 +43,7 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 def is_admin(user: User) -> bool:
-    return user.group == UserGroup.ADMIN
+    return user.is_superuser or user.group == UserGroup.ADMIN
 
 
 def get_current_admin(current_user: CurrentUser) -> User:
