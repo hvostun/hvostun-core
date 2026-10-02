@@ -9,6 +9,7 @@ from app.admin.deps import CurrentUser, SessionDep
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
 from app.models import AnswerEvent, Dog, Survey, SurveySession, SurveyVersion, User
 from app.pagination import execute_page, page_window
+from app.services import dictionaries as dictionary_service
 from app.services import sessions as session_service
 
 router = APIRouter()
@@ -70,6 +71,9 @@ def sessions_page(
         offset=offset,
         limit=limit,
     )
+    rec_counts = session_service.session_recommendation_counts(
+        session, [row.id for row, *_ in rows]
+    )
     return templates.TemplateResponse(
         request,
         "list.html",
@@ -83,6 +87,8 @@ def sessions_page(
                 {"key": "owner", "label": "Пользователь"},
                 {"key": "dog", "label": "Собака"},
                 {"key": "survey", "label": "Анкета"},
+                {"key": "recommendations", "label": "Рекомендации"},
+                {"key": "users", "label": "Пользователи"},
             ],
             rows=[
                 {
@@ -93,6 +99,8 @@ def sessions_page(
                         "owner": cell(owner.full_name or owner.email),
                         "dog": cell(dog.name),
                         "survey": f"{survey.name} · v{version.version_num}",
+                        "recommendations": cell(rec_counts[row.id][0]),
+                        "users": cell(rec_counts[row.id][1]),
                     },
                 }
                 for row, owner, dog, version, survey in rows
@@ -212,6 +220,8 @@ def _session_detail_response(
     user: CurrentUser,
     session_id: uuid.UUID,
     *,
+    category: str = "",
+    answer: str = "",
     error: str | None = None,
     status_code: int = 200,
 ) -> Any:
@@ -220,6 +230,9 @@ def _session_detail_response(
     except session_service.SessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     answers = session_service.get_session_answers(session, context.row)
+    filtered = session_service.filter_session_answers(
+        answers, category=category, answer=answer
+    )
     rec_groups = session_service.group_recommendations(
         session_service.get_session_recommendations(session, session_id)
     )
@@ -236,16 +249,32 @@ def _session_detail_response(
             "session_row": context.row,
             "survey": context.survey,
             "version": context.version,
-            "dog": session_service.dog_session_facts(context.dog, context.row),
+            "dog": session_service.dog_session_facts(
+                session, context.dog, context.row
+            ),
             "answers": [
                 {
                     "order_number": item.link.order_num,
                     "question_text": item.question.text,
+                    "category_name": dictionary_service.label_for(
+                        session,
+                        dictionary_service.SURVEYS_QUESTIONS_GROUP_KEY,
+                        item.link.group,
+                    ),
                     "answer": item.display_value,
                     "legend": item.legend,
+                    "show_bar": item.progress["show_bar"],
+                    "bar_percent": item.progress["percent"],
+                    "bar_color": item.progress["color"],
                 }
-                for item in answers
+                for item in filtered
             ],
+            "categories": session_service.session_answer_categories(session),
+            "answer_values": session_service.session_answer_values(answers),
+            "category": category,
+            "answer": answer,
+            "unanswered_filter": session_service.UNANSWERED_FILTER,
+            "has_questions": bool(answers),
             "rec_groups": rec_groups,
             "available_recommendations": available,
             "error": error,
@@ -260,8 +289,17 @@ def session_detail(
     session: SessionDep,
     user: CurrentUser,
     session_id: uuid.UUID,
+    category: str = "",
+    answer: str = "",
 ) -> Any:
-    return _session_detail_response(request, session, user, session_id)
+    return _session_detail_response(
+        request,
+        session,
+        user,
+        session_id,
+        category=category,
+        answer=answer,
+    )
 
 
 @router.post("/sessions/{session_id}/recommendations")
@@ -310,26 +348,52 @@ def add_session_recommendation(
     return RedirectResponse(f"/sessions/{session_id}", status_code=303)
 
 
-@router.post("/sessions/{session_id}/recommendations/{recommendation_id}")
-def update_session_recommendation(
+@router.post("/sessions/{session_id}/recommendations/save")
+def save_session_recommendations(
     request: Request,
     session: SessionDep,
     user: CurrentUser,
     session_id: uuid.UUID,
-    recommendation_id: uuid.UUID,
-    chart_number: str = Form(""),
-    weight: str = Form(""),
-    comment: str = Form(""),
+    recommendation_id: list[str] = Form(default=[]),
+    chart_number: list[str] = Form(default=[]),
+    weight: list[str] = Form(default=[]),
+    comment: list[str] = Form(default=[]),
 ) -> Any:
+    if not (
+        len(recommendation_id)
+        == len(chart_number)
+        == len(weight)
+        == len(comment)
+    ):
+        return _session_detail_response(
+            request,
+            session,
+            user,
+            session_id,
+            error="Некорректные данные рекомендаций",
+            status_code=400,
+        )
     try:
-        session_service.update_session_recommendation(
+        updates = [
+            (
+                uuid.UUID(row_id),
+                session_service.parse_chart_number(chart),
+                session_service.parse_weight(weight_value),
+                text,
+            )
+            for row_id, chart, weight_value, text in zip(
+                recommendation_id,
+                chart_number,
+                weight,
+                comment,
+                strict=True,
+            )
+        ]
+        session_service.update_session_recommendations(
             session,
             session_id=session_id,
             current_user=user,
-            recommendation_id=recommendation_id,
-            chart_number=session_service.parse_chart_number(chart_number),
-            weight=session_service.parse_weight(weight),
-            comment=comment,
+            updates=updates,
         )
     except session_service.SessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -340,6 +404,15 @@ def update_session_recommendation(
             user,
             session_id,
             error=str(exc),
+            status_code=400,
+        )
+    except ValueError:
+        return _session_detail_response(
+            request,
+            session,
+            user,
+            session_id,
+            error="Некорректные данные рекомендаций",
             status_code=400,
         )
     return RedirectResponse(f"/sessions/{session_id}", status_code=303)

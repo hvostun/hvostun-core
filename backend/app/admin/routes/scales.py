@@ -99,19 +99,17 @@ def scales_page(
             user=user,
             title="Шкалы",
             columns=[
-                {"key": "id", "label": "id"},
-                {"key": "name", "label": "name"},
-                {"key": "type", "label": "type"},
-                {"key": "description", "label": "description"},
+                {"key": "name", "label": "Шкала"},
+                {"key": "type", "label": "Тип данных"},
+                {"key": "config", "label": "Легенда"},
             ],
             rows=[
                 {
                     "href": f"/scales/{row.id}",
                     "cells": {
-                        "id": cell(row.id),
                         "name": cell(row.name),
                         "type": cell(row.type),
-                        "description": cell(row.description),
+                        "config": cell(_format_config(row.config)),
                     },
                 }
                 for row in rows

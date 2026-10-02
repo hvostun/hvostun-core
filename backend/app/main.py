@@ -1,5 +1,8 @@
+from pathlib import Path
+
 import sentry_sdk
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.admin.router import router as admin_router
 from app.core.config import settings
@@ -15,6 +18,11 @@ app = FastAPI(
 )
 
 app.include_router(admin_router)
+app.mount(
+    "/static",
+    StaticFiles(directory=Path(__file__).resolve().parent / "admin" / "static"),
+    name="static",
+)
 
 
 @app.get("/health", include_in_schema=False)

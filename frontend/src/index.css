@@ -39,9 +39,12 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-blue: var(--blue);
+  --color-sand: var(--sand);
+  --color-coral: var(--coral);
 }
 
-:root {
+/* :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -74,6 +77,42 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+} */
+:root {
+  --radius: .75rem;
+  --background: oklch(99.2% .004 100);
+  --foreground: oklch(24.5% .024 157.1);
+  --card: oklch(99.2% .004 100);
+  --card-foreground: oklch(24.5% .024 157.1);
+  --popover: oklch(99.2% .004 100);
+  --popover-foreground: oklch(24.5% .024 157.1);
+  --primary: oklch(32.8% .061 155.1);
+  --primary-foreground: oklch(99.2% .004 100);
+  --secondary: oklch(92.7% .024 231.9);
+  --secondary-foreground: oklch(24.5% .024 157.1);
+  --muted: oklch(92.7% .024 231.9);
+  --muted-foreground: oklch(45% .035 160);
+  --accent: oklch(52.9% .112 140.9);
+  --accent-foreground: oklch(99.2% .004 100);
+  --blue: oklch(79.3% .073 237.5);
+  --blue-foreground: oklch(32.8% .061 155.1);
+  --tint-blue: oklch(92.7% .024 231.9);
+  --sand: oklch(86% .075 90);
+  --coral: oklch(78% .07 40);
+  --destructive: oklch(57.7% .215 27);
+  --destructive-foreground: oklch(99.2% .004 100);
+  --border: oklch(24.5% .024 157.1 / .14);
+  --input: oklch(24.5% .024 157.1 / .24);
+  --ring: oklch(52.9% .112 140.9);
+  --chart-1: oklch(32.8% .061 155.1);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(92.7% .024 231.9);
+  --sidebar-primary: oklch(52.9% .112 140.9);
+  --sidebar-primary-foreground: oklch(92.7% .024 231.9);
 }
 
 .dark {
@@ -114,9 +153,11 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   button,
   [role="button"] {
     cursor: pointer;

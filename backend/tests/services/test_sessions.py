@@ -1,10 +1,14 @@
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 
 import pytest
 
 from app.services.sessions import (
+    UNANSWERED_FILTER,
     SessionRecommendationError,
+    answer_progress,
     days_since_status,
+    filter_session_answers,
     format_dog_age,
     parse_chart_number,
     parse_weight,
@@ -36,3 +40,29 @@ def test_parse_chart_and_weight() -> None:
         parse_chart_number("-1")
     with pytest.raises(SessionRecommendationError, match="от 0 до 1"):
         parse_weight("1.5")
+
+
+def test_filter_session_answers() -> None:
+    first = SimpleNamespace(link=SimpleNamespace(group="Excitability"), display_value="3")
+    second = SimpleNamespace(link=SimpleNamespace(group="Aggression"), display_value="")
+    rows = [first, second]  # type: ignore[list-item]
+    assert filter_session_answers(rows, category="Excitability") == [first]
+    assert filter_session_answers(rows, answer="3") == [first]
+    assert filter_session_answers(rows, answer=UNANSWERED_FILTER) == [second]
+    assert filter_session_answers(rows, category="Aggression", answer="3") == []
+
+
+def test_answer_progress_maps_scale_and_skips_missing() -> None:
+    config = {"min_value": 0, "max_value": 4}
+    bar = answer_progress({"value": 3}, config, "Excitability")
+    assert bar["show_bar"] is True
+    assert bar["percent"] == 75
+    assert bar["color"] == "var(--bs-orange)"
+    missing = answer_progress({"value": -999}, config, "Aggression")
+    assert missing["show_bar"] is False
+    assert missing["color"] == "var(--bs-red)"
+    empty = answer_progress(None, config, "other")
+    assert empty["show_bar"] is False
+    zero = answer_progress({"value": 0}, {"min_value": -1, "max_value": 4}, "other")
+    assert zero["show_bar"] is True
+    assert zero["percent"] == 0

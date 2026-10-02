@@ -22,6 +22,12 @@ def upgrade() -> None:
         sa.Column("survey_version_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("question_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("order_num", sa.Integer(), nullable=False),
+        sa.Column(
+            sa.quoted_name("group", True),
+            sa.Text(),
+            nullable=False,
+            server_default="other",
+        ),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=True),
         created_at(),
         sa.ForeignKeyConstraint(
@@ -36,6 +42,11 @@ def upgrade() -> None:
             "survey_version_id",
             "order_num",
             name="uq_surveys_questions_version_order",
+        ),
+        sa.CheckConstraint(
+            "\"group\" IN ('Excitability', 'Aggression', 'Fear_Anxiety', "
+            "'Separation', 'Attachment', 'Training', 'other')",
+            name="ck_surveys_questions_group",
         ),
     )
     op.create_index(

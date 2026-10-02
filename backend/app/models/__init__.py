@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel
 
 from app.models.base import CreatedAtMixin, TimestampMixin, get_datetime_utc
+from app.models.dictionary import Dictionary
 from app.models.dog import (
     Dog,
     DogChip,
@@ -31,6 +32,7 @@ from app.models.questionnairy import (
     Survey,
     SurveyPublic,
     SurveyQuestion,
+    SurveyQuestionGroup,
     SurveySession,
     SurveySessionPublic,
     SurveySessionsPublic,
@@ -41,6 +43,7 @@ from app.models.questionnairy import (
 )
 from app.models.recommendation import (
     Recommendation,
+    RecommendationGroup,
     RecommendationPublic,
     RecommendationsPublic,
     SessionRecommendation,
@@ -71,6 +74,7 @@ __all__ = [
     "AnswerValue",
     "Consent",
     "CreatedAtMixin",
+    "Dictionary",
     "Dog",
     "DogChip",
     "DogPublic",
@@ -88,6 +92,7 @@ __all__ = [
     "Survey",
     "SurveyPublic",
     "SurveyQuestion",
+    "SurveyQuestionGroup",
     "SurveySession",
     "SurveySessionPublic",
     "SurveySessionsPublic",
@@ -98,6 +103,7 @@ __all__ = [
     "SessionAnswerPublic",
     "SessionAnswersPublic",
     "Recommendation",
+    "RecommendationGroup",
     "RecommendationPublic",
     "RecommendationsPublic",
     "SessionRecommendation",

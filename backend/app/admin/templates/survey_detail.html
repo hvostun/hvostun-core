@@ -11,6 +11,7 @@
   <thead>
     <tr>
       <th>order</th>
+      <th>group</th>
       <th>text</th>
       <th>scale_name</th>
     </tr>
@@ -19,6 +20,7 @@
     {% for item in questions %}
     <tr>
       <td>{{ item.order_number }}</td>
+      <td>{{ item.group or "—" }}</td>
       <td>{{ item.text }}</td>
       <td>{{ item.scale_name }}</td>
     </tr>

@@ -16,10 +16,11 @@ from app.models.questionnairy import (
     ScaleType,
     SessionStatus,
     SurveyQuestion,
+    SurveyQuestionGroup,
     SurveySession,
     SurveyVersion,
 )
-from app.models.recommendation import Recommendation
+from app.models.recommendation import Recommendation, RecommendationGroup
 from app.models.user import User, UserGroup
 
 
@@ -72,6 +73,10 @@ def _validate_domain_values(session: SASession) -> None:
                 obj.type = ScaleType(obj.type)
             elif isinstance(obj, User):
                 obj.group = UserGroup(obj.group)
+            elif isinstance(obj, SurveyQuestion):
+                obj.group = SurveyQuestionGroup(obj.group)
+            elif isinstance(obj, Recommendation):
+                obj.group = RecommendationGroup(obj.group)
         except ValueError as exc:
             raise DomainValueValidationError(str(exc)) from exc
 
@@ -117,6 +122,9 @@ def _validate_answer(session: SASession, answer: AnswerEvent) -> None:
 
     if value is None:
         answer.value = {"value": None}
+        return
+    if value == -999:
+        answer.value = {"value": -999}
         return
     if scale_type == ScaleType.INTEGER:
         if isinstance(value, bool) or not isinstance(value, int):

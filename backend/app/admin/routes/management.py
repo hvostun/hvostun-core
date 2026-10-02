@@ -1,12 +1,16 @@
+import uuid
+from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
 from app.admin.deps import SessionDep, SuperUser
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
-from app.models import Owner, Recommendation, User
+from app.models import Owner, Recommendation, User, UserGroup
 from app.pagination import execute_page, page_window
+from app.services import users as user_service
 
 router = APIRouter()
 
@@ -25,6 +29,9 @@ def _render_list(
     row_cells: Any,
     filters: list[dict[str, str]],
     filter_values: dict[str, str],
+    row_href: Callable[[Any], str | None] | None = None,
+    create_href: str | None = None,
+    create_label: str | None = None,
 ) -> Any:
     offset, limit, page = page_window(page, PAGE_SIZE)
     count_stmt = select(func.count()).select_from(model)
@@ -46,11 +53,19 @@ def _render_list(
             user=user,
             title=title,
             columns=columns,
-            rows=[{"href": None, "cells": row_cells(row)} for row in rows],
+            rows=[
+                {
+                    "href": row_href(row) if row_href else None,
+                    "cells": row_cells(row),
+                }
+                for row in rows
+            ],
             count=count,
             page=page,
             filters=filters,
             filter_values=filter_values,
+            create_href=create_href,
+            create_label=create_label,
         ),
     )
 
@@ -130,15 +145,11 @@ def recommendations_page(
         ),
         filters_sql=filters_sql,
         columns=[
-            {"key": "id", "label": "id"},
             {"key": "name", "label": "name"},
-            {"key": "slug", "label": "slug"},
             {"key": "description", "label": "description"},
         ],
         row_cells=lambda row: {
-            "id": cell(row.id),
             "name": cell(row.name),
-            "slug": cell(row.slug),
             "description": cell(row.description),
         },
         filters=[
@@ -173,7 +184,6 @@ def users_page(
         statement=select(User).order_by(col(User.created_at).desc()),
         filters_sql=filters_sql,
         columns=[
-            {"key": "id", "label": "id"},
             {"key": "email", "label": "email"},
             {"key": "full_name", "label": "full_name"},
             {"key": "group", "label": "group"},
@@ -181,7 +191,6 @@ def users_page(
             {"key": "is_active", "label": "is_active"},
         ],
         row_cells=lambda row: {
-            "id": cell(row.id),
             "email": cell(row.email),
             "full_name": cell(row.full_name),
             "group": cell(row.group),
@@ -197,4 +206,183 @@ def users_page(
             },
         ],
         filter_values={"email": email, "full_name": full_name},
+        row_href=lambda row: f"/users/{row.id}",
+        create_href="/users/new",
+        create_label="Создать администратора",
     )
+
+
+def _user_form(
+    *,
+    email: str = "",
+    full_name: str = "",
+    group: str = UserGroup.EXPERT,
+    phone: str = "",
+    contact: str = "",
+    is_active: str = "true",
+    is_superuser: str = "false",
+    password: str = "",
+) -> dict[str, str]:
+    return {
+        "email": email,
+        "full_name": full_name,
+        "group": group,
+        "phone": phone,
+        "contact": contact,
+        "is_active": is_active,
+        "is_superuser": is_superuser,
+        "password": password,
+    }
+
+
+def _user_form_from_row(row: User) -> dict[str, str]:
+    return _user_form(
+        email=row.email,
+        full_name=row.full_name or "",
+        group=row.group,
+        phone=row.phone or "",
+        contact=row.contact or "",
+        is_active="true" if row.is_active else "false",
+        is_superuser="true" if row.is_superuser else "false",
+    )
+
+
+def _user_form_response(
+    request: Request,
+    user: SuperUser,
+    *,
+    form: dict[str, str],
+    target: User | None = None,
+    error: str | None = None,
+    status_code: int = 200,
+) -> Any:
+    return templates.TemplateResponse(
+        request,
+        "user_form.html",
+        {
+            "user": user,
+            "target": target,
+            "form": form,
+            "groups": [item.value for item in UserGroup],
+            "error": error,
+            "is_create": target is None,
+        },
+        status_code=status_code,
+    )
+
+
+@router.get("/users/new")
+def user_new(request: Request, user: SuperUser) -> Any:
+    return _user_form_response(request, user, form=_user_form())
+
+
+@router.post("/users/new")
+def user_create(
+    request: Request,
+    session: SessionDep,
+    user: SuperUser,
+    email: str = Form(""),
+    password: str = Form(""),
+    full_name: str = Form(""),
+    group: str = Form(UserGroup.EXPERT),
+    phone: str = Form(""),
+    contact: str = Form(""),
+    is_active: str = Form("true"),
+    is_superuser: str = Form("false"),
+) -> Any:
+    form = _user_form(
+        email=email,
+        full_name=full_name,
+        group=group,
+        phone=phone,
+        contact=contact,
+        is_active=is_active,
+        is_superuser=is_superuser,
+        password=password,
+    )
+    try:
+        created = user_service.create_admin_user(
+            session,
+            email=email,
+            password=password,
+            full_name=full_name,
+            group=group,
+            phone=phone,
+            contact=contact,
+            is_active=is_active,
+            is_superuser=is_superuser,
+        )
+    except user_service.UserFormError as exc:
+        return _user_form_response(
+            request, user, form=form, error=str(exc), status_code=400
+        )
+    return RedirectResponse(f"/users/{created.id}", status_code=303)
+
+
+@router.get("/users/{user_id}")
+def user_detail(
+    request: Request,
+    session: SessionDep,
+    user: SuperUser,
+    user_id: uuid.UUID,
+) -> Any:
+    try:
+        target = user_service.get_user(session, user_id)
+    except user_service.UserNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _user_form_response(request, user, form=_user_form_from_row(target), target=target)
+
+
+@router.post("/users/{user_id}")
+def user_update(
+    request: Request,
+    session: SessionDep,
+    user: SuperUser,
+    user_id: uuid.UUID,
+    email: str = Form(""),
+    password: str = Form(""),
+    full_name: str = Form(""),
+    group: str = Form(UserGroup.EXPERT),
+    phone: str = Form(""),
+    contact: str = Form(""),
+    is_active: str = Form("true"),
+    is_superuser: str = Form("false"),
+) -> Any:
+    try:
+        target = user_service.get_user(session, user_id)
+    except user_service.UserNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    form = _user_form(
+        email=email,
+        full_name=full_name,
+        group=group,
+        phone=phone,
+        contact=contact,
+        is_active=is_active,
+        is_superuser=is_superuser,
+        password=password,
+    )
+    try:
+        user_service.update_admin_user(
+            session,
+            user_id=user_id,
+            current_user=user,
+            email=email,
+            password=password,
+            full_name=full_name,
+            group=group,
+            phone=phone,
+            contact=contact,
+            is_active=is_active,
+            is_superuser=is_superuser,
+        )
+    except user_service.UserFormError as exc:
+        return _user_form_response(
+            request,
+            user,
+            form=form,
+            target=target,
+            error=str(exc),
+            status_code=400,
+        )
+    return RedirectResponse(f"/users/{user_id}", status_code=303)

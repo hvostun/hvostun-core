@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, func, select
 
 from app.models import (
     AnswerEvent,
@@ -17,15 +17,30 @@ from app.models import (
     SessionRecommendation,
     Survey,
     SurveyQuestion,
+    SurveyQuestionGroup,
     SurveySession,
     SurveyVersion,
     User,
 )
+from app.services import dictionaries as dictionary_service
 
 MANUAL_CHART_NUMBER = 0
 MANUAL_WEIGHT = 1.0
 WEIGHT_MIN = 0.0
 WEIGHT_MAX = 1.0
+UNANSWERED_FILTER = "unanswered"
+MISSING_ANSWER = -999
+DEFAULT_SCALE_MIN = 0
+DEFAULT_SCALE_MAX = 4
+CATEGORY_BAR_COLORS = {
+    "Excitability": "var(--bs-orange)",
+    "Aggression": "var(--bs-red)",
+    "Fear_Anxiety": "var(--bs-purple)",
+    "Separation": "var(--bs-yellow)",
+    "Attachment": "var(--bs-green)",
+    "Training": "var(--bs-cyan)",
+    "other": "var(--bs-blue)",
+}
 
 _LEGEND_LINE = re.compile(r"^(-?\d+)\s*(?:[-–]\s+)?(.*)$")
 
@@ -101,17 +116,23 @@ def format_dog_age(birthday: date | None, at: date | None) -> str:
     return " ".join(parts)
 
 
-def dog_session_facts(dog: Dog, session_row: SurveySession) -> dict[str, Any]:
+def dog_session_facts(
+    session: Session, dog: Dog, session_row: SurveySession
+) -> dict[str, Any]:
     at = session_calendar_date(session_row.created_at)
     return {
         "id": dog.id,
         "name": dog.name,
-        "sex": dog.sex or "",
+        "sex": dictionary_service.label_for(
+            session, dictionary_service.DOGS_SEX_KEY, dog.sex
+        ),
         "age": format_dog_age(dog.birthday, at),
         "breed": dog.breed or "",
         "mixed": dog.mixed,
         "neutered": dog.neutered,
-        "status": dog.status,
+        "status": dictionary_service.label_for(
+            session, dictionary_service.DOGS_STATUS_KEY, dog.status
+        ),
         "days_since_status": days_since_status(
             dog.status_at, session_row.created_at
         ),
@@ -134,6 +155,7 @@ class SessionAnswer:
     event: AnswerEvent | None
     display_value: str
     legend: str
+    progress: dict[str, Any]
 
 
 def answer_scalar(value: object) -> object:
@@ -172,6 +194,43 @@ def legend_label(config: object, value: object) -> str:
     if scalar is None:
         return ""
     return legend_map(config).get(str(scalar), "")
+
+
+def _scale_bounds(config: object) -> tuple[float, float]:
+    min_value = float(DEFAULT_SCALE_MIN)
+    max_value = float(DEFAULT_SCALE_MAX)
+    if isinstance(config, dict):
+        if config.get("min_value") is not None:
+            min_value = float(config["min_value"])
+        if config.get("max_value") is not None:
+            max_value = float(config["max_value"])
+    return min_value, max_value
+
+
+def answer_progress(
+    value: object, config: object, category: object
+) -> dict[str, Any]:
+    color = CATEGORY_BAR_COLORS.get(str(category), CATEGORY_BAR_COLORS["other"])
+    hidden = {"show_bar": False, "percent": 0, "color": color}
+    scalar = answer_scalar(value)
+    if scalar is None or scalar == "":
+        return hidden
+    try:
+        number = float(scalar)
+    except (TypeError, ValueError):
+        return hidden
+    if number == MISSING_ANSWER:
+        return hidden
+    if number == 0:
+        return {"show_bar": True, "percent": 0, "color": color}
+    min_value, max_value = _scale_bounds(config)
+    span = max_value - min_value - 1
+    if span <= 0:
+        percent = 0
+    else:
+        percent = (number - min_value - 1) / span * 100
+    percent = max(0, min(100, round(percent)))
+    return {"show_bar": True, "percent": percent, "color": color}
 
 
 def get_session(session: Session, session_id: uuid.UUID) -> SurveySession:
@@ -258,9 +317,46 @@ def get_session_answers(
                 event=latest_event,
                 display_value=format_answer(value),
                 legend=legend_label(scale.config, value),
+                progress=answer_progress(value, scale.config, link.group),
             )
         )
     return answers
+
+
+def session_answer_categories(session: Session) -> list[dict[str, str]]:
+    return [
+        {
+            "value": item.value,
+            "label": dictionary_service.label_for(
+                session,
+                dictionary_service.SURVEYS_QUESTIONS_GROUP_KEY,
+                item.value,
+            )
+            or item.value,
+        }
+        for item in SurveyQuestionGroup
+    ]
+
+
+def session_answer_values(answers: list[SessionAnswer]) -> list[str]:
+    values = {item.display_value for item in answers if item.display_value}
+    return sorted(values, key=lambda value: (len(value), value))
+
+
+def filter_session_answers(
+    answers: list[SessionAnswer],
+    *,
+    category: str = "",
+    answer: str = "",
+) -> list[SessionAnswer]:
+    filtered = answers
+    if category:
+        filtered = [item for item in filtered if str(item.link.group) == category]
+    if answer == UNANSWERED_FILTER:
+        filtered = [item for item in filtered if not item.display_value]
+    elif answer:
+        filtered = [item for item in filtered if item.display_value == answer]
+    return filtered
 
 
 def get_session_recommendations(
@@ -278,6 +374,26 @@ def get_session_recommendations(
             )
         ).all()
     )
+
+
+def session_recommendation_counts(
+    session: Session, session_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, tuple[int, int]]:
+    counts = dict.fromkeys(session_ids, (0, 0))
+    if not session_ids:
+        return counts
+    rows = session.exec(
+        select(
+            SessionRecommendation.session_id,
+            func.count(),
+            func.count(func.distinct(SessionRecommendation.user_id)),
+        )
+        .where(col(SessionRecommendation.session_id).in_(session_ids))
+        .group_by(SessionRecommendation.session_id)
+    ).all()
+    for session_id, rec_count, user_count in rows:
+        counts[session_id] = (int(rec_count), int(user_count))
+    return counts
 
 
 def list_catalog_recommendations(session: Session) -> list[Recommendation]:
@@ -357,17 +473,15 @@ def get_session_recommendation(
     return row
 
 
-def update_session_recommendation(
+def _apply_session_recommendation_update(
     session: Session,
     *,
     session_id: uuid.UUID,
-    current_user: User,
     recommendation_id: uuid.UUID,
     chart_number: int,
     weight: float,
-    comment: str | None = None,
+    comment: str | None,
 ) -> SessionRecommendation:
-    get_accessible_session(session, session_id, current_user)
     row = get_session_recommendation(session, session_id, recommendation_id)
     if chart_number < 0:
         raise SessionRecommendationError("Очередность не может быть отрицательной")
@@ -378,9 +492,54 @@ def update_session_recommendation(
     row.weight = weight
     row.comment = text or None
     session.add(row)
-    session.commit()
-    session.refresh(row)
     return row
+
+
+def update_session_recommendations(
+    session: Session,
+    *,
+    session_id: uuid.UUID,
+    current_user: User,
+    updates: list[tuple[uuid.UUID, int, float, str | None]],
+) -> list[SessionRecommendation]:
+    get_accessible_session(session, session_id, current_user)
+    try:
+        rows = [
+            _apply_session_recommendation_update(
+                session,
+                session_id=session_id,
+                recommendation_id=recommendation_id,
+                chart_number=chart_number,
+                weight=weight,
+                comment=comment,
+            )
+            for recommendation_id, chart_number, weight, comment in updates
+        ]
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    for row in rows:
+        session.refresh(row)
+    return rows
+
+
+def update_session_recommendation(
+    session: Session,
+    *,
+    session_id: uuid.UUID,
+    current_user: User,
+    recommendation_id: uuid.UUID,
+    chart_number: int,
+    weight: float,
+    comment: str | None = None,
+) -> SessionRecommendation:
+    return update_session_recommendations(
+        session,
+        session_id=session_id,
+        current_user=current_user,
+        updates=[(recommendation_id, chart_number, weight, comment)],
+    )[0]
 
 
 def group_recommendations(

@@ -23,8 +23,15 @@ def upgrade() -> None:
         sa.Column("slug", sa.Text(), nullable=False),
         sa.Column("text", sa.Text(), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
+        sa.Column(
+            sa.quoted_name("group", True),
+            sa.Text(),
+            nullable=False,
+            server_default="other",
+        ),
         created_at(),
         updated_at(),
+        sa.CheckConstraint("\"group\" IN ('other')", name="ck_recommendations_group"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_recommendations_slug", "recommendations", ["slug"], unique=True)

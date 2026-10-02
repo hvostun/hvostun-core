@@ -25,6 +25,28 @@ def test_users_group_check_constraint_exists(db: Session) -> None:
     assert "ck_users_group" in names
 
 
+def test_catalog_group_check_constraints_exist(db: Session) -> None:
+    inspector = inspect(db.get_bind())
+    surveys_questions = {
+        constraint["name"]
+        for constraint in inspector.get_check_constraints("surveys_questions")
+    }
+    recommendations = {
+        constraint["name"]
+        for constraint in inspector.get_check_constraints("recommendations")
+    }
+    assert "ck_surveys_questions_group" in surveys_questions
+    assert "ck_recommendations_group" in recommendations
+    question_columns = {
+        column["name"] for column in inspector.get_columns("surveys_questions")
+    }
+    recommendation_columns = {
+        column["name"] for column in inspector.get_columns("recommendations")
+    }
+    assert "group" in question_columns
+    assert "group" in recommendation_columns
+
+
 def test_questions_have_no_type_column(db: Session) -> None:
     inspector = inspect(db.get_bind())
     columns = {column["name"] for column in inspector.get_columns("questions")}

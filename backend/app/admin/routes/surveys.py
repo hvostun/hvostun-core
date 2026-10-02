@@ -9,6 +9,7 @@ from app.admin.templating import PAGE_SIZE, cell, list_context, templates
 from app.models import Survey, SurveyVersion
 from app.pagination import execute_page, page_window
 from app.services import catalog
+from app.services import dictionaries as dictionary_service
 
 router = APIRouter()
 
@@ -105,6 +106,11 @@ def survey_detail(
             "questions": [
                 {
                     "order_number": link.order_num,
+                    "group": dictionary_service.label_for(
+                        session,
+                        dictionary_service.SURVEYS_QUESTIONS_GROUP_KEY,
+                        link.group,
+                    ),
                     "text": question.text,
                     "scale_name": scale.name,
                 }

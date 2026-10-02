@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ title }} — Hvostun Admin{% endblock %}
 {% block content %}
-<h1 class="h3 mb-3">{{ title }}</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">{{ title }}</h1>
+  {% if create_href %}
+  <a class="btn btn-primary" href="{{ create_href }}">{{ create_label or "Создать" }}</a>
+  {% endif %}
+</div>
 {% if filters %}
 <form class="row g-2 mb-3" method="get">
   {% for field in filters %}

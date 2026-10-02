@@ -274,6 +274,8 @@ def test_scale_config_validation(
         (Scale, "type", "invalid"),
         (PlacementEvent, "code", "unknown"),
         (User, "group", "invalid"),
+        (SurveyQuestion, "group", "Unknown"),
+        (Recommendation, "group", "Excitability"),
     ],
 )
 def test_domain_values_reject_invalid_assignments(
@@ -297,6 +299,22 @@ def test_domain_values_reject_invalid_assignments(
         db.add(dog)
         db.commit()
         obj = PlacementEvent(dog_id=dog.id, code="shelter_started")
+    elif model is SurveyQuestion:
+        _user, _dog, _survey, version, _scale, question, _link = _catalog(db)
+        extra = Question(text="Grouped question", scale_id=question.scale_id)
+        db.add(extra)
+        db.commit()
+        obj = SurveyQuestion(
+            survey_version_id=version.id,
+            question_id=extra.id,
+            order_num=2,
+        )
+    elif model is Recommendation:
+        obj = Recommendation(
+            name="Invalid group",
+            slug=f"invalid-group-{uuid.uuid4()}",
+            text="text",
+        )
     else:
         user, dog, _survey, version, _scale, _question, _link = _catalog(db)
         obj = SurveySession(

@@ -30,6 +30,16 @@ class ScaleType(StrEnum):
     DATE = "date"
 
 
+class SurveyQuestionGroup(StrEnum):
+    EXCITABILITY = "Excitability"
+    AGGRESSION = "Aggression"
+    FEAR_ANXIETY = "Fear_Anxiety"
+    SEPARATION = "Separation"
+    ATTACHMENT = "Attachment"
+    TRAINING = "Training"
+    OTHER = "other"
+
+
 class ScaleConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -152,6 +162,11 @@ class SurveyQuestion(CreatedAtMixin, SQLModel, table=True):
             "order_num",
             name="uq_surveys_questions_version_order",
         ),
+        CheckConstraint(
+            "\"group\" IN ('Excitability', 'Aggression', 'Fear_Anxiety', "
+            "'Separation', 'Attachment', 'Training', 'other')",
+            name="ck_surveys_questions_group",
+        ),
         Index("ix_surveys_questions_question_id", "question_id"),
         Index("ix_surveys_questions_user_id", "user_id"),
     )
@@ -167,6 +182,15 @@ class SurveyQuestion(CreatedAtMixin, SQLModel, table=True):
         ondelete="RESTRICT",
     )
     order_num: int
+    group: SurveyQuestionGroup = Field(
+        default=SurveyQuestionGroup.OTHER,
+        sa_column=Column(
+            "group",
+            Text,
+            nullable=False,
+            server_default="other",
+        ),
+    )
     user_id: uuid.UUID | None = Field(
         default=None, foreign_key="users.id", ondelete="RESTRICT"
     )

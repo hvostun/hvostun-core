@@ -33,6 +33,8 @@ def list_context(
     page: int,
     filters: list[dict[str, str]],
     filter_values: dict[str, str],
+    create_href: str | None = None,
+    create_label: str | None = None,
 ) -> dict[str, Any]:
     return {
         "request": request,
@@ -45,4 +47,6 @@ def list_context(
         "pages": page_count(count, PAGE_SIZE),
         "filters": filters,
         "filter_qs": filter_qs(filter_values),
+        "create_href": create_href,
+        "create_label": create_label,
     }
