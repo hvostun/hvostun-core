@@ -23,6 +23,7 @@ def test_dogs_have_measurement_columns(db: Session) -> None:
     assert columns["firstdog"]["nullable"] is False
     assert columns["weight"]["nullable"] is True
     assert columns["height"]["nullable"] is True
+    assert columns["history"]["nullable"] is True
 
 
 def test_users_group_check_constraint_exists(db: Session) -> None:
@@ -55,7 +56,7 @@ def test_catalog_group_check_constraints_exist(db: Session) -> None:
         constraint["name"]
         for constraint in inspector.get_check_constraints("recommendations")
     }
-    assert "ck_surveys_questions_group" in surveys_questions
+    assert "ck_surveys_questions_group" not in surveys_questions
     assert "ck_recommendations_group" in recommendations
     question_columns = {
         column["name"] for column in inspector.get_columns("surveys_questions")

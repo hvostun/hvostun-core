@@ -1,10 +1,13 @@
 import uuid
 from collections.abc import Sequence
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
 from app.models import (
     Question,
+    Recommendation,
+    RecommendationGroup,
     Scale,
     ScaleType,
     Survey,
@@ -14,6 +17,10 @@ from app.models import (
 
 
 class CatalogNotFoundError(LookupError):
+    pass
+
+
+class CatalogUpdateError(ValueError):
     pass
 
 
@@ -137,3 +144,80 @@ def create_survey_version(
     session.commit()
     session.refresh(version)
     return version
+
+
+def update_survey_question_layout(
+    session: Session,
+    survey_version_id: uuid.UUID,
+    updates: Sequence[tuple[uuid.UUID, int | None, str]],
+) -> None:
+    links = {
+        link.question_id: link
+        for _question, _scale, link in get_version_questions(session, survey_version_id)
+    }
+    question_ids = [question_id for question_id, _display_num, _group in updates]
+    if set(question_ids) != set(links) or len(question_ids) != len(links):
+        raise CatalogUpdateError("Некорректные данные вопросов")
+    for question_id, display_num, group in updates:
+        link = links[question_id]
+        link.display_num = display_num
+        link.group = group.strip()
+    session.commit()
+
+
+def get_recommendation(session: Session, recommendation_id: uuid.UUID) -> Recommendation:
+    row = session.get(Recommendation, recommendation_id)
+    if row is None:
+        raise CatalogNotFoundError("Recommendation not found")
+    return row
+
+
+def create_recommendation(
+    session: Session,
+    *,
+    name: str,
+    slug: str,
+    text: str,
+    description: str | None,
+    group: RecommendationGroup,
+) -> Recommendation:
+    row = Recommendation(
+        name=name,
+        slug=slug,
+        text=text,
+        description=description,
+        group=group,
+    )
+    session.add(row)
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise CatalogUpdateError("Такой slug уже есть") from exc
+    session.refresh(row)
+    return row
+
+
+def update_recommendation(
+    session: Session,
+    recommendation_id: uuid.UUID,
+    *,
+    name: str,
+    slug: str,
+    text: str,
+    description: str | None,
+    group: RecommendationGroup,
+) -> Recommendation:
+    row = get_recommendation(session, recommendation_id)
+    row.name = name
+    row.slug = slug
+    row.text = text
+    row.description = description
+    row.group = group
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise CatalogUpdateError("Такой slug уже есть") from exc
+    session.refresh(row)
+    return row

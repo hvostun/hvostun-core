@@ -51,6 +51,30 @@ hvostun-core/
 | ML | scikit-learn tabular (`RandomForest` + `LogisticRegression`); lockfile `uv.lock` |
 | Deploy | `compose.yml` + `compose.deploy.yml`: HTTPS `proxy` + `backend` + `db`; `db-ui` отключён |
 
-bash scripts/db_backup.sh
+Старт.
 
+```
+docker compose build
+docker compose up -d
+docker compose logs backend -f --tail=10
+```
+
+http://localhost:8000/ - экспертный контур
+http://localhost:8080/ - бд
+
+Миграции
+
+```
+alembic upgrade head
+```
+
+Сделать бэкап
+
+```bash
+bash scripts/db_backup.sh
+```
+
+Раскатить бэкап
+```bash
 docker compose exec -T db psql -U postgres -d hvostun_development < .data/backup/hvostun_development.sql
+```

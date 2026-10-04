@@ -52,6 +52,9 @@ def _form_values(
     status_at: str,
     breed: str,
     mixed: str,
+    weight: str,
+    height: str,
+    history: str,
 ) -> dict[str, str]:
     return {
         "name": name,
@@ -66,6 +69,9 @@ def _form_values(
         "status_at": status_at,
         "breed": breed,
         "mixed": mixed,
+        "weight": weight,
+        "height": height,
+        "history": history,
     }
 
 
@@ -85,6 +91,9 @@ def _dog_form_from_row(dog: Dog) -> dict[str, str]:
         "status_at": dog.status_at.isoformat() if dog.status_at else "",
         "breed": dog.breed or "",
         "mixed": "" if dog.mixed is None else str(dog.mixed).lower(),
+        "weight": str(dog.weight) if dog.weight else "",
+        "height": str(dog.height) if dog.height else "",
+        # "history": dog.history or "",
     }
 
 

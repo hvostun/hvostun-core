@@ -4,167 +4,178 @@
 <div class="container-fluid">
   <p><a href="/sessions">← Ответы</a></p>
   <dl class="row mb-0">
-    <div class="col-sm-3">
-      <div class="card text-dark bg-light mb-3" style="max-width: 18rem;">
-        <div class="card-header">{{ dog.sex or "—" }}</div>
-        <div class="card-body">
-          <h5 class="card-title">{{ dog.status or "—" }} {% if dog.days_since_status is not none
-            %}{{ dog.days_since_status }}{%
-            else
-            %}—{% endif %} дней</h5>
-          <p class="card-text">Возраст: {{ dog.age or "—" }}, порода: {{ dog.breed or "—" }}, метис: {{ "Да" if
-            dog.mixed
-            else "Нет" }}, стерилизован: {{ "Да" if dog.neutered else "Нет" }}</p>
+    <div class="row">
+      <div class="col-sm-5">
+        <div class="card text-dark bg-light mb-3" style="max-width: 30rem;">
+          <div class="card-header">{{ dog.sex or "—" }}</div>
+          <div class="card-body">
+            <h5 class="card-title">{{ dog.status or "—" }} {% if dog.days_since_status is not none
+              %}{{ dog.days_since_status }}{%
+              else
+              %}—{% endif %} дней</h5>
+            <p class="card-text">Возраст: {{ dog.age or "—" }}
+              <br>Порода: {{ dog.breed or "—" }} {{ "(Метис)" if dog.mixed}}
+              <br>Стерилизован: {{ "Да" if dog.neutered else "Нет" }}
+              <br>Вес: {% if dog.weight is not none %}{{ dog.weight }}{% else %}—{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-7">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">История</h5>
+            <p class="card-text">{{ dog.history or "—" }}</p>
+          </div>
         </div>
       </div>
     </div>
-    <div class="col-sm-9">
-      <h2 class="h5 mt-4">Вопросы и ответы</h2>
-      <form class="row g-2 mb-3" method="get" action="/sessions/{{ session_row.id }}">
-        <div class="col-auto">
-          <label class="form-label visually-hidden" for="category">Категория</label>
-          <select class="form-select" id="category" name="category">
-            <option value="">Все категории</option>
-            {% for item in categories %}
-            <option value="{{ item.value }}" {% if category==item.value %}selected{% endif %}>{{ item.label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-auto">
-          <label class="form-label visually-hidden" for="answer">Ответ</label>
-          <select class="form-select" id="answer" name="answer">
-            <option value="">Все ответы</option>
-            <option value="{{ unanswered_filter }}" {% if answer==unanswered_filter %}selected{% endif %}>Без ответа
-            </option>
-            {% for item in answer_values %}
-            <option value="{{ item }}" {% if answer==item %}selected{% endif %}>{{ item }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-auto">
-          <button class="btn btn-secondary" type="submit">Фильтр</button>
-        </div>
-      </form>
-    </div>
-    {% if not answers %}
-    <p class="text-muted">{% if has_questions %}Нет вопросов по фильтру.{% else %}Нет вопросов.{% endif %}</p>
-    {% else %}
-    <table class="table table-sm table-striped">
-      <thead>
-        <tr>
-          <th>Категория</th>
-          <th>Порядковый номер</th>
-          <th>Отображаемый номер</th>
-          <th>Вопрос</th>
-          <th>Ответ</th>
-          <th>Значение</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in answers %}
-        <tr>
-          <td>{{ item.category_name }}</td>
-          <td>{{ item.order_number }}</td>
-          <td>{{ item.display_num }}</td>
-          <td>{{ item.question_text }}</td>
-          <td>
-            {% if item.show_bar %}
-            <div class="progress">
-              <div class="progress-bar" role="progressbar"
-                style="width: {{ item.bar_percent }}%; background-color: {{ item.bar_color }};"
-                aria-valuenow="{{ item.bar_percent }}" aria-valuemin="0" aria-valuemax="100">{{ item.answer}}
-              </div>
-            </div>
-            {% else %}
-            —
-            {% endif %}
-          </td>
-          <td>{{ item.legend or "—" }}</td>
-        </tr>
+</div>
+<div class="col-sm-7">
+  <h2 class="h5 mt-4">Вопросы и ответы</h2>
+  <form class="row g-2 mb-3" method="get" action="/sessions/{{ session_row.id }}">
+    <div class="col-auto">
+      <label class="form-label visually-hidden" for="category">Категория</label>
+      <select class="form-select" id="category" name="category">
+        <option value="">Все категории</option>
+        {% for item in categories %}
+        <option value="{{ item.value }}" {% if category==item.value %}selected{% endif %}>{{ item.label }}
+        </option>
         {% endfor %}
-      </tbody>
-    </table>
-    {% endif %}<h3 class="h6 mt-4">Добавить рекомендацию</h3>
-    {% if not available_recommendations %}
-    <p class="text-muted">Нет доступных рекомендаций для добавления.</p>
-    {% else %}
-    <form method="post" action="/sessions/{{ session_row.id }}/recommendations" class="mt-2">
-      <div class="mb-3">
-        <label class="form-label" for="recomendation_id">Рекомендация</label>
-        <select class="form-select" id="recomendation_id" name="recomendation_id" required>
-          <option value="">Выберите рекомендацию</option>
-          {% for rec in available_recommendations %}
-          <option value="{{ rec.id }}">{{ rec.name }}{% if rec.slug %} · {{ rec.slug }}{% endif %}</option>
-          {% endfor %}
-        </select>
+      </select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label visually-hidden" for="answer">Ответ</label>
+      <select class="form-select" id="answer" name="answer">
+        <option value="">Все ответы</option>
+        <option value="{{ unanswered_filter }}" {% if answer==unanswered_filter %}selected{% endif %}>Без ответа
+        </option>
+        {% for item in answer_values %}
+        <option value="{{ item }}" {% if answer==item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-secondary" type="submit">Фильтр</button>
+    </div>
+  </form>
+</div>
+</div>
+{% if not answers %}
+<p class="text-muted">{% if has_questions %}Нет вопросов по фильтру.{% else %}Нет вопросов.{% endif %}</p>
+{% else %}
+<table class="table table-sm table-striped">
+  <thead>
+    <tr>
+      <th>№</th>
+      <th>Категория</th>
+      <th>Вопрос</th>
+      <th>Ответ</th>
+      <th>Значение</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in answers %}
+    <tr>
+      <td>{{ item.display_num }}</td>
+      <td>{{ item.category_name }}</td>
+      <td>{{ item.question_text }}</td>
+      <td>
+        {% if item.show_bar %}
+        <div class="progress">
+          <div class="progress-bar" role="progressbar"
+            style="width: {{ item.bar_percent }}%; background-color: {{ item.bar_color }};"
+            aria-valuenow="{{ item.bar_percent }}" aria-valuemin="0" aria-valuemax="100">{{ item.answer}}
+          </div>
+        </div>
+        {% else %}
+        —
+        {% endif %}
+      </td>
+      <td>{{ item.legend or "—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}<h3 class="h6 mt-4">Добавить рекомендацию</h3>
+{% if not available_recommendations %}
+<p class="text-muted">Нет доступных рекомендаций для добавления.</p>
+{% else %}
+<form method="post" action="/sessions/{{ session_row.id }}/recommendations" class="mt-2">
+  <div class="mb-3">
+    <label class="form-label" for="recomendation_id">Рекомендация</label>
+    <select class="form-select" id="recomendation_id" name="recomendation_id" required>
+      <option value="">Выберите рекомендацию</option>
+      {% for rec in available_recommendations %}
+      <option value="{{ rec.id }}">{{ rec.name }}{% if rec.slug %} · {{ rec.slug }}{% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="btn btn-primary" type="submit">Добавить</button>
+</form>
+{% endif %}
+<h2 class="h5 mt-4">Рекомендации</h2>
+{% if not rec_groups %}
+<p class="text-muted">Нет рекомендаций.</p>
+{% else %}
+<form method="post" action="/sessions/{{ session_row.id }}/recommendations/save">
+  {% for group in rec_groups %}
+  {% for item in group.recommendations %}
+  <div class="card mb-2">
+    <div class="card-body">
+      <input type="hidden" name="recommendation_id" value="{{ item.id }}" />
+      <div class="row">
+        <div class="col-sm-12">
+          <h3 class="h6 mb-3">{{ item.recommendation_name }}</h3>
+        </div>
       </div>
-      <button class="btn btn-primary" type="submit">Добавить</button>
-    </form>
-    {% endif %}
-    <h2 class="h5 mt-4">Рекомендации</h2>
-    {% if not rec_groups %}
-    <p class="text-muted">Нет рекомендаций.</p>
-    {% else %}
-    <form method="post" action="/sessions/{{ session_row.id }}/recommendations/save">
-      {% for group in rec_groups %}
-      {% for item in group.recommendations %}
-      <div class="card mb-2">
-        <div class="card-body">
-          <input type="hidden" name="recommendation_id" value="{{ item.id }}" />
-          <div class="row">
-            <div class="col-sm-12">
-              <h3 class="h6 mb-3">{{ item.recommendation_name }}</h3>
-            </div>
+      <div class="row">
+        <div class="col-sm-2">
+          <div class="mb-3">
+            <label class="form-label" for="chart_number-{{ item.id }}">Очередность</label>
+            <input class="form-control" id="chart_number-{{ item.id }}" name="chart_number" type="number" min="0"
+              step="1" required value="{{ item.chart_number }}" />
           </div>
-          <div class="row">
-            <div class="col-sm-2">
-              <div class="mb-3">
-                <label class="form-label" for="chart_number-{{ item.id }}">Очередность</label>
-                <input class="form-control" id="chart_number-{{ item.id }}" name="chart_number" type="number" min="0"
-                  step="1" required value="{{ item.chart_number }}" />
-              </div>
+        </div>
+        <div class="col-sm-3">
+          <div class="mb-3">
+            <div class="row">
+              <label class="form-label" for="weight-{{ item.id }}">Критичность: <span id="weight-value-{{ item.id }}">{{
+                  item.weight }}</span></label>
             </div>
-            <div class="col-sm-3">
-              <div class="mb-3">
-                <div class="row">
-                  <label class="form-label" for="weight-{{ item.id }}">Критичность: <span
-                      id="weight-value-{{ item.id }}">{{
-                      item.weight }}</span></label>
-                </div>
-                <div class="row">
-                  <input type="range" id="weight-{{ item.id }}" name="weight" min="0" max="1" step="0.1"
-                    value="{{ item.weight }}"
-                    oninput="document.getElementById('weight-value-{{ item.id }}').textContent = this.value" />
-                </div>
-              </div>
-            </div>
-            <div class="col-sm-7">
-              <div class="mb-6">
-                <label class="form-label" for="comment-{{ item.id }}">Комментарий</label>
-                <textarea class="form-control" id="comment-{{ item.id }}" name="comment"
-                  rows="2">{{ item.comment or "" }}</textarea>
-              </div>
-            </div>
-          </div>
-          <div class="row">
-            <div class="col-sm-10">
-              Автор рекомендации: {{ item.author_name }}
-            </div>
-            <div class="col-sm-2">
-              {% if item.user_id == user.id or can_manage_all_recommendations %}
-              <button class="btn btn-danger" type="submit"
-                formaction="/sessions/{{ session_row.id }}/recommendations/{{ item.id }}/delete" formmethod="post"
-                onclick="return confirm('Удалить рекомендацию?')">Удалить</button>
-              {% endif %}
+            <div class="row">
+              <input type="range" id="weight-{{ item.id }}" name="weight" min="0" max="1" step="0.1"
+                value="{{ item.weight }}"
+                oninput="document.getElementById('weight-value-{{ item.id }}').textContent = this.value" />
             </div>
           </div>
         </div>
+        <div class="col-sm-7">
+          <div class="mb-6">
+            <label class="form-label" for="comment-{{ item.id }}">Комментарий</label>
+            <textarea class="form-control" id="comment-{{ item.id }}" name="comment"
+              rows="2">{{ item.comment or "" }}</textarea>
+          </div>
+        </div>
       </div>
-      {% endfor %}
-      {% endfor %}
-      <button class="btn btn-primary" type="submit">Сохранить</button>
-    </form>
-    {% endif %}
+      <div class="row">
+        <div class="col-sm-10">
+          Автор рекомендации: {{ item.author_name }}
+        </div>
+        <div class="col-sm-2">
+          {% if item.user_id == user.id or can_manage_all_recommendations %}
+          <button class="btn btn-danger" type="submit"
+            formaction="/sessions/{{ session_row.id }}/recommendations/{{ item.id }}/delete" formmethod="post"
+            onclick="return confirm('Удалить рекомендацию?')">Удалить</button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  {% endfor %}
+  <button class="btn btn-primary" type="submit">Сохранить</button>
+</form>
+{% endif %}
 
 </div>
 {% endblock %}

@@ -34,15 +34,6 @@ UNANSWERED_FILTER = "unanswered"
 MISSING_ANSWER = -999
 DEFAULT_SCALE_MIN = 0
 DEFAULT_SCALE_MAX = 4
-CATEGORY_BAR_COLORS = {
-    "Excitability": "var(--bs-orange)",
-    "Aggression": "var(--bs-red)",
-    "Fear_Anxiety": "var(--bs-purple)",
-    "Separation": "var(--bs-yellow)",
-    "Attachment": "var(--bs-green)",
-    "Training": "var(--bs-cyan)",
-    "other": "var(--bs-blue)",
-}
 
 _LEGEND_LINE = re.compile(r"^(-?\d+)\s*(?:[-–]\s+)?(.*)$")
 
@@ -146,6 +137,9 @@ def dog_session_facts(
         "days_since_status": days_since_status(
             dog.status_at, session_row.created_at
         ),
+        "weight": dog.weight,
+        "height": dog.height,
+        "history": dog.history,
     }
 
 
@@ -218,9 +212,13 @@ def _scale_bounds(config: object) -> tuple[float, float]:
 
 
 def answer_progress(
-    value: object, config: object, category: object
+    session: Session, value: object, config: object, category: object
 ) -> dict[str, Any]:
-    color = CATEGORY_BAR_COLORS.get(str(category), CATEGORY_BAR_COLORS["other"])
+    color = dictionary_service.label_for(
+            session,
+            dictionary_service.SURVEYS_QUESTIONS_GROUP_COLOR_KEY,
+            str(category),
+        ) or "var(--bs-blue)"
     hidden = {"show_bar": False, "percent": 0, "color": color}
     scalar = answer_scalar(value)
     if scalar is None or scalar == "":
@@ -327,25 +325,34 @@ def get_session_answers(
                 event=latest_event,
                 display_value=format_answer(value),
                 legend=legend_label(scale.config, value),
-                progress=answer_progress(value, scale.config, link.group),
+                progress=answer_progress(session, value, scale.config, link.group),
             )
         )
     return answers
 
 
-def session_answer_categories(session: Session) -> list[dict[str, str]]:
-    return [
-        {
-            "value": item.value,
-            "label": dictionary_service.label_for(
-                session,
-                dictionary_service.SURVEYS_QUESTIONS_GROUP_KEY,
-                item.value,
-            )
-            or item.value,
-        }
-        for item in SurveyQuestionGroup
-    ]
+def group_label(session: Session, code: str | None) -> str:
+    text = "" if code is None else str(code)
+    if not text:
+        return ""
+    return (
+        dictionary_service.label_for(
+            session,
+            dictionary_service.SURVEYS_QUESTIONS_GROUP_KEY,
+            text,
+        )
+        or text
+    )
+
+
+def session_answer_categories(
+    session: Session, groups: list[str] | None = None
+) -> list[dict[str, str]]:
+    codes = [item.value for item in SurveyQuestionGroup]
+    for code in groups or []:
+        if code and code not in codes:
+            codes.append(code)
+    return [{"value": code, "label": group_label(session, code)} for code in codes]
 
 
 def session_answer_values(answers: list[SessionAnswer]) -> list[str]:

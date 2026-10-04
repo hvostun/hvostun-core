@@ -430,6 +430,7 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
         survey_version_id=version.id,
         question_id=question.id,
         order_num=1,
+        group="NotInDictionary",
     )
     db.add(link)
     session_row = SurveySession(
@@ -460,6 +461,7 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
     assert page.status_code == 200
     assert "Как часто лает?" in page.text
     assert "Категория" in page.text
+    assert "NotInDictionary" in page.text
     assert "Прочее" in page.text
     assert 'value="other"' in page.text
     assert "Обычно" in page.text
@@ -467,7 +469,6 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
     assert "width: 75%" in page.text
     assert "var(--bs-blue)" in page.text
     assert "Значение" in page.text
-    assert "№" in page.text
     assert "<td>1</td>" in page.text
     assert "Все категории" in page.text
     assert "Все ответы" in page.text
@@ -635,6 +636,9 @@ def test_session_detail_shows_dog_facts(client: TestClient, db: Session) -> None
         status="home",
         birthday=date(2024, 6, 20),
         status_at=date(2026, 9, 10),
+        weight=12.5,
+        height=48,
+        history="из приюта",
     )
     survey = Survey(name="Facts Survey", slug=f"facts-{random_lower_string()}")
     db.add(
@@ -691,6 +695,9 @@ def test_session_detail_shows_dog_facts(client: TestClient, db: Session) -> None
     assert "home" not in page.text
     assert expected_age in page.text
     assert str(expected_days) in page.text
+    assert "12.5" in page.text
+    assert "48" in page.text
+    assert "из приюта" in page.text
 
 
 def test_answer_events_page_is_visible_to_logged_in_user(
@@ -1322,6 +1329,108 @@ def test_admin_access_matrix(client: TestClient, db: Session) -> None:
     assert 'href="/owners"' not in home.text
 
 
+def test_admin_can_create_and_edit_recommendation(
+    client: TestClient, db: Session
+) -> None:
+    _login_admin(client, db)
+    listing = client.get("/recommendations")
+    assert listing.status_code == 200
+    assert 'href="/recommendations/new"' in listing.text
+    form = client.get("/recommendations/new")
+    assert form.status_code == 200
+    assert "Новая рекомендация" in form.text
+    slug = f"rec-{random_lower_string()}"
+    created = client.post(
+        "/recommendations/new",
+        data={
+            "name": "Прогулка",
+            "slug": slug,
+            "text": "Выходите дважды в день",
+            "description": "Коротко",
+            "group": "other",
+        },
+        follow_redirects=False,
+    )
+    assert created.status_code == 303
+    row = db.exec(select(Recommendation).where(Recommendation.slug == slug)).one()
+    assert created.headers["location"] == f"/recommendations/{row.id}"
+    assert row.name == "Прогулка"
+    assert row.text == "Выходите дважды в день"
+    assert row.description == "Коротко"
+    page = client.get(f"/recommendations/{row.id}")
+    assert page.status_code == 200
+    assert "Сохранить" in page.text
+    updated = client.post(
+        f"/recommendations/{row.id}",
+        data={
+            "name": "Длинная прогулка",
+            "slug": slug,
+            "text": "Выходите трижды в день",
+            "description": "",
+            "group": "other",
+        },
+        follow_redirects=False,
+    )
+    assert updated.status_code == 303
+    db.refresh(row)
+    assert row.name == "Длинная прогулка"
+    assert row.description is None
+    duplicate = client.post(
+        "/recommendations/new",
+        data={
+            "name": "Другая",
+            "slug": slug,
+            "text": "Текст",
+            "description": "",
+            "group": "other",
+        },
+    )
+    assert duplicate.status_code == 400
+    assert "slug" in duplicate.text
+    missing = client.post(
+        "/recommendations/new",
+        data={
+            "name": "",
+            "slug": f"empty-{random_lower_string()}",
+            "text": "Текст",
+            "description": "",
+            "group": "other",
+        },
+    )
+    assert missing.status_code == 400
+    assert "обязательны" in missing.text
+
+
+def test_expert_cannot_open_recommendation_form(
+    client: TestClient, db: Session
+) -> None:
+    row = Recommendation(
+        name="Closed",
+        slug=f"closed-{random_lower_string()}",
+        text="Text",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _login_expert(client, db)
+    assert client.get("/recommendations/new", follow_redirects=False).status_code == 403
+    assert (
+        client.get(f"/recommendations/{row.id}", follow_redirects=False).status_code
+        == 403
+    )
+    response = client.post(
+        f"/recommendations/{row.id}",
+        data={
+            "name": "Changed",
+            "slug": row.slug,
+            "text": "Changed",
+            "description": "",
+            "group": "other",
+        },
+    )
+    assert response.status_code == 403
+
+
 def test_scales_page_visible_to_logged_in_user(client: TestClient, db: Session) -> None:
     scale = Scale(
         name="Частота лая",
@@ -1512,6 +1621,119 @@ def test_survey_detail_sorts_questions_by_display_num(
     page = client.get(f"/surveys/{survey.id}")
     assert page.status_code == 200
     assert page.text.index("Показывается первым") < page.text.index("Показывается вторым")
+
+
+def test_admin_can_edit_survey_question_layout(client: TestClient, db: Session) -> None:
+    survey = Survey(name="Editable survey", slug=f"editable-{random_lower_string()}")
+    scale = Scale(name="Балл", type="integer", config={"min_value": 0, "max_value": 4})
+    db.add(survey)
+    db.add(scale)
+    db.commit()
+    db.refresh(survey)
+    db.refresh(scale)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    question = Question(text="Можно переставить", scale_id=scale.id)
+    db.add(version)
+    db.add(question)
+    db.commit()
+    db.refresh(version)
+    db.refresh(question)
+    link = SurveyQuestion(
+        survey_version_id=version.id,
+        question_id=question.id,
+        order_num=1,
+        display_num=3,
+        group="other",
+    )
+    db.add(link)
+    db.commit()
+    _login_admin(client, db)
+    page = client.get(f"/surveys/{survey.id}")
+    assert page.status_code == 200
+    assert 'name="display_num"' in page.text
+    assert 'name="group"' in page.text
+    assert "Сохранить" in page.text
+    saved = client.post(
+        f"/surveys/{survey.id}",
+        data={
+            "question_id": str(question.id),
+            "display_num": "1",
+            "group": "Household",
+        },
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    db.refresh(link)
+    assert link.display_num == 1
+    assert link.group == "Household"
+    cleared = client.post(
+        f"/surveys/{survey.id}",
+        data={
+            "question_id": str(question.id),
+            "display_num": "",
+            "group": "Household",
+        },
+        follow_redirects=False,
+    )
+    assert cleared.status_code == 303
+    db.refresh(link)
+    assert link.display_num is None
+    invalid = client.post(
+        f"/surveys/{survey.id}",
+        data={
+            "question_id": str(question.id),
+            "display_num": "нет",
+            "group": "Household",
+        },
+    )
+    assert invalid.status_code == 400
+    assert "целым" in invalid.text
+    db.refresh(link)
+    assert link.display_num is None
+
+
+def test_expert_cannot_edit_survey_question_layout(
+    client: TestClient, db: Session
+) -> None:
+    survey = Survey(name="Read only survey", slug=f"readonly-{random_lower_string()}")
+    scale = Scale(name="Балл", type="integer", config={"min_value": 0, "max_value": 4})
+    db.add(survey)
+    db.add(scale)
+    db.commit()
+    db.refresh(survey)
+    db.refresh(scale)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    question = Question(text="Только чтение", scale_id=scale.id)
+    db.add(version)
+    db.add(question)
+    db.commit()
+    db.refresh(version)
+    db.refresh(question)
+    link = SurveyQuestion(
+        survey_version_id=version.id,
+        question_id=question.id,
+        order_num=1,
+        group="other",
+    )
+    db.add(link)
+    db.commit()
+    _login_expert(client, db)
+    page = client.get(f"/surveys/{survey.id}")
+    assert page.status_code == 200
+    assert "Сохранить" not in page.text
+    assert 'name="group"' not in page.text
+    response = client.post(
+        f"/surveys/{survey.id}",
+        data={
+            "question_id": str(question.id),
+            "display_num": "2",
+            "group": "Household",
+        },
+    )
+    assert response.status_code == 403
+    db.refresh(link)
+    assert link.group == "other"
+    assert link.display_num is None
 
 
 def test_json_api_is_gone(client: TestClient) -> None:

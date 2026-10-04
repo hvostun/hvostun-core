@@ -16,7 +16,6 @@ from app.models.questionnairy import (
     ScaleType,
     SessionStatus,
     SurveyQuestion,
-    SurveyQuestionGroup,
     SurveySession,
     SurveyVersion,
 )
@@ -73,8 +72,6 @@ def _validate_domain_values(session: SASession) -> None:
                 obj.type = ScaleType(obj.type)
             elif isinstance(obj, User):
                 obj.group = UserGroup(obj.group)
-            elif isinstance(obj, SurveyQuestion):
-                obj.group = SurveyQuestionGroup(obj.group)
             elif isinstance(obj, Recommendation):
                 obj.group = RecommendationGroup(obj.group)
         except ValueError as exc:
@@ -152,19 +149,29 @@ def _validate_answer(session: SASession, answer: AnswerEvent) -> None:
 
 
 def _guard_immutable_objects(session: SASession) -> None:
-    immutable_types = (SurveyVersion, Question, AnswerEvent, Recommendation)
+    frozen = (SurveyVersion, Question, AnswerEvent)
+    undeletable = (*frozen, Recommendation, Scale, SurveyQuestion)
     for obj in session.deleted:
-        if isinstance(obj, (*immutable_types, Scale, SurveyQuestion)):
+        if isinstance(obj, undeletable):
             _reject_immutable(obj, "deleted")
     for obj in session.dirty:
-        if isinstance(obj, immutable_types) and session.is_modified(
+        if isinstance(obj, frozen) and session.is_modified(
             obj, include_collections=False
         ):
             _reject_immutable(obj, "updated")
         if isinstance(obj, SurveyQuestion) and session.is_modified(
             obj, include_collections=False
         ):
-            _reject_immutable(obj, "updated")
+            state = inspect(obj)
+            if state is None:
+                _reject_immutable(obj, "updated")
+            changed = {
+                attr.key
+                for attr in state.mapper.column_attrs
+                if state.attrs[attr.key].history.has_changes()
+            }
+            if not changed <= {"display_num", "group"}:
+                _reject_immutable(obj, "updated")
         if isinstance(obj, SurveySession):
             state = inspect(obj)
             if state is None:

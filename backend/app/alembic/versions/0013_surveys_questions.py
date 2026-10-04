@@ -44,11 +44,6 @@ def upgrade() -> None:
             "order_num",
             name="uq_surveys_questions_version_order",
         ),
-        sa.CheckConstraint(
-            "\"group\" IN ('Excitability', 'Aggression', 'Fear_Anxiety', "
-            "'Separation', 'Attachment', 'Training', 'other')",
-            name="ck_surveys_questions_group",
-        ),
     )
     op.create_index(
         "ix_surveys_questions_question_id", "surveys_questions", ["question_id"]

@@ -141,7 +141,7 @@ def test_scale_can_be_updated_but_not_deleted(db: Session) -> None:
     db.rollback()
 
 
-def test_recommendation_and_answer_are_immutable(db: Session) -> None:
+def test_recommendation_can_be_updated_but_not_deleted(db: Session) -> None:
     recommendation = Recommendation(
         name="Immutable recommendation",
         slug=f"immutable-rec-{random_lower_string()}",
@@ -150,9 +150,9 @@ def test_recommendation_and_answer_are_immutable(db: Session) -> None:
     db.add(recommendation)
     db.commit()
     recommendation.text = "Changed"
-    with pytest.raises(CatalogImmutableError):
-        db.commit()
-    db.rollback()
+    db.commit()
+    db.refresh(recommendation)
+    assert recommendation.text == "Changed"
     db.delete(recommendation)
     with pytest.raises(CatalogImmutableError):
         db.commit()
@@ -201,6 +201,24 @@ def test_version_composition_closes_after_first_session(db: Session) -> None:
     with pytest.raises(CatalogImmutableError):
         db.commit()
     db.rollback()
+
+
+def test_survey_question_group_and_display_num_can_change(db: Session) -> None:
+    _user, dog, _survey, version, _scale, _question, link = _catalog(db)
+    db.add(
+        SurveySession(
+            owner_id=_owner_id(db),
+            dog_id=dog.id,
+            survey_version_id=version.id,
+        )
+    )
+    db.commit()
+    link.group = "Custom"
+    link.display_num = 4
+    db.commit()
+    db.refresh(link)
+    assert link.group == "Custom"
+    assert link.display_num == 4
 
 
 def test_session_cannot_move_to_another_version(db: Session) -> None:
@@ -283,7 +301,6 @@ def test_scale_config_validation(
         (Scale, "type", "invalid"),
         (PlacementEvent, "code", "unknown"),
         (User, "group", "invalid"),
-        (SurveyQuestion, "group", "Unknown"),
         (Recommendation, "group", "Excitability"),
     ],
 )
@@ -308,16 +325,6 @@ def test_domain_values_reject_invalid_assignments(
         db.add(dog)
         db.commit()
         obj = PlacementEvent(dog_id=dog.id, code="shelter_started")
-    elif model is SurveyQuestion:
-        _user, _dog, _survey, version, _scale, question, _link = _catalog(db)
-        extra = Question(text="Grouped question", scale_id=question.scale_id)
-        db.add(extra)
-        db.commit()
-        obj = SurveyQuestion(
-            survey_version_id=version.id,
-            question_id=extra.id,
-            order_num=2,
-        )
     elif model is Recommendation:
         obj = Recommendation(
             name="Invalid group",
@@ -336,6 +343,23 @@ def test_domain_values_reject_invalid_assignments(
     with pytest.raises(DomainValueValidationError):
         db.commit()
     db.rollback()
+
+
+def test_survey_question_accepts_any_group(db: Session) -> None:
+    _user, _dog, _survey, version, _scale, question, _link = _catalog(db)
+    extra = Question(text="Custom group question", scale_id=question.scale_id)
+    db.add(extra)
+    db.commit()
+    link = SurveyQuestion(
+        survey_version_id=version.id,
+        question_id=extra.id,
+        order_num=2,
+        group="NotInDictionary",
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+    assert link.group == "NotInDictionary"
 
 
 def test_answer_composite_foreign_keys(db: Session) -> None:

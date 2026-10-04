@@ -17,7 +17,6 @@ from app.models import (
     SurveyVersion,
 )
 from app.pagination import execute_page, page_window
-from app.services import dictionaries as dictionary_service
 from app.services import sessions as session_service
 
 router = APIRouter()
@@ -329,10 +328,8 @@ def _session_detail_response(
                     "order_number": item.link.order_num,
                     "display_num": item.link.display_num,
                     "question_text": item.question.text,
-                    "category_name": dictionary_service.label_for(
-                        session,
-                        dictionary_service.SURVEYS_QUESTIONS_GROUP_KEY,
-                        item.link.group,
+                    "category_name": session_service.group_label(
+                        session, item.link.group
                     ),
                     "answer": item.display_value,
                     "legend": item.legend,
@@ -342,7 +339,9 @@ def _session_detail_response(
                 }
                 for item in filtered
             ],
-            "categories": session_service.session_answer_categories(session),
+            "categories": session_service.session_answer_categories(
+                session, [str(item.link.group) for item in answers]
+            ),
             "answer_values": session_service.session_answer_values(answers),
             "category": category,
             "answer": answer,

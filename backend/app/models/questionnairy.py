@@ -162,11 +162,6 @@ class SurveyQuestion(CreatedAtMixin, SQLModel, table=True):
             "order_num",
             name="uq_surveys_questions_version_order",
         ),
-        CheckConstraint(
-            "\"group\" IN ('Excitability', 'Aggression', 'Fear_Anxiety', "
-            "'Separation', 'Attachment', 'Training', 'other')",
-            name="ck_surveys_questions_group",
-        ),
         Index("ix_surveys_questions_question_id", "question_id"),
         Index("ix_surveys_questions_user_id", "user_id"),
     )
@@ -183,8 +178,8 @@ class SurveyQuestion(CreatedAtMixin, SQLModel, table=True):
     )
     order_num: int
     display_num: int | None = None
-    group: SurveyQuestionGroup = Field(
-        default=SurveyQuestionGroup.OTHER,
+    group: str = Field(
+        default="other",
         sa_column=Column(
             "group",
             Text,

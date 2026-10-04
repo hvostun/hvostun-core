@@ -8,8 +8,9 @@ from sqlmodel import col, func, select
 
 from app.admin.deps import AdminUser, SessionDep, SuperUser
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
-from app.models import Owner, Recommendation, User, UserGroup
+from app.models import Owner, Recommendation, RecommendationGroup, User, UserGroup
 from app.pagination import execute_page, page_window
+from app.services import catalog
 from app.services import users as user_service
 
 router = APIRouter()
@@ -157,7 +158,173 @@ def recommendations_page(
             {"name": "slug", "label": "slug", "value": slug},
         ],
         filter_values={"name": name, "slug": slug},
+        row_href=lambda row: f"/recommendations/{row.id}",
+        create_href="/recommendations/new",
+        create_label="Создать",
     )
+
+
+def _recommendation_form(
+    *,
+    name: str = "",
+    slug: str = "",
+    text: str = "",
+    description: str = "",
+    group: str = RecommendationGroup.OTHER,
+) -> dict[str, str]:
+    return {
+        "name": name,
+        "slug": slug,
+        "text": text,
+        "description": description,
+        "group": group,
+    }
+
+
+def _recommendation_form_from_row(row: Recommendation) -> dict[str, str]:
+    return _recommendation_form(
+        name=row.name,
+        slug=row.slug,
+        text=row.text,
+        description=row.description or "",
+        group=row.group,
+    )
+
+
+def _recommendation_form_response(
+    request: Request,
+    user: User,
+    *,
+    form: dict[str, str],
+    target: Recommendation | None = None,
+    error: str | None = None,
+    status_code: int = 200,
+) -> Any:
+    return templates.TemplateResponse(
+        request,
+        "recommendation_form.html",
+        {
+            "user": user,
+            "target": target,
+            "form": form,
+            "groups": [item.value for item in RecommendationGroup],
+            "error": error,
+            "is_create": target is None,
+        },
+        status_code=status_code,
+    )
+
+
+def _recommendation_fields(
+    name: str, slug: str, text: str, description: str, group: str
+) -> tuple[dict[str, str], str | None]:
+    form = _recommendation_form(
+        name=name,
+        slug=slug,
+        text=text,
+        description=description,
+        group=group,
+    )
+    if not name.strip() or not slug.strip() or not text.strip():
+        return form, "Название, slug и текст обязательны"
+    return form, None
+
+
+@router.get("/recommendations/new")
+def recommendation_new(request: Request, user: AdminUser) -> Any:
+    return _recommendation_form_response(request, user, form=_recommendation_form())
+
+
+@router.post("/recommendations/new")
+def recommendation_create(
+    request: Request,
+    session: SessionDep,
+    user: AdminUser,
+    name: str = Form(""),
+    slug: str = Form(""),
+    text: str = Form(""),
+    description: str = Form(""),
+    group: str = Form(RecommendationGroup.OTHER),
+) -> Any:
+    form, error = _recommendation_fields(name, slug, text, description, group)
+    if error:
+        return _recommendation_form_response(
+            request, user, form=form, error=error, status_code=400
+        )
+    try:
+        created = catalog.create_recommendation(
+            session,
+            name=name.strip(),
+            slug=slug.strip(),
+            text=text.strip(),
+            description=description.strip() or None,
+            group=RecommendationGroup(group),
+        )
+    except (catalog.CatalogUpdateError, ValueError) as exc:
+        return _recommendation_form_response(
+            request, user, form=form, error=str(exc), status_code=400
+        )
+    return RedirectResponse(f"/recommendations/{created.id}", status_code=303)
+
+
+@router.get("/recommendations/{recommendation_id}")
+def recommendation_detail(
+    request: Request,
+    session: SessionDep,
+    user: AdminUser,
+    recommendation_id: uuid.UUID,
+) -> Any:
+    try:
+        target = catalog.get_recommendation(session, recommendation_id)
+    except catalog.CatalogNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _recommendation_form_response(
+        request, user, form=_recommendation_form_from_row(target), target=target
+    )
+
+
+@router.post("/recommendations/{recommendation_id}")
+def recommendation_update(
+    request: Request,
+    session: SessionDep,
+    user: AdminUser,
+    recommendation_id: uuid.UUID,
+    name: str = Form(""),
+    slug: str = Form(""),
+    text: str = Form(""),
+    description: str = Form(""),
+    group: str = Form(RecommendationGroup.OTHER),
+) -> Any:
+    try:
+        target = catalog.get_recommendation(session, recommendation_id)
+    except catalog.CatalogNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    form, error = _recommendation_fields(name, slug, text, description, group)
+    if error:
+        return _recommendation_form_response(
+            request, user, form=form, target=target, error=error, status_code=400
+        )
+    try:
+        catalog.update_recommendation(
+            session,
+            recommendation_id,
+            name=name.strip(),
+            slug=slug.strip(),
+            text=text.strip(),
+            description=description.strip() or None,
+            group=RecommendationGroup(group),
+        )
+    except (catalog.CatalogUpdateError, ValueError) as exc:
+        session.rollback()
+        return _recommendation_form_response(
+            request,
+            user,
+            form=form,
+            target=target,
+            error=str(exc),
+            status_code=400,
+        )
+    return RedirectResponse(f"/recommendations/{recommendation_id}", status_code=303)
 
 
 @router.get("/users")

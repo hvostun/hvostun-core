@@ -7,6 +7,7 @@ from app.models import Dictionary, User
 DOGS_SEX_KEY = "dogs::sex"
 DOGS_STATUS_KEY = "dogs::status"
 SURVEYS_QUESTIONS_GROUP_KEY = "surveys_questions::group"
+SURVEYS_QUESTIONS_GROUP_COLOR_KEY = "surveys_questions::group::color"
 
 
 def get_value(session: Session, key: str) -> Any | None:

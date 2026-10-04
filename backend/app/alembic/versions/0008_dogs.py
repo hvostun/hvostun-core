@@ -42,6 +42,7 @@ def upgrade() -> None:
         ),
         sa.Column("weight", sa.Float(), nullable=True),
         sa.Column("height", sa.Integer(), nullable=True),
+        sa.Column("history", sa.Text(), nullable=True),
         sa.Column("created_by_id", postgresql.UUID(as_uuid=True), nullable=True),
         created_at(),
         updated_at(),
