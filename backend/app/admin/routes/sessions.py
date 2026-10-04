@@ -17,6 +17,7 @@ from app.models import (
     SurveyVersion,
 )
 from app.pagination import execute_page, page_window
+from app.services import scoring as scoring_service
 from app.services import sessions as session_service
 
 router = APIRouter()
@@ -41,7 +42,8 @@ def sessions_page(
     owner_id: str = "",
     dog_id: str = "",
     survey_version_id: str = "",
-    users_sort: str = "",
+    users_sort: str = "asc",
+    mine: str = "no",
 ) -> Any:
     offset, limit, page = page_window(page, PAGE_SIZE)
     filters: list[Any] = []
@@ -56,12 +58,18 @@ def sessions_page(
         filters.append(SurveySession.dog_id == parsed_dog_id)
     if parsed_version_id:
         filters.append(SurveySession.survey_version_id == parsed_version_id)
+    if mine not in {"yes", "no"}:
+        mine = ""
     my_recommendation = (
         select(SessionRecommendation.id)
         .where(SessionRecommendation.session_id == SurveySession.id)
         .where(SessionRecommendation.user_id == user.id)
         .exists()
     )
+    if mine == "yes":
+        filters.append(my_recommendation)
+    elif mine == "no":
+        filters.append(~my_recommendation)
     recommendation_users = select(
         SessionRecommendation.session_id.label("session_id"),
         func.count(func.distinct(SessionRecommendation.user_id)).label("user_count"),
@@ -112,9 +120,11 @@ def sessions_page(
         offset=offset,
         limit=limit,
     )
+    page_ids = [row.id for row, *_ in rows]
     rec_counts = session_service.session_recommendation_counts(
-        session, [row.id for row, *_ in rows], user
+        session, page_ids, user
     )
+    rates = session_service.answer_rates(session, page_ids)
     return templates.TemplateResponse(
         request,
         "list.html",
@@ -127,6 +137,7 @@ def sessions_page(
                 {"key": "status", "label": "status"},
                 {"key": "owner", "label": "Заполнил"},
                 {"key": "survey", "label": "Анкета"},
+                {"key": "answer_rate", "label": "Ответов, %"},
                 {"key": "recommendations", "label": "Рекомендации (кол-во)"},
                 {
                     "key": "users",
@@ -147,6 +158,7 @@ def sessions_page(
                                 "owner_id": owner_id,
                                 "dog_id": dog_id,
                                 "survey_version_id": survey_version_id,
+                                "mine": mine,
                                 "users_sort": (
                                     "asc" if users_sort == "desc" else "desc"
                                 ),
@@ -168,6 +180,9 @@ def sessions_page(
                         "status": cell(row.status),
                         "owner": cell(owner.name),
                         "survey": f"{survey.name} · v{version.version_num}",
+                        "answer_rate": (
+                            "—" if rates[row.id] is None else cell(rates[row.id])
+                        ),
                         "recommendations": cell(rec_counts[row.id][0]),
                         "users": cell(rec_counts[row.id][1]),
                         "has_mine": has_mine,
@@ -178,25 +193,21 @@ def sessions_page(
             count=count,
             page=page,
             filters=[
-                {"name": "status", "label": "status", "value": status},
                 {
-                    "name": "owner_id",
-                    "label": "Пользователь",
-                    "value": owner_id,
-                },
-                {"name": "dog_id", "label": "Собака", "value": dog_id},
-                {
-                    "name": "survey_version_id",
-                    "label": "Версия анкеты",
-                    "value": survey_version_id,
+                    "name": "mine",
+                    "type": "select",
+                    "label": "Моя рекомендация",
+                    "value": mine,
+                    "options": [
+                        {"value": "no", "label": "Без моей рекомендации"},
+                        {"value": "yes", "label": "Мои рекомендации"},
+                        {"value": "", "label": "Все"},
+                    ],
                 },
             ],
             filter_values={
-                "status": status,
-                "owner_id": owner_id,
-                "dog_id": dog_id,
-                "survey_version_id": survey_version_id,
                 "users_sort": users_sort,
+                "mine": mine,
             },
         ),
     )
@@ -285,6 +296,12 @@ def answer_events_page(
     )
 
 
+def _active_view(requested: str, has_domains: bool) -> str:
+    if not has_domains or requested == "flat":
+        return "flat"
+    return "domains"
+
+
 def _session_detail_response(
     request: Request,
     session: SessionDep,
@@ -293,6 +310,7 @@ def _session_detail_response(
     *,
     category: str = "",
     answer: str = "",
+    view: str = "",
     error: str | None = None,
     status_code: int = 200,
 ) -> Any:
@@ -301,8 +319,15 @@ def _session_detail_response(
     except session_service.SessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     answers = session_service.get_session_answers(session, context.row)
+    scoring = scoring_service.score_session(session, answers)
+    active_view = _active_view(view, scoring is not None)
     filtered = session_service.filter_session_answers(
         answers, category=category, answer=answer
+    )
+    blocks = (
+        scoring_service.scoring_view(session, scoring)
+        if scoring is not None and active_view == "domains"
+        else None
     )
     rec_groups = session_service.group_recommendations(
         session_service.get_session_recommendations(session, session_id, user)
@@ -324,21 +349,12 @@ def _session_detail_response(
                 session, context.dog, context.row
             ),
             "answers": [
-                {
-                    "order_number": item.link.order_num,
-                    "display_num": item.link.display_num,
-                    "question_text": item.question.text,
-                    "category_name": session_service.group_label(
-                        session, item.link.group
-                    ),
-                    "answer": item.display_value,
-                    "legend": item.legend,
-                    "show_bar": item.progress["show_bar"],
-                    "bar_percent": item.progress["percent"],
-                    "bar_color": item.progress["color"],
-                }
-                for item in filtered
+                scoring_service.answer_row(session, item) for item in filtered
             ],
+            "view": active_view,
+            "has_domains": scoring is not None,
+            "domain_sections": [] if blocks is None else blocks["domains"],
+            "unscored_answers": [] if blocks is None else blocks["unscored"],
             "categories": session_service.session_answer_categories(
                 session, [str(item.link.group) for item in answers]
             ),
@@ -366,6 +382,7 @@ def session_detail(
     session_id: uuid.UUID,
     category: str = "",
     answer: str = "",
+    view: str = "",
 ) -> Any:
     return _session_detail_response(
         request,
@@ -374,6 +391,7 @@ def session_detail(
         session_id,
         category=category,
         answer=answer,
+        view=view,
     )
 
 

@@ -1,5 +1,73 @@
 {% extends "base.html" %}
 {% block title %}Сессия — Hvostun Admin{% endblock %}
+{% macro answer_table(items) %}
+<table class="table table-sm table-striped">
+  <thead>
+    <tr>
+      {% if view == "flat" %}
+      <th>№</th>
+      <th>Категория</th>
+      {% endif %}
+      <th>Вопрос</th>
+      <th>Ответ</th>
+      <th>Значение</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      {% if view == "flat" %}
+      <td>{{ item.display_num }}</td>
+      <td>{{ item.category_name }}</td>
+      {% endif %}
+      <td>{{ item.question_text }}</td>
+      <td>
+        {% if item.show_bar %}
+        <div class="progress">
+          <div class="progress-bar" role="progressbar"
+            style="width: {{ item.bar_percent }}%; background-color: {{ item.bar_color }};"
+            aria-valuenow="{{ item.bar_percent }}" aria-valuemin="0" aria-valuemax="100">{{ item.answer }}
+          </div>
+        </div>
+        {% else %}
+        —
+        {% endif %}
+        {% if item.scored_note %}
+        <div class="small text-muted">{{ item.scored_note }}</div>
+        {% endif %}
+      </td>
+      <td>{{ item.legend or "—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+{% macro score_section(section) %}
+{% if not section.low_answers %}
+<details class="border rounded mb-2">
+  <summary class="px-3 py-2 bg">
+    <span class="fw-semibold">{{ section.label }}</span>
+    <span class="ms-2">{{ section.score_label }} из 10</span>
+
+    <span class="text-muted ms-2">| Количество ответов: {{ section.answered }} из {{ section.total }}</span>
+    {% if section.show_bar %}
+    <div class="progress mt-2" style="height: 0.5rem;">
+      <div class="progress-bar" role="progressbar"
+        style="width: {{ section.bar_percent }}%; background-color: {{ section.bar_color }};"
+        aria-valuenow="{{ section.bar_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
+    </div>
+    {% endif %}
+  </summary>
+  <div class="p-3">
+    {% if section["items"] %}
+    {{ answer_table(section["items"]) }}
+    {% else %}
+    <p class="text-muted mb-0">Нет вопросов.</p>
+    {% endif %}
+  </div>
+</details>
+{% endif %}
+{% endmacro %}
 {% block content %}
 <div class="container-fluid">
   <p><a href="/sessions">← Ответы</a></p>
@@ -32,7 +100,24 @@
 </div>
 <div class="col-sm-7">
   <h2 class="h5 mt-4">Вопросы и ответы</h2>
+  {% if has_domains %}
+  <p class="mb-3">
+    {% if view == "domains" %}
+    <span class="fw-semibold">По доменам</span>
+    {% else %}
+    <a href="/sessions/{{ session_row.id }}?view=domains">По доменам</a>
+    {% endif %}
+    ·
+    {% if view == "flat" %}
+    <span class="fw-semibold">Все вопросы</span>
+    {% else %}
+    <a href="/sessions/{{ session_row.id }}?view=flat">Все вопросы</a>
+    {% endif %}
+  </p>
+  {% endif %}
+  {% if view == "flat" %}
   <form class="row g-2 mb-3" method="get" action="/sessions/{{ session_row.id }}">
+    <input type="hidden" name="view" value="flat" />
     <div class="col-auto">
       <label class="form-label visually-hidden" for="category">Категория</label>
       <select class="form-select" id="category" name="category">
@@ -58,44 +143,25 @@
       <button class="btn btn-secondary" type="submit">Фильтр</button>
     </div>
   </form>
+  {% endif %}
 </div>
 </div>
-{% if not answers %}
+{% if view == "domains" %}
+{% for section in domain_sections %}
+{{ score_section(section) }}
+{% endfor %}
+{% if unscored_answers %}
+<details class="border rounded mb-2" open>
+  <summary class="px-3 py-2 bg"><span class="fw-semibold">Вне скоринга</span></summary>
+  <div class="p-3">
+    {{ answer_table(unscored_answers) }}
+  </div>
+</details>
+{% endif %}
+{% elif not answers %}
 <p class="text-muted">{% if has_questions %}Нет вопросов по фильтру.{% else %}Нет вопросов.{% endif %}</p>
 {% else %}
-<table class="table table-sm table-striped">
-  <thead>
-    <tr>
-      <th>№</th>
-      <th>Категория</th>
-      <th>Вопрос</th>
-      <th>Ответ</th>
-      <th>Значение</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for item in answers %}
-    <tr>
-      <td>{{ item.display_num }}</td>
-      <td>{{ item.category_name }}</td>
-      <td>{{ item.question_text }}</td>
-      <td>
-        {% if item.show_bar %}
-        <div class="progress">
-          <div class="progress-bar" role="progressbar"
-            style="width: {{ item.bar_percent }}%; background-color: {{ item.bar_color }};"
-            aria-valuenow="{{ item.bar_percent }}" aria-valuemin="0" aria-valuemax="100">{{ item.answer}}
-          </div>
-        </div>
-        {% else %}
-        —
-        {% endif %}
-      </td>
-      <td>{{ item.legend or "—" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+{{ answer_table(answers) }}
 {% endif %}<h3 class="h6 mt-4">Добавить рекомендацию</h3>
 {% if not available_recommendations %}
 <p class="text-muted">Нет доступных рекомендаций для добавления.</p>
@@ -127,15 +193,18 @@
       <input type="hidden" name="recommendation_id" value="{{ item.id }}" />
       <div class="row">
         <div class="col-sm-12">
-          <h3 class="h6 mb-3">{{ item.recommendation_name }}</h3>
+          <h3 class="h6 mb-3">{{ item.recommendation_name }}: {{ item.recommendation_text }}</h3>
         </div>
       </div>
       <div class="row">
         <div class="col-sm-2">
           <div class="mb-3">
-            <label class="form-label" for="chart_number-{{ item.id }}">Очередность</label>
-            <input class="form-control" id="chart_number-{{ item.id }}" name="chart_number" type="number" min="0"
-              step="1" required value="{{ item.chart_number }}" />
+            <label class="form-label" for="chart_number-{{ item.id }}">Важность</label>
+            <select class="form-select" id="chart_number-{{ item.id }}" name="chart_number">
+              <option value="0">Высокая</option>
+              <option value="1">Средняя</option>
+              <option value="2">Низкая</option>
+            </select>
           </div>
         </div>
         <div class="col-sm-3">

@@ -87,6 +87,50 @@ def _display_num_text(value: int | None) -> str:
     return "" if value is None else str(value)
 
 
+def _active_sort(sort: str) -> str:
+    if sort in {"order", "-order", "display", "-display"}:
+        return sort
+    return "display"
+
+
+def _sort_questions(
+    questions: list[dict[str, str | int]], sort: str
+) -> list[dict[str, str | int]]:
+    active = _active_sort(sort)
+
+    def key(item: dict[str, str | int]) -> tuple[int, int, int, str]:
+        order = int(item["order_number"])
+        raw_display = str(item["display_num"])
+        display = int(raw_display) if raw_display else None
+        question_id = str(item["question_id"])
+        missing = 10**9 if display is None else display
+        if active == "order":
+            return (order, missing, 0, question_id)
+        if active == "-order":
+            return (-order, missing, 0, question_id)
+        if display is None:
+            return (0 if active == "-display" else 1, 0, order, question_id)
+        placed = 1 if active == "-display" else 0
+        number = -display if active == "-display" else display
+        return (placed, number, order, question_id)
+
+    return sorted(questions, key=key)
+
+
+def _sort_header(title: str, column: str, sort: str) -> dict[str, str]:
+    active = _active_sort(sort)
+    if active == column:
+        label = f"{title} ↑"
+        target = f"-{column}"
+    elif active == f"-{column}":
+        label = f"{title} ↓"
+        target = column
+    else:
+        label = title
+        target = column
+    return {"label": label, "href": f"?sort={target}"}
+
+
 def _question_fields(
     rows: list[tuple[Question, Scale, SurveyQuestion]],
 ) -> list[dict[str, str | int]]:
@@ -112,6 +156,7 @@ def _survey_detail_response(
     error: str | None = None,
     status_code: int = 200,
     questions: list[dict[str, str | int]] | None = None,
+    sort: str = "",
 ) -> Any:
     try:
         survey = catalog.get_survey(session, survey_id)
@@ -128,7 +173,13 @@ def _survey_detail_response(
             "version": version,
             "can_edit": is_admin(user),
             "error": error,
-            "questions": questions if questions is not None else _question_fields(rows),
+            "questions": _sort_questions(
+                questions if questions is not None else _question_fields(rows),
+                sort,
+            ),
+            "sort": _active_sort(sort),
+            "order_sort": _sort_header("order", "order", sort),
+            "display_sort": _sort_header("display_num", "display", sort),
         },
         status_code=status_code,
     )
@@ -152,8 +203,9 @@ def survey_detail(
     session: SessionDep,
     user: CurrentUser,
     survey_id: uuid.UUID,
+    sort: str = "",
 ) -> Any:
-    return _survey_detail_response(request, session, user, survey_id)
+    return _survey_detail_response(request, session, user, survey_id, sort=sort)
 
 
 @router.post("/surveys/{survey_id}")
@@ -165,6 +217,7 @@ def survey_questions_update(
     question_id: list[str] = Form(default=[]),
     display_num: list[str] = Form(default=[]),
     group: list[str] = Form(default=[]),
+    sort: str = Form(""),
 ) -> Any:
     try:
         version = catalog.get_latest_survey_version(session, survey_id)
@@ -185,6 +238,7 @@ def survey_questions_update(
             survey_id,
             error="Некорректные данные вопросов",
             status_code=400,
+            sort=sort,
         )
     for raw_id, raw_display, raw_group in zip(question_id, display_num, group, strict=True):
         item = by_id.get(raw_id)
@@ -196,6 +250,7 @@ def survey_questions_update(
                 survey_id,
                 error="Некорректные данные вопросов",
                 status_code=400,
+                sort=sort,
             )
         item["display_num"] = raw_display
         item["group"] = raw_group
@@ -221,6 +276,7 @@ def survey_questions_update(
             error=str(exc),
             status_code=400,
             questions=posted,
+            sort=sort,
         )
     except ValueError as exc:
         session.rollback()
@@ -232,5 +288,9 @@ def survey_questions_update(
             error=str(exc),
             status_code=400,
             questions=posted,
+            sort=sort,
         )
-    return RedirectResponse(f"/surveys/{survey_id}", status_code=303)
+    target = f"/surveys/{survey_id}"
+    if _active_sort(sort) != "display":
+        target = f"{target}?sort={_active_sort(sort)}"
+    return RedirectResponse(target, status_code=303)

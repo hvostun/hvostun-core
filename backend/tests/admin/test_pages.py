@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -27,6 +27,10 @@ from app.models import (
     User,
     UserCreate,
     UserGroup,
+)
+from app.services.dictionaries import (
+    SURVEYS_QUESTIONS_CONSTS_KEY,
+    SURVEYS_QUESTIONS_GROUP_KEY,
 )
 from app.services.sessions import (
     days_since_status,
@@ -285,7 +289,7 @@ def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> N
     assert str(dog.id) not in sessions.text
     assert str(survey.id) not in sessions.text
     assert re.search(
-        r"C-BARQ Sessions · v1\s*</td>\s*<td>\s*0\s*</td>\s*<td>\s*0\s*</td>",
+        r"C-BARQ Sessions · v1\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*0\s*</td>\s*<td>\s*0\s*</td>",
         sessions.text,
     )
 
@@ -392,7 +396,7 @@ def test_sessions_page_shows_recommendation_counts(
     assert sessions.status_code == 200
     assert "Rex Rec Counts" in sessions.text
     assert re.search(
-        r"C-BARQ Rec Counts · v1\s*</td>\s*<td>\s*3\s*</td>\s*<td>\s*2\s*</td>",
+        r"C-BARQ Rec Counts · v1\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*3\s*</td>\s*<td>\s*2\s*</td>",
         sessions.text,
     )
     assert 'name="has_my_recommendation"' not in sessions.text
@@ -409,6 +413,17 @@ def test_sessions_page_shows_recommendation_counts(
     assert descending.text.index("Rex Rec Counts") < descending.text.index(
         "Rex Without Recommendations"
     )
+    assert 'name="mine"' in sessions.text
+    assert "Мои рекомендации" in sessions.text
+    assert "Нет моей рекомендации" in sessions.text
+    only_mine = client.get("/sessions", params={"mine": "yes"})
+    assert "Rex Rec Counts" in only_mine.text
+    assert "Rex Without Recommendations" not in only_mine.text
+    assert 'value="yes" selected' in only_mine.text
+    without_mine = client.get("/sessions", params={"mine": "no"})
+    assert "Rex Without Recommendations" in without_mine.text
+    assert "Rex Rec Counts" not in without_mine.text
+    assert 'value="no" selected' in without_mine.text
 
 
 def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> None:
@@ -429,14 +444,23 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
             },
         },
     )
-    db.add(
-        Dictionary(
-            key="surveys_questions::group",
-            value={"other": "Прочее", "Excitability": "Возбудимость"},
-            created_by=user.id,
-            updated_by=user.id,
+    group_labels = {
+        "other": {"name": "Прочее", "color": "var(--bs-blue)"},
+        "Excitability": {"name": "Возбудимость", "color": "var(--bs-orange)"},
+    }
+    group_row = db.get(Dictionary, "surveys_questions::group")
+    if group_row is None:
+        db.add(
+            Dictionary(
+                key="surveys_questions::group",
+                value=group_labels,
+                created_by=user.id,
+                updated_by=user.id,
+            )
         )
-    )
+    else:
+        group_row.value = group_labels
+        db.add(group_row)
     db.add(dog)
     db.add(survey)
     db.add(scale)
@@ -487,7 +511,7 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
             "password": settings.FIRST_SUPERUSER_PASSWORD,
         },
     )
-    page = client.get(f"/sessions/{session_row.id}")
+    page = client.get(f"/sessions/{session_row.id}", params={"view": "flat"})
     assert page.status_code == 200
     assert "Как часто лает?" in page.text
     assert "Категория" in page.text
@@ -1677,6 +1701,36 @@ def test_survey_detail_sorts_questions_by_display_num(
     assert page.text.index("Показывается первым") < page.text.index(
         "Показывается вторым"
     )
+    assert "display_num ↑" in page.text
+    by_order = client.get(f"/surveys/{survey.id}?sort=order")
+    assert by_order.status_code == 200
+    assert "order ↑" in by_order.text
+    assert by_order.text.index("Показывается вторым") < by_order.text.index(
+        "Показывается первым"
+    )
+    by_order_desc = client.get(f"/surveys/{survey.id}?sort=-order")
+    assert "order ↓" in by_order_desc.text
+    assert by_order_desc.text.index("Показывается первым") < by_order_desc.text.index(
+        "Показывается вторым"
+    )
+    by_display_desc = client.get(f"/surveys/{survey.id}?sort=-display")
+    assert "display_num ↓" in by_display_desc.text
+    assert by_display_desc.text.index("Показывается вторым") < by_display_desc.text.index(
+        "Показывается первым"
+    )
+    saved = client.post(
+        f"/surveys/{survey.id}",
+        data={
+            "csrf_token": client.cookies[CSRF_COOKIE_NAME],
+            "question_id": [str(later.id), str(earlier.id)],
+            "display_num": ["2", "1"],
+            "group": ["other", "other"],
+            "sort": "order",
+        },
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    assert saved.headers["location"].endswith("?sort=order")
 
 
 def test_admin_can_edit_survey_question_layout(client: TestClient, db: Session) -> None:
@@ -1799,6 +1853,236 @@ def test_expert_cannot_edit_survey_question_layout(
 def test_json_api_is_gone(client: TestClient) -> None:
     response = client.get("/api/v1/surveys/")
     assert response.status_code == 404
+
+
+def test_session_detail_groups_answers_by_cbarq_domains(
+    client: TestClient, db: Session
+) -> None:
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    assert user
+    dog = Dog(name="Domain Dog")
+    survey = Survey(name="Domain Survey", slug=f"domains-{random_lower_string()}")
+    scale = Scale(
+        name="Балл доменов",
+        type="integer",
+        config={"min_value": 0, "max_value": 4},
+    )
+    db.add(dog)
+    db.add(survey)
+    db.add(scale)
+    group_labels = {
+        "Excitability": {"name": "Возбудимость", "color": "var(--bs-orange)"},
+        "Trainability": {
+            "name": "Трудность дрессировки",
+            "color": "var(--bs-green)",
+        },
+    }
+    group_row = db.get(Dictionary, SURVEYS_QUESTIONS_GROUP_KEY)
+    if group_row is None:
+        db.add(
+            Dictionary(
+                key=SURVEYS_QUESTIONS_GROUP_KEY,
+                value=group_labels,
+                created_by=user.id,
+                updated_by=user.id,
+            )
+        )
+    else:
+        group_row.value = group_labels
+        db.add(group_row)
+    consts_value = {
+        "c-barq-short-42": {"domain_threshold": 0.5, "reverse": [27, 28]}
+    }
+    consts_row = db.get(Dictionary, SURVEYS_QUESTIONS_CONSTS_KEY)
+    if consts_row is None:
+        db.add(
+            Dictionary(
+                key=SURVEYS_QUESTIONS_CONSTS_KEY,
+                value=consts_value,
+                created_by=user.id,
+                updated_by=user.id,
+            )
+        )
+    else:
+        consts_row.value = consts_value
+        db.add(consts_row)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(survey)
+    db.refresh(scale)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    texts = {
+        1: ("Возбуждается дома", "Excitability"),
+        2: ("Возбуждается на улице", "Excitability"),
+        11: ("Знакомая собака", "Dog_rivalry"),
+        27: ("Сразу сидит", "Trainability"),
+        28: ("Сразу жди", "Trainability"),
+        29: ("Легко отвлекается", "Trainability"),
+        32: ("Тянет поводок", "other"),
+        99: ("Общий вопрос", "other"),
+    }
+    questions: dict[int, Question] = {}
+    for order, (text, group) in texts.items():
+        question = Question(text=text, scale_id=scale.id)
+        db.add(question)
+        db.commit()
+        db.refresh(question)
+        questions[order] = question
+        db.add(
+            SurveyQuestion(
+                survey_version_id=version.id,
+                question_id=question.id,
+                order_num=order,
+                display_num=order,
+                group=group,
+            )
+        )
+    session_row = SurveySession(
+        owner_id=_create_owner(db).id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+    values = {1: 2, 2: 4, 27: 0, 32: 3, 99: 1}
+    for order, value in values.items():
+        db.add(
+            AnswerEvent(
+                surveys_session_id=session_row.id,
+                survey_version_id=version.id,
+                question_id=questions[order].id,
+                value={"value": value},
+            )
+        )
+    db.commit()
+    _login_superuser(client)
+    page = client.get(f"/sessions/{session_row.id}")
+    assert page.status_code == 200
+    assert "По доменам" in page.text
+    assert "Возбудимость" in page.text
+    assert "3.00" in page.text
+    assert "2 из 2" in page.text
+    assert "Трудность дрессировки" in page.text
+    assert "мало ответов" in page.text
+    assert "в балл: 4 − x = 4" in page.text
+    assert "Dog_rivalry" in page.text
+    assert "Прочее" not in page.text
+    assert "Вне скоринга" in page.text
+    assert "Общий вопрос" in page.text
+    assert 'id="category"' not in page.text
+    flat = client.get(f"/sessions/{session_row.id}", params={"view": "flat"})
+    assert flat.status_code == 200
+    assert "Все категории" in flat.text
+    assert "Возбуждается дома" in flat.text
+    assert "Общий вопрос" in flat.text
+    filtered = client.get(
+        f"/sessions/{session_row.id}",
+        params={"view": "flat", "answer": "4"},
+    )
+    assert "Возбуждается на улице" in filtered.text
+    assert "Общий вопрос" not in filtered.text
+
+
+def test_sessions_page_shows_answer_percent(client: TestClient, db: Session) -> None:
+    owner = _create_owner(db, "Владелец процента списка")
+    dog = Dog(name="Listed Percent Dog")
+    empty_dog = Dog(name="Listed Empty Dog")
+    survey = Survey(name="Listed Percent", slug=f"listed-{random_lower_string()}")
+    scale = Scale(name="Балл списка", type="integer", config={"min_value": 0, "max_value": 4})
+    db.add(dog)
+    db.add(empty_dog)
+    db.add(survey)
+    db.add(scale)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(empty_dog)
+    db.refresh(survey)
+    db.refresh(scale)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    empty_version = SurveyVersion(survey_id=survey.id, version_num=2)
+    db.add(version)
+    db.add(empty_version)
+    db.commit()
+    db.refresh(version)
+    db.refresh(empty_version)
+    first = Question(text="Список 1", scale_id=scale.id)
+    second = Question(text="Список 2", scale_id=scale.id)
+    db.add(first)
+    db.add(second)
+    db.commit()
+    db.refresh(first)
+    db.refresh(second)
+    db.add(
+        SurveyQuestion(
+            survey_version_id=version.id,
+            question_id=first.id,
+            order_num=1,
+            display_num=1,
+        )
+    )
+    db.add(
+        SurveyQuestion(
+            survey_version_id=version.id,
+            question_id=second.id,
+            order_num=2,
+            display_num=2,
+        )
+    )
+    answered = SurveySession(
+        owner_id=owner.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    empty = SurveySession(
+        owner_id=owner.id,
+        dog_id=empty_dog.id,
+        survey_version_id=empty_version.id,
+        status="draft",
+    )
+    db.add(answered)
+    db.add(empty)
+    db.commit()
+    db.refresh(answered)
+    db.add(
+        AnswerEvent(
+            surveys_session_id=answered.id,
+            survey_version_id=version.id,
+            question_id=first.id,
+            value={"value": -999},
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    )
+    db.add(
+        AnswerEvent(
+            surveys_session_id=answered.id,
+            survey_version_id=version.id,
+            question_id=first.id,
+            value={"value": 1},
+            created_at=datetime(2026, 2, 1, tzinfo=UTC),
+        )
+    )
+    db.add(
+        AnswerEvent(
+            surveys_session_id=answered.id,
+            survey_version_id=version.id,
+            question_id=second.id,
+            value={"value": -999},
+            created_at=datetime(2026, 2, 1, tzinfo=UTC),
+        )
+    )
+    db.commit()
+    _login_superuser(client)
+    page = client.get("/sessions")
+    assert page.status_code == 200
+    assert "Ответов, %" in page.text
+    assert re.search(r"Listed Percent · v1\s*</td>\s*<td>\s*50\s*</td>", page.text)
+    assert re.search(r"Listed Percent · v2\s*</td>\s*<td>\s*—\s*</td>", page.text)
 
 
 def test_health_check(client: TestClient) -> None:

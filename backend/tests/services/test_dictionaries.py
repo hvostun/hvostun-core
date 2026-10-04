@@ -4,11 +4,14 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.models import Dictionary, User
 from app.services.dictionaries import (
+    DEFAULT_GROUP_COLOR,
     DOGS_SEX_KEY,
     DOGS_STATUS_KEY,
     SURVEYS_QUESTIONS_GROUP_KEY,
     DictionaryNotFoundError,
     get_dictionary,
+    group_color,
+    group_name,
     label_for,
     update_dictionary,
 )
@@ -35,6 +38,37 @@ def test_label_for_reads_json_map(db: Session) -> None:
     assert label_for(db, key, "male") == "кобель"
     assert label_for(db, key, "unknown") == ""
     assert label_for(db, key, None) == ""
+
+
+def test_group_entry_reads_name_and_color(db: Session) -> None:
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    assert user
+    groups = {
+        "Energy": {"name": "Уровень энергии", "color": "var(--bs-teal)"},
+        "Health": {"color": "var(--bs-red)"},
+    }
+    row = db.get(Dictionary, SURVEYS_QUESTIONS_GROUP_KEY)
+    if row is None:
+        db.add(
+            Dictionary(
+                key=SURVEYS_QUESTIONS_GROUP_KEY,
+                value=groups,
+                created_by=user.id,
+                updated_by=user.id,
+            )
+        )
+    else:
+        row.value = groups
+        db.add(row)
+    db.commit()
+    assert group_name(db, "Energy") == "Уровень энергии"
+    assert group_color(db, "Energy") == "var(--bs-teal)"
+    assert group_name(db, "Health") == "Health"
+    assert group_color(db, "Health") == "var(--bs-red)"
+    assert group_name(db, "Missing") == "Missing"
+    assert group_color(db, "Missing") == DEFAULT_GROUP_COLOR
+    assert group_name(db, None) == ""
+    assert group_color(db, None) == DEFAULT_GROUP_COLOR
 
 
 def test_label_for_missing_key_is_empty(db: Session) -> None:

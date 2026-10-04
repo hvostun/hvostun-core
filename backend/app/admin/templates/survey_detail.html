@@ -5,7 +5,8 @@
 <h1 class="h3">{{ survey.name }}</h1>
 <p class="text-muted">
   {{ survey.slug }} · версия {{ version.version_num }}
-  {% if version.description %} — {{ version.description }}{% elif survey.description %} — {{ survey.description }}{% endif %}
+  {% if version.description %} — {{ version.description }}{% elif survey.description %} — {{ survey.description }}{%
+  endif %}
 </p>
 {% if error %}
 <div class="alert alert-danger">{{ error }}</div>
@@ -13,11 +14,12 @@
 {% if can_edit %}
 <form method="post" action="/surveys/{{ survey.id }}">
   {% include "csrf.html" %}
+  <input type="hidden" name="sort" value="{{ sort }}" />
   <table class="table table-sm table-striped">
     <thead>
       <tr>
-        <th>order</th>
-        <th>display_num</th>
+        <th><a href="{{ order_sort.href }}">{{ order_sort.label }}</a></th>
+        <th><a href="{{ display_sort.href }}">{{ display_sort.label }}</a></th>
         <th>group</th>
         <th>text</th>
         <th>scale_name</th>
@@ -31,22 +33,12 @@
           <input type="hidden" name="question_id" value="{{ item.question_id }}" />
         </td>
         <td>
-          <input
-            class="form-control form-control-sm"
-            name="display_num"
-            inputmode="numeric"
-            value="{{ item.display_num }}"
-            aria-label="display_num"
-          />
+          <input class="form-control form-control-sm" name="display_num" inputmode="numeric"
+            value="{{ item.display_num }}" aria-label="display_num" />
         </td>
         <td>
-          <input
-            class="form-control form-control-sm"
-            name="group"
-            required
-            value="{{ item.group }}"
-            aria-label="group"
-          />
+          <input class="form-control form-control-sm" name="group" required value="{{ item.group }}"
+            aria-label="group" />
         </td>
         <td>{{ item.text }}</td>
         <td>{{ item.scale_name }}</td>

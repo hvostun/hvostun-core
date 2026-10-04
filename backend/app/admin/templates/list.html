@@ -11,6 +11,14 @@
 <form class="row g-2 mb-3" method="get">
   {% for field in filters %}
   <div class="col-auto">
+    {% if field.type == "select" %}
+    <label class="form-label" for="{{ field.name }}">{{ field.label }}</label>
+    <select class="form-select" id="{{ field.name }}" name="{{ field.name }}">
+      {% for option in field.options %}
+      <option value="{{ option.value }}" {% if option.value == field.value %}selected{% endif %}>{{ option.label }}</option>
+      {% endfor %}
+    </select>
+    {% else %}
     <label class="form-label visually-hidden" for="{{ field.name }}">{{ field.label }}</label>
     <input
       class="form-control"
@@ -19,6 +27,7 @@
       placeholder="{{ field.label }}"
       value="{{ field.value }}"
     />
+    {% endif %}
   </div>
   {% endfor %}
   <div class="col-auto">

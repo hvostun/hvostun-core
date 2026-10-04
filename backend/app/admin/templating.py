@@ -1,3 +1,4 @@
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -37,7 +38,7 @@ def list_context(
     rows: list[dict[str, Any]],
     count: int,
     page: int,
-    filters: list[dict[str, str]],
+    filters: Sequence[Mapping[str, Any]],
     filter_values: dict[str, str],
     create_href: str | None = None,
     create_label: str | None = None,

@@ -58,17 +58,23 @@ def test_filter_session_answers() -> None:
 def test_answer_progress_maps_scale_and_skips_missing(db: Session) -> None:
     user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
     assert user
-    db.add(
-        Dictionary(
-            key="surveys_questions::group::color",
-            value={
-                "Excitability": "var(--bs-orange)",
-                "Aggression": "var(--bs-red)",
-            },
-            created_by=user.id,
-            updated_by=user.id,
+    groups = {
+        "Excitability": {"name": "Возбудимость", "color": "var(--bs-orange)"},
+        "Aggression": {"name": "Агрессия", "color": "var(--bs-red)"},
+    }
+    row = db.get(Dictionary, "surveys_questions::group")
+    if row is None:
+        db.add(
+            Dictionary(
+                key="surveys_questions::group",
+                value=groups,
+                created_by=user.id,
+                updated_by=user.id,
+            )
         )
-    )
+    else:
+        row.value = groups
+        db.add(row)
     db.commit()
     config = {"min_value": 0, "max_value": 4}
     bar = answer_progress(db, {"value": 3}, config, "Excitability")
