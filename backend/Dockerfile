@@ -1,4 +1,4 @@
-FROM python:3.14
+FROM python:3.14.8
 
 ENV PYTHONUNBUFFERED=1
 
@@ -39,6 +39,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --package app
+
+RUN groupadd --system --gid 999 hvostun \
+ && useradd --system --gid 999 --uid 999 --no-create-home hvostun \
+ && chown -R hvostun:hvostun /app
+USER hvostun
 
 WORKDIR /app/backend/
 

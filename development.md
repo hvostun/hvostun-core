@@ -75,7 +75,7 @@ The `compose.deploy.yml` file contains the deployment-specific settings, includi
 Set a public `DOMAIN`, `LETSENCRYPT_EMAIL`, and production secrets, then deploy with:
 
 ```bash
-docker compose -f compose.yml -f compose.deploy.yml up -d --build
+bash scripts/deploy.sh up -d --build
 ```
 
 The deployment override forces `FASTAPI_ENV=production`, uses the
@@ -102,11 +102,13 @@ Dump the local development database (catalog and PII stay out of git):
 bash scripts/db_backup.sh
 ```
 
-The script writes `.data/backup/hvostun_development_YYYY-MM-DD_HHMMSS.sql` and copies it to `.data/backup/hvostun_development.sql`. Restore with:
+The script writes `.data/backup/hvostun_development_YYYY-MM-DD_HHMMSS.sql` and copies it to `.data/backup/hvostun_development.sql`. The database name comes from `POSTGRES_DB`, or `hvostun_${FASTAPI_ENV:-development}` when that variable is unset. This local dump includes `--clean`. Restore with:
 
 ```bash
 docker compose exec -T db psql -U postgres -d hvostun_development < .data/backup/hvostun_development.sql
 ```
+
+`bash scripts/deploy.sh up` dumps `hvostun_production` without `--clean` before `prestart` runs `alembic upgrade`. `pull` and `config` do not dump.
 
 Do not store deployment secrets in `.env`. Keep production secrets in your host/CI secret store.
 

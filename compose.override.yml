@@ -29,7 +29,7 @@ services:
       - "5432:5432"
 
   db-ui:
-    image: adminer
+    image: adminer:6.0.1
     depends_on:
       - db
     ports:
