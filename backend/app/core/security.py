@@ -1,7 +1,9 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
+from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
 from pwdlib.hashers.bcrypt import BcryptHasher
@@ -24,6 +26,17 @@ def create_access_token(subject: str | Any, expires_delta: timedelta) -> str:
     to_encode = {"exp": expire, "sub": str(subject)}
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+
+def decode_access_token_subject(token: str) -> uuid.UUID | None:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        subject = payload.get("sub")
+        if not isinstance(subject, str):
+            return None
+        return uuid.UUID(subject)
+    except InvalidTokenError, ValueError:
+        return None
 
 
 def verify_password(

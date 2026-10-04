@@ -1,0 +1,69 @@
+services:
+  proxy:
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - traefik-certificates:/certificates
+    command:
+      - --providers.docker
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.http.address=:80
+      - --entrypoints.http.http.redirections.entrypoint.to=https
+      - --entrypoints.http.http.redirections.entrypoint.scheme=https
+      - --entrypoints.https.address=:443
+      - --certificatesresolvers.le.acme.email=${LETSENCRYPT_EMAIL:?Variable not set}
+      - --certificatesresolvers.le.acme.storage=/certificates/acme.json
+      - --certificatesresolvers.le.acme.tlschallenge=true
+      - --accesslog
+      - --log
+
+  db:
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Variable not set}
+      POSTGRES_DB: hvostun_production
+
+  # Adminer is a local-only tool. Even if explicitly started in this
+  # deployment composition, Traefik must not publish it.
+  db-ui:
+    profiles: ["dev"]
+    restart: "no"
+    labels:
+      - traefik.enable=false
+
+  prestart:
+    image: backend:latest
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      PROJECT_NAME: ${PROJECT_NAME:?Variable not set}
+      SECRET_KEY: ${SECRET_KEY:?Variable not set}
+      FASTAPI_ENV: production
+      FIRST_SUPERUSER: ${FIRST_SUPERUSER:?Variable not set}
+      FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD:?Variable not set}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Variable not set}@db:5432/hvostun_production
+    command: ["bash", "scripts/prestart.sh"]
+
+  backend:
+    restart: unless-stopped
+    depends_on:
+      prestart:
+        condition: service_completed_successfully
+    environment:
+      FASTAPI_ENV: production
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Variable not set}@db:5432/hvostun_production
+    labels:
+      - traefik.http.routers.backend-https.rule=Host(`${DOMAIN:?Variable not set}`)
+      - traefik.http.routers.backend-https.entrypoints=https
+      - traefik.http.routers.backend-https.tls=true
+      - traefik.http.routers.backend-https.tls.certresolver=le
+
+volumes:
+  traefik-certificates:

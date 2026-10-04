@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Hvostun Admin{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">{{ title }}</h1>
+  {% if create_href %}
+  <a class="btn btn-primary" href="{{ create_href }}">{{ create_label or "Создать" }}</a>
+  {% endif %}
+</div>
+{% if filters %}
+<form class="row g-2 mb-3" method="get">
+  {% for field in filters %}
+  <div class="col-auto">
+    <label class="form-label visually-hidden" for="{{ field.name }}">{{ field.label }}</label>
+    <input
+      class="form-control"
+      id="{{ field.name }}"
+      name="{{ field.name }}"
+      placeholder="{{ field.label }}"
+      value="{{ field.value }}"
+    />
+  </div>
+  {% endfor %}
+  <div class="col-auto">
+    <button class="btn btn-secondary" type="submit">Фильтр</button>
+  </div>
+</form>
+{% endif %}
+<p class="text-muted">{{ count }} записей</p>
+<div class="table-responsive">
+  <table class="table table-sm table-striped table-hover">
+    <thead>
+      <tr>
+        {% for column in columns %}
+        <th>{% if column.sort_href %}<a href="{{ column.sort_href }}">{{ column.label }}</a>{% else %}{{ column.label }}{% endif %}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        {% for column in columns %}
+        <td>
+          {% if column.type == "checkbox" %}
+          <input type="checkbox" disabled {% if row.cells[column.key] %}checked{% endif %} aria-label="{{ column.label }}" />
+          {% elif row.href and loop.first %}
+          <a href="{{ row.href }}">{{ row.cells[column.key] }}</a>
+          {% else %}
+          {{ row.cells[column.key] }}
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if pages > 1 %}
+<nav>
+  <ul class="pagination">
+    {% if page > 1 %}
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page - 1 }}{% if filter_qs %}&{{ filter_qs }}{% endif %}">Назад</a>
+    </li>
+    {% endif %}
+    <li class="page-item disabled">
+      <span class="page-link">{{ page }} / {{ pages }}</span>
+    </li>
+    {% if page < pages %}
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page + 1 }}{% if filter_qs %}&{{ filter_qs }}{% endif %}">Вперёд</a>
+    </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

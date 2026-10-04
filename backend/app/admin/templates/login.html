@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Вход — Hvostun Admin{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <h1 class="h3 mb-3">Вход</h1>
+    <form method="post" action="/login">
+      <div class="mb-3">
+        <label class="form-label" for="email">Email</label>
+        <input
+          class="form-control"
+          id="email"
+          name="email"
+          type="email"
+          required
+          value="{{ email or '' }}"
+        />
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="password">Пароль</label>
+        <input
+          class="form-control"
+          id="password"
+          name="password"
+          type="password"
+          required
+        />
+      </div>
+      <button class="btn btn-primary" type="submit">Войти</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -2,7 +2,9 @@
 
 ## Local Development
 
-For local development, run PostgreSQL and Mailpit with Docker Compose, and run the FastAPI and Vite development servers locally.
+For local development, run PostgreSQL and Mailpit with Docker Compose, and run the FastAPI development server locally. The HTML admin is served by FastAPI.
+
+Copy `.env.example` to `.env` before `docker compose up`.
 
 Start the supporting services:
 
@@ -23,38 +25,21 @@ Start the FastAPI development server:
 uv run fastapi dev
 ```
 
-In another terminal, from the project root, install the frontend dependencies and start the Vite development server:
-
-```bash
-bun install
-bun run dev
-```
-
 Now you can open these URLs:
 
-Frontend development server: <http://localhost:5173>
+HTML admin: <http://localhost:8000>
 
-Backend API: <http://localhost:8000>
-
-Automatic interactive API documentation with Swagger UI: <http://localhost:8000/docs>
+Health: <http://localhost:8000/health>
 
 Mailpit: <http://localhost:8025>
 
-The frontend development server uses the backend at `http://localhost:8000`, as configured in `frontend/.env`.
-
-### Frontend Served by FastAPI
-
-Build the frontend from the `frontend` directory:
-
-```bash
-bun run build
-```
-
-The build is written to `backend/app/frontend` and served by FastAPI at <http://localhost:8000>. Rebuild the frontend after making frontend changes.
+The catalog `frontend/` is an inactive React template for a future user UI. It
+is not served, built, deployed, or allowed through CORS by the backend. Its
+generated client is not kept in sync with the current API.
 
 ## Full Stack with Docker Compose
 
-To run the backend and built frontend in Docker Compose:
+To run the backend (HTML admin) in Docker Compose:
 
 ```bash
 docker compose run --rm backend bash scripts/prestart.sh
@@ -63,11 +48,9 @@ docker compose watch
 
 Now you can open these URLs:
 
-Application, with the frontend and API served by FastAPI: <http://localhost:8000>
+Application, with the HTML admin served by FastAPI: <http://localhost:8000>
 
-Automatic interactive API documentation with Swagger UI: <http://localhost:8000/docs>
-
-Adminer, database web administration: <http://localhost:8080>
+db-ui - database web administration: <http://localhost:8080>
 
 Traefik UI, to see how the routes are being handled by the proxy: <http://localhost:8090>
 
@@ -89,7 +72,17 @@ The `compose.override.yml` file adds local development settings, such as mountin
 
 The `compose.deploy.yml` file contains the deployment-specific settings, including HTTPS and automatic certificate handling. It is explicitly combined with `compose.yml` when deploying the application.
 
-The backend reads local settings from the `.env` file. Docker Compose also uses it for variable interpolation and passes the settings each container needs.
+Set a public `DOMAIN`, `LETSENCRYPT_EMAIL`, and production secrets, then deploy with:
+
+```bash
+docker compose -f compose.yml -f compose.deploy.yml up -d --build
+```
+
+The deployment override forces `FASTAPI_ENV=production`, uses the
+`hvostun_production` database, runs Alembic and initial superuser setup in a
+one-shot `prestart` service, and does not start or expose `db-ui`.
+
+The backend reads local settings from the `.env` file (copy from `.env.example`). Docker Compose also uses it for variable interpolation and passes the settings each container needs.
 
 After changing variables, make sure you restart the stack:
 
@@ -99,7 +92,21 @@ docker compose watch
 
 ## The `.env` File
 
-The tracked `.env` file contains local development defaults, passwords, and other configuration. Its hostnames use `localhost` for processes running on your machine. Docker Compose overrides hostnames such as the database and SMTP server with their Compose service names.
+`.env` is not committed. Start from `.env.example`: local development defaults, passwords, and other configuration. Its hostnames use `localhost` for processes running on your machine. Docker Compose overrides hostnames such as the database and SMTP server with their Compose service names.
+
+The Postgres database name is `hvostun_{FASTAPI_ENV}` (local default: `hvostun_development`). Settings rewrites `DATABASE_URL` to that name, so `FASTAPI_ENV=test` always uses `hvostun_test`. Backend tests set `FASTAPI_ENV=test` and create/migrate `hvostun_test` on first run (`uv run pytest` from `backend/`, or `uv run bash scripts/test.sh`).
+
+Dump the local development database (catalog and PII stay out of git):
+
+```bash
+bash scripts/db_backup.sh
+```
+
+The script writes `.data/backup/hvostun_development_YYYY-MM-DD_HHMMSS.sql` and copies it to `.data/backup/hvostun_development.sql`. Restore with:
+
+```bash
+docker compose exec -T db psql -U postgres -d hvostun_development < .data/backup/hvostun_development.sql
+```
 
 Do not store deployment secrets in `.env`. Keep production secrets in your host/CI secret store.
 

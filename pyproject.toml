@@ -7,15 +7,20 @@ dev = [
 [tool.uv.workspace]
 members = ["backend"]
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.14"
+extraPaths = ["backend"]
+
+
 [tool.typos.files]
 extend-exclude = [
     "uv.lock",
     "bun.lock",
     "backend/coverage/",
     "backend/htmlcov/",
-    "backend/app/frontend/",
-    "frontend/dist/",
-    "frontend/public/assets/images/",
+    "frontend/src/client/",
 ]
 
 [tool.typos.default]

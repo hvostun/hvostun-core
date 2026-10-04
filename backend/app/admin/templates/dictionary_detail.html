@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ row.key }} — Справочники{% endblock %}
+{% block content %}
+<p><a href="/dictionaries">← Справочники</a></p>
+<h1 class="h3">{{ row.key }}</h1>
+<form method="post" action="/dictionaries/{{ row.key }}" class="mt-3">
+  <div class="mb-3">
+    <label class="form-label" for="value">value (JSON)</label>
+    <textarea class="form-control font-monospace" id="value" name="value" rows="16" required>{{ value_text }}</textarea>
+  </div>
+  <button class="btn btn-primary" type="submit">Сохранить</button>
+</form>
+{% endblock %}
