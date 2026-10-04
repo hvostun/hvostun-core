@@ -28,6 +28,7 @@ services:
   # Adminer is a local-only tool. Even if explicitly started in this
   # deployment composition, Traefik must not publish it.
   db-ui:
+    image: adminer
     profiles: ["dev"]
     restart: "no"
     labels:
