@@ -137,9 +137,7 @@ def _domain_score(
     )
 
 
-def score_domains(
-    answers: list[SessionAnswer], consts: ScoringConsts
-) -> DomainScoring:
+def score_domains(answers: list[SessionAnswer], consts: ScoringConsts) -> DomainScoring:
     grouped: dict[str, list[SessionAnswer]] = {}
     order: list[str] = []
     unscored: list[SessionAnswer] = []
@@ -173,7 +171,9 @@ def _bar_percent(score: float) -> int:
     return max(0, min(100, round(percent)))
 
 
-def answer_row(session: Session, answer: SessionAnswer, note: str = "") -> dict[str, Any]:
+def answer_row(
+    session: Session, answer: SessionAnswer, note: str = ""
+) -> dict[str, Any]:
     return {
         "order_number": answer.link.order_num,
         "display_num": answer.link.display_num,
@@ -194,10 +194,10 @@ def _point_note(point: ScoredPoint) -> str:
     return ""
 
 
-def _point_rows(session: Session, points: tuple[ScoredPoint, ...]) -> list[dict[str, Any]]:
-    return [
-        answer_row(session, point.answer, _point_note(point)) for point in points
-    ]
+def _point_rows(
+    session: Session, points: tuple[ScoredPoint, ...]
+) -> list[dict[str, Any]]:
+    return [answer_row(session, point.answer, _point_note(point)) for point in points]
 
 
 def scoring_view(session: Session, scoring: DomainScoring) -> dict[str, Any]:
@@ -209,7 +209,7 @@ def scoring_view(session: Session, scoring: DomainScoring) -> dict[str, Any]:
                 "key": domain.key,
                 "label": group_label(session, domain.key),
                 "score_label": (
-                    "—" if domain.score is None else f"{(domain.score /4 *10):.2f}"
+                    "—" if domain.score is None else f"{(domain.score / 4 * 10):.2f}"
                 ),
                 "answered": domain.answered,
                 "total": domain.total,

@@ -24,7 +24,9 @@ def test_create_admin_user_rejects_short_password(db: Session) -> None:
 
 
 def test_update_admin_user_rejects_self_deactivate(db: Session) -> None:
-    current = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    current = db.exec(
+        select(User).where(User.email == settings.FIRST_SUPERUSER)
+    ).first()
     assert current
     with pytest.raises(UserFormError, match="деактивировать"):
         update_admin_user(

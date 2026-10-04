@@ -46,7 +46,9 @@ def test_parse_chart_and_weight() -> None:
 
 
 def test_filter_session_answers() -> None:
-    first = SimpleNamespace(link=SimpleNamespace(group="Excitability"), display_value="3")
+    first = SimpleNamespace(
+        link=SimpleNamespace(group="Excitability"), display_value="3"
+    )
     second = SimpleNamespace(link=SimpleNamespace(group="Aggression"), display_value="")
     rows = [first, second]  # type: ignore[list-item]
     assert filter_session_answers(rows, category="Excitability") == [first]

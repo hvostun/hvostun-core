@@ -276,7 +276,7 @@ def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> N
     )
     sessions = client.get("/sessions")
     assert sessions.status_code == 200
-    assert "Пользователь" in sessions.text
+    assert "Моя рекомендация" in sessions.text
     assert "Собака" in sessions.text
     assert "Анкета" in sessions.text
     assert "Рекомендации" in sessions.text
@@ -392,7 +392,7 @@ def test_sessions_page_shows_recommendation_counts(
             "password": settings.FIRST_SUPERUSER_PASSWORD,
         },
     )
-    sessions = client.get("/sessions")
+    sessions = client.get("/sessions", params={"mine": ""})
     assert sessions.status_code == 200
     assert "Rex Rec Counts" in sessions.text
     assert re.search(
@@ -405,17 +405,17 @@ def test_sessions_page_shows_recommendation_counts(
     assert mine_row is not None and "checked" in mine_row.group(0)
     assert empty_row is not None and "checked" not in empty_row.group(0)
 
-    ascending = client.get("/sessions", params={"users_sort": "asc"})
+    ascending = client.get("/sessions", params={"users_sort": "asc", "mine": ""})
     assert ascending.text.index("Rex Without Recommendations") < ascending.text.index(
         "Rex Rec Counts"
     )
-    descending = client.get("/sessions", params={"users_sort": "desc"})
+    descending = client.get("/sessions", params={"users_sort": "desc", "mine": ""})
     assert descending.text.index("Rex Rec Counts") < descending.text.index(
         "Rex Without Recommendations"
     )
     assert 'name="mine"' in sessions.text
     assert "Мои рекомендации" in sessions.text
-    assert "Нет моей рекомендации" in sessions.text
+    assert "Без моей рекомендации" in sessions.text
     only_mine = client.get("/sessions", params={"mine": "yes"})
     assert "Rex Rec Counts" in only_mine.text
     assert "Rex Without Recommendations" not in only_mine.text
@@ -562,6 +562,7 @@ def test_session_detail_hides_progress_for_missing_answer(
             survey_version_id=version.id,
             question_id=question.id,
             order_num=1,
+            display_num=1,
             group="Aggression",
         )
     )
@@ -584,7 +585,7 @@ def test_session_detail_hides_progress_for_missing_answer(
     )
     db.commit()
     _login_superuser(client)
-    page = client.get(f"/sessions/{session_row.id}")
+    page = client.get(f"/sessions/{session_row.id}", params={"view": "flat"})
     assert page.status_code == 200
     assert "Не применимо?" in page.text
     assert "progress-bar" not in page.text
@@ -626,6 +627,7 @@ def test_session_detail_filters_questions_by_category_and_answer(
             survey_version_id=version.id,
             question_id=first.id,
             order_num=1,
+            display_num=1,
             group="Excitability",
         )
     )
@@ -634,6 +636,7 @@ def test_session_detail_filters_questions_by_category_and_answer(
             survey_version_id=version.id,
             question_id=second.id,
             order_num=2,
+            display_num=2,
             group="Aggression",
         )
     )
@@ -656,27 +659,31 @@ def test_session_detail_filters_questions_by_category_and_answer(
     )
     db.commit()
     _login_superuser(client)
-    page = client.get(f"/sessions/{session_row.id}")
+    page = client.get(f"/sessions/{session_row.id}", params={"view": "flat"})
     assert page.status_code == 200
     assert "Лает на гостей?" in page.text
     assert "Рычит на собак?" in page.text
     by_category = client.get(
-        f"/sessions/{session_row.id}", params={"category": "Excitability"}
+        f"/sessions/{session_row.id}",
+        params={"view": "flat", "category": "Excitability"},
     )
     assert by_category.status_code == 200
     assert "Лает на гостей?" in by_category.text
     assert "Рычит на собак?" not in by_category.text
-    by_answer = client.get(f"/sessions/{session_row.id}", params={"answer": "3"})
+    by_answer = client.get(
+        f"/sessions/{session_row.id}", params={"view": "flat", "answer": "3"}
+    )
     assert "Лает на гостей?" in by_answer.text
     assert "Рычит на собак?" not in by_answer.text
     unanswered = client.get(
-        f"/sessions/{session_row.id}", params={"answer": "unanswered"}
+        f"/sessions/{session_row.id}",
+        params={"view": "flat", "answer": "unanswered"},
     )
     assert "Рычит на собак?" in unanswered.text
     assert "Лает на гостей?" not in unanswered.text
     empty = client.get(
         f"/sessions/{session_row.id}",
-        params={"category": "Aggression", "answer": "3"},
+        params={"view": "flat", "category": "Aggression", "answer": "3"},
     )
     assert "Нет вопросов по фильтру." in empty.text
     assert "Лает на гостей?" not in empty.text
@@ -787,6 +794,7 @@ def test_answer_events_page_is_visible_to_logged_in_user(
             survey_version_id=version.id,
             question_id=question.id,
             order_num=1,
+            display_num=1,
         )
     )
     session_row = SurveySession(
@@ -1715,9 +1723,9 @@ def test_survey_detail_sorts_questions_by_display_num(
     )
     by_display_desc = client.get(f"/surveys/{survey.id}?sort=-display")
     assert "display_num ↓" in by_display_desc.text
-    assert by_display_desc.text.index("Показывается вторым") < by_display_desc.text.index(
-        "Показывается первым"
-    )
+    assert by_display_desc.text.index(
+        "Показывается вторым"
+    ) < by_display_desc.text.index("Показывается первым")
     saved = client.post(
         f"/surveys/{survey.id}",
         data={
@@ -1787,9 +1795,10 @@ def test_admin_can_edit_survey_question_layout(client: TestClient, db: Session) 
         },
         follow_redirects=False,
     )
-    assert cleared.status_code == 303
+    assert cleared.status_code == 400
+    assert "обязателен" in cleared.text
     db.refresh(link)
-    assert link.display_num is None
+    assert link.display_num == 1
     invalid = post(
         client,
         f"/surveys/{survey.id}",
@@ -1802,7 +1811,7 @@ def test_admin_can_edit_survey_question_layout(client: TestClient, db: Session) 
     assert invalid.status_code == 400
     assert "целым" in invalid.text
     db.refresh(link)
-    assert link.display_num is None
+    assert link.display_num == 1
 
 
 def test_expert_cannot_edit_survey_question_layout(
@@ -1826,6 +1835,7 @@ def test_expert_cannot_edit_survey_question_layout(
         survey_version_id=version.id,
         question_id=question.id,
         order_num=1,
+        display_num=1,
         group="other",
     )
     db.add(link)
@@ -1847,7 +1857,7 @@ def test_expert_cannot_edit_survey_question_layout(
     assert response.status_code == 403
     db.refresh(link)
     assert link.group == "other"
-    assert link.display_num is None
+    assert link.display_num == 1
 
 
 def test_json_api_is_gone(client: TestClient) -> None:
@@ -1890,9 +1900,7 @@ def test_session_detail_groups_answers_by_cbarq_domains(
     else:
         group_row.value = group_labels
         db.add(group_row)
-    consts_value = {
-        "c-barq-short-42": {"domain_threshold": 0.5, "reverse": [27, 28]}
-    }
+    consts_value = {"c-barq-short-42": {"domain_threshold": 0.5, "reverse": [27, 28]}}
     consts_row = db.get(Dictionary, SURVEYS_QUESTIONS_CONSTS_KEY)
     if consts_row is None:
         db.add(
@@ -1965,12 +1973,12 @@ def test_session_detail_groups_answers_by_cbarq_domains(
     assert page.status_code == 200
     assert "По доменам" in page.text
     assert "Возбудимость" in page.text
-    assert "3.00" in page.text
+    assert "7.50" in page.text
+    assert "из 10" in page.text
     assert "2 из 2" in page.text
-    assert "Трудность дрессировки" in page.text
-    assert "мало ответов" in page.text
-    assert "в балл: 4 − x = 4" in page.text
-    assert "Dog_rivalry" in page.text
+    assert "Трудность дрессировки" not in page.text
+    assert "мало ответов" not in page.text
+    assert "Dog_rivalry" not in page.text
     assert "Прочее" not in page.text
     assert "Вне скоринга" in page.text
     assert "Общий вопрос" in page.text
@@ -1993,7 +2001,9 @@ def test_sessions_page_shows_answer_percent(client: TestClient, db: Session) -> 
     dog = Dog(name="Listed Percent Dog")
     empty_dog = Dog(name="Listed Empty Dog")
     survey = Survey(name="Listed Percent", slug=f"listed-{random_lower_string()}")
-    scale = Scale(name="Балл списка", type="integer", config={"min_value": 0, "max_value": 4})
+    scale = Scale(
+        name="Балл списка", type="integer", config={"min_value": 0, "max_value": 4}
+    )
     db.add(dog)
     db.add(empty_dog)
     db.add(survey)

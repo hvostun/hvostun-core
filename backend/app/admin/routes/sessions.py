@@ -70,8 +70,8 @@ def sessions_page(
         filters.append(my_recommendation)
     elif mine == "no":
         filters.append(~my_recommendation)
-    recommendation_users = select(
-        SessionRecommendation.session_id.label("session_id"),
+    recommendation_users: Any = select(
+        col(SessionRecommendation.session_id).label("session_id"),
         func.count(func.distinct(SessionRecommendation.user_id)).label("user_count"),
     )
     if not session_service.can_manage_all_session_recommendations(user):
@@ -79,11 +79,11 @@ def sessions_page(
             SessionRecommendation.user_id == user.id
         )
     recommendation_users_subquery = recommendation_users.group_by(
-        SessionRecommendation.session_id
+        col(SessionRecommendation.session_id)
     ).subquery()
     count_stmt = select(func.count()).select_from(SurveySession)
     stmt = (
-        select(  # type: ignore[call-overload]
+        select(  # type: ignore[call-overload]  # ty: ignore[no-matching-overload]
             SurveySession,
             Owner,
             Dog,
@@ -107,6 +107,7 @@ def sessions_page(
         count_stmt = count_stmt.where(*filters)
         stmt = stmt.where(*filters)
     user_count = func.coalesce(recommendation_users_subquery.c.user_count, 0)
+    ordering: tuple[Any, ...]
     if users_sort == "asc":
         ordering = (user_count.asc(), col(SurveySession.created_at).desc())
     elif users_sort == "desc":
@@ -121,9 +122,7 @@ def sessions_page(
         limit=limit,
     )
     page_ids = [row.id for row, *_ in rows]
-    rec_counts = session_service.session_recommendation_counts(
-        session, page_ids, user
-    )
+    rec_counts = session_service.session_recommendation_counts(session, page_ids, user)
     rates = session_service.answer_rates(session, page_ids)
     return templates.TemplateResponse(
         request,
@@ -345,12 +344,8 @@ def _session_detail_response(
             "session_row": context.row,
             "survey": context.survey,
             "version": context.version,
-            "dog": session_service.dog_session_facts(
-                session, context.dog, context.row
-            ),
-            "answers": [
-                scoring_service.answer_row(session, item) for item in filtered
-            ],
+            "dog": session_service.dog_session_facts(session, context.dog, context.row),
+            "answers": [scoring_service.answer_row(session, item) for item in filtered],
             "view": active_view,
             "has_domains": scoring is not None,
             "domain_sections": [] if blocks is None else blocks["domains"],
@@ -473,12 +468,7 @@ def save_session_recommendations(
     weight: list[str] = Form(default=[]),
     comment: list[str] = Form(default=[]),
 ) -> Any:
-    if not (
-        len(recommendation_id)
-        == len(chart_number)
-        == len(weight)
-        == len(comment)
-    ):
+    if not (len(recommendation_id) == len(chart_number) == len(weight) == len(comment)):
         return _session_detail_response(
             request,
             session,

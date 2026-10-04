@@ -14,7 +14,7 @@ def get_datetime_utc() -> datetime:
 class CreatedAtMixin(SQLModel):
     created_at: datetime = Field(
         default_factory=get_datetime_utc,
-        sa_type=DateTime(timezone=True),  # type: ignore[call-overload]
+        sa_type=DateTime(timezone=True),  # type: ignore[call-overload]  # ty: ignore[invalid-argument-type]
         sa_column_kwargs={"server_default": func.now(), "nullable": False},
     )
 
@@ -22,7 +22,7 @@ class CreatedAtMixin(SQLModel):
 class TimestampMixin(CreatedAtMixin):
     updated_at: datetime = Field(
         default_factory=get_datetime_utc,
-        sa_type=DateTime(timezone=True),  # type: ignore[call-overload]
+        sa_type=DateTime(timezone=True),  # type: ignore[call-overload]  # ty: ignore[invalid-argument-type]
         sa_column_kwargs={
             "server_default": func.now(),
             "onupdate": get_datetime_utc,

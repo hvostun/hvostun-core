@@ -31,3 +31,8 @@ extend-ignore-re = [
 
 [tool.typos.default.extend-identifiers]
 alls = "alls"
+
+[tool.typos.default.extend-words]
+# Имя таблицы в схеме: session_recomendations.recomendation_id
+recomendation = "recomendation"
+recomendations = "recomendations"

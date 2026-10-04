@@ -80,9 +80,7 @@ def test_parse_scoring_consts_ignores_garbage() -> None:
     assert parse_scoring_consts(None) == ScoringConsts(None, frozenset())
     assert parse_scoring_consts({"c-barq-short-42": {}}).threshold is None
     assert (
-        parse_scoring_consts(
-            {"c-barq-short-42": {"domain_threshold": True}}
-        ).threshold
+        parse_scoring_consts({"c-barq-short-42": {"domain_threshold": True}}).threshold
         is None
     )
 
@@ -263,7 +261,9 @@ def test_answer_rates_counts_bare_json_numbers(db: Session) -> None:
     owner = Owner(name="Владелец скалярных ответов")
     dog = Dog(name="Scalar Percent Dog")
     survey = Survey(name="Scalar Percent", slug=f"scalar-{random_lower_string()}")
-    scale = Scale(name="Балл скаляр", type="integer", config={"min_value": 0, "max_value": 4})
+    scale = Scale(
+        name="Балл скаляр", type="integer", config={"min_value": 0, "max_value": 4}
+    )
     db.add(owner)
     db.add(dog)
     db.add(survey)

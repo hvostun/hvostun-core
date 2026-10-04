@@ -1,6 +1,7 @@
 import json
 import re
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
@@ -136,9 +137,7 @@ def dog_session_facts(
         "status": dictionary_service.label_for(
             session, dictionary_service.DOGS_STATUS_KEY, dog.status
         ),
-        "days_since_status": days_since_status(
-            dog.status_at, session_row.created_at
-        ),
+        "days_since_status": days_since_status(dog.status_at, session_row.created_at),
         "weight": dog.weight,
         "height": dog.height,
         "history": dog.history,
@@ -221,9 +220,11 @@ def answer_progress(
     scalar = answer_scalar(value)
     if scalar is None or scalar == "":
         return hidden
+    if not isinstance(scalar, int | float | str):
+        return hidden
     try:
         number = float(scalar)
-    except (TypeError, ValueError):
+    except ValueError:
         return hidden
     if number == MISSING_ANSWER:
         return hidden
@@ -232,10 +233,10 @@ def answer_progress(
     min_value, max_value = _scale_bounds(config)
     span = max_value - min_value - 1
     if span <= 0:
-        percent = 0
+        raw_percent = 0.0
     else:
-        percent = (number - min_value - 1) / span * 100
-    percent = max(0, min(100, round(percent)))
+        raw_percent = (number - min_value - 1) / span * 100
+    percent = max(0, min(100, round(raw_percent)))
     return {"show_bar": True, "percent": percent, "color": color}
 
 
@@ -275,7 +276,7 @@ def get_session_context(
 ) -> SessionContext:
     get_accessible_session(session, session_id, current_user)
     result = session.exec(
-        select(  # type: ignore[call-overload]
+        select(  # type: ignore[call-overload]  # ty: ignore[no-matching-overload]
             SurveySession, Owner, Dog, SurveyVersion, Survey
         )
         .where(SurveySession.id == session_id)
@@ -395,17 +396,14 @@ def session_recommendation_counts(
     counts = dict.fromkeys(session_ids, (0, 0))
     if not session_ids:
         return counts
-    statement = (
-        select(
-            SessionRecommendation.session_id,
-            func.count(),
-            func.count(func.distinct(SessionRecommendation.user_id)),
-        )
-        .where(col(SessionRecommendation.session_id).in_(session_ids))
-    )
+    statement = select(
+        SessionRecommendation.session_id,
+        func.count(),
+        func.count(func.distinct(SessionRecommendation.user_id)),
+    ).where(col(SessionRecommendation.session_id).in_(session_ids))
     if not can_manage_all_session_recommendations(current_user):
         statement = statement.where(SessionRecommendation.user_id == current_user.id)
-    rows = session.exec(statement.group_by(SessionRecommendation.session_id)).all()
+    rows = session.exec(statement.group_by(col(SessionRecommendation.session_id))).all()
     for session_id, rec_count, user_count in rows:
         counts[session_id] = (int(rec_count), int(user_count))
     return counts
@@ -608,7 +606,7 @@ def update_session_recommendations(
     *,
     session_id: uuid.UUID,
     current_user: User,
-    updates: list[tuple[uuid.UUID, int, float, str | None]],
+    updates: Sequence[tuple[uuid.UUID, int, float, str | None]],
 ) -> list[SessionRecommendation]:
     get_accessible_session(session, session_id, current_user)
     try:

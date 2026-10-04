@@ -83,8 +83,8 @@ def surveys_page(
     )
 
 
-def _display_num_text(value: int | None) -> str:
-    return "" if value is None else str(value)
+def _display_num_text(value: int) -> str:
+    return str(value)
 
 
 def _active_sort(sort: str) -> str:
@@ -100,16 +100,15 @@ def _sort_questions(
 
     def key(item: dict[str, str | int]) -> tuple[int, int, int, str]:
         order = int(item["order_number"])
-        raw_display = str(item["display_num"])
-        display = int(raw_display) if raw_display else None
+        try:
+            display = int(item["display_num"])
+        except TypeError, ValueError:
+            display = 10**9
         question_id = str(item["question_id"])
-        missing = 10**9 if display is None else display
         if active == "order":
-            return (order, missing, 0, question_id)
+            return (order, display, 0, question_id)
         if active == "-order":
-            return (-order, missing, 0, question_id)
-        if display is None:
-            return (0 if active == "-display" else 1, 0, order, question_id)
+            return (-order, display, 0, question_id)
         placed = 1 if active == "-display" else 0
         number = -display if active == "-display" else display
         return (placed, number, order, question_id)
@@ -185,10 +184,10 @@ def _survey_detail_response(
     )
 
 
-def _parse_display_num(raw: str) -> int | None:
+def _parse_display_num(raw: str) -> int:
     text = raw.strip()
     if not text:
-        return None
+        raise catalog.CatalogUpdateError("Отображаемый номер обязателен")
     try:
         return int(text)
     except ValueError as exc:
@@ -240,7 +239,9 @@ def survey_questions_update(
             status_code=400,
             sort=sort,
         )
-    for raw_id, raw_display, raw_group in zip(question_id, display_num, group, strict=True):
+    for raw_id, raw_display, raw_group in zip(
+        question_id, display_num, group, strict=True
+    ):
         item = by_id.get(raw_id)
         if item is None:
             return _survey_detail_response(
