@@ -51,3 +51,10 @@ repos:
         require_serial: true
         language: unsupported
         pass_filenames: false
+
+      - id: local-pip-audit
+        name: pip-audit
+        entry: bash scripts/audit_python_deps.sh
+        language: unsupported
+        pass_filenames: false
+        files: ^(uv\.lock|backend/pyproject\.toml)$

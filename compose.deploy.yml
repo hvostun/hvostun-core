@@ -9,6 +9,8 @@ services:
     # Do not add --api or --api.insecure. The local dashboard is compose.override.yml.
     command:
       - --providers.docker
+      - --providers.docker.endpoint=tcp://socket-proxy:2375
+      - --providers.docker.network=hvostun_public
       - --providers.docker.exposedbydefault=false
       - --entrypoints.http.address=:80
       - --entrypoints.http.http.redirections.entrypoint.to=https
@@ -24,6 +26,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Variable not set}
+      POSTGRES_DB: hvostun_production
+
+  db-roles:
+    environment:
       POSTGRES_DB: hvostun_production
 
   # Adminer is a local-only tool. Even if explicitly started in this
@@ -50,7 +56,7 @@ services:
       FASTAPI_ENV: production
       FIRST_SUPERUSER: ${FIRST_SUPERUSER:?Variable not set}
       FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD:?Variable not set}
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Variable not set}@db:5432/hvostun_production
+      DATABASE_URL: postgresql://hvostun_migrator:${POSTGRES_MIGRATOR_PASSWORD:?Variable not set}@db:5432/hvostun_production
     command: ["bash", "scripts/prestart.sh"]
 
   backend:
@@ -60,12 +66,31 @@ services:
         condition: service_completed_successfully
     environment:
       FASTAPI_ENV: production
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Variable not set}@db:5432/hvostun_production
+      DATABASE_URL: postgresql://hvostun_app:${POSTGRES_APP_PASSWORD:?Variable not set}@db:5432/hvostun_production
     labels:
       - traefik.http.routers.backend-https.rule=Host(`${DOMAIN:?Variable not set}`)
       - traefik.http.routers.backend-https.entrypoints=https
       - traefik.http.routers.backend-https.tls=true
       - traefik.http.routers.backend-https.tls.certresolver=le
+      - traefik.http.routers.backend-https.middlewares=secure-headers
+      - traefik.http.routers.backend-login.rule=Host(`${DOMAIN:?Variable not set}`) && Path(`/login`) && Method(`POST`)
+      - traefik.http.routers.backend-login.entrypoints=https
+      - traefik.http.routers.backend-login.tls=true
+      - traefik.http.routers.backend-login.tls.certresolver=le
+      - traefik.http.routers.backend-login.priority=100
+      - traefik.http.routers.backend-login.service=backend
+      - traefik.http.routers.backend-login.middlewares=login-ratelimit,secure-headers
+      - traefik.http.middlewares.login-ratelimit.ratelimit.average=5
+      - traefik.http.middlewares.login-ratelimit.ratelimit.period=1m
+      - traefik.http.middlewares.login-ratelimit.ratelimit.burst=10
+      - traefik.http.middlewares.login-ratelimit.ratelimit.sourcecriterion.ipstrategy.depth=0
+      # Dynamic bar widths in session_detail.html need style-src-attr.
+      - traefik.http.middlewares.secure-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.secure-headers.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.secure-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.secure-headers.headers.frameDeny=true
+      - traefik.http.middlewares.secure-headers.headers.referrerPolicy=same-origin
+      - traefik.http.middlewares.secure-headers.headers.contentSecurityPolicy=default-src 'self'; style-src 'self' https://cdn.jsdelivr.net; style-src-attr 'unsafe-inline'; frame-ancestors 'none'; form-action 'self'
 
 volumes:
   traefik-certificates:

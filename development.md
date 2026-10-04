@@ -35,14 +35,15 @@ Mailpit: <http://localhost:8025>
 
 The catalog `frontend/` is an inactive React template for a future user UI. It
 is not served, built, deployed, or allowed through CORS by the backend. Its
-generated client is not kept in sync with the current API.
+generated client is not kept in sync with the current API. Dependencies are
+locked in `frontend/bun.lock` (`axios` 1.20.0, `js-yaml` overridden to 4.3.2).
 
 ## Full Stack with Docker Compose
 
 To run the backend (HTML admin) in Docker Compose:
 
 ```bash
-docker compose run --rm backend bash scripts/prestart.sh
+docker compose run --rm prestart
 docker compose watch
 ```
 
@@ -82,6 +83,22 @@ The deployment override forces `FASTAPI_ENV=production`, uses the
 `hvostun_production` database, runs Alembic and initial superuser setup in a
 one-shot `prestart` service, and does not start or expose `db-ui`.
 
+`scripts/deploy.sh` refuses a config that enables Traefik `--api`, publishes
+`5432`, `8080`, or `8090`, or mounts the Docker socket into `proxy`. Traefik
+reads labels through `socket-proxy`. On `up`, the script builds the backend
+image and scans it with Trivy (`HIGH,CRITICAL`) before the pre-migration backup.
+
+Postgres roles, created by the one-shot `db-roles` service:
+
+- `hvostun_migrator` owns the schema and is the `prestart` login.
+- `hvostun_app` is the backend login and can only read and write rows.
+- `postgres` stays the superuser used by backups and by host-side pytest.
+
+`POSTGRES_APP_PASSWORD` and `POSTGRES_MIGRATOR_PASSWORD` must be set. Do not
+reuse the local example values in production. After restoring a dump, or after
+migrating `hvostun_development` from the host as `postgres`, run
+`docker compose run --rm db-roles` so grants and ownership match the roles.
+
 The backend reads local settings from the `.env` file (copy from `.env.example`). Docker Compose also uses it for variable interpolation and passes the settings each container needs.
 
 After changing variables, make sure you restart the stack:
@@ -95,6 +112,8 @@ docker compose watch
 `.env` is not committed. Start from `.env.example`: local development defaults, passwords, and other configuration. Its hostnames use `localhost` for processes running on your machine. Docker Compose overrides hostnames such as the database and SMTP server with their Compose service names.
 
 The Postgres database name is `hvostun_{FASTAPI_ENV}` (local default: `hvostun_development`). Settings rewrites `DATABASE_URL` to that name, so `FASTAPI_ENV=test` always uses `hvostun_test`. Backend tests set `FASTAPI_ENV=test` and create/migrate `hvostun_test` on first run (`uv run pytest` from `backend/`, or `uv run bash scripts/test.sh`).
+
+The host `DATABASE_URL` stays the `postgres` superuser so pytest can create `hvostun_test`. Compose does not use that URL: `prestart` connects as `hvostun_migrator`, and `backend` connects as `hvostun_app`. Cookie `Secure` is set when `FASTAPI_ENV` is `staging` or `production`. Deployed Traefik adds HSTS, `nosniff`, `X-Frame-Options: DENY`, and a Content-Security-Policy, and limits `POST /login` to 5 requests per minute per client IP (burst 10). Admin POST forms require a double-submit CSRF token; logout is `POST /logout`.
 
 Dump the local development database (catalog and PII stay out of git):
 

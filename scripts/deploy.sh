@@ -27,12 +27,33 @@ if grep -q -- '--api' <<<"$config"; then
   exit 1
 fi
 
+if "${compose[@]}" config --format json | python3 -c '
+import json, sys
+cfg = json.load(sys.stdin)
+volumes = json.dumps(cfg["services"]["proxy"].get("volumes") or [])
+sys.exit(1 if "docker.sock" in volumes else 0)
+'; then
+  :
+else
+  echo "deploy proxy must not mount docker.sock" >&2
+  exit 1
+fi
+
 if grep -E -q 'published: "?(5432|8080|8090)"?' <<<"$config"; then
   echo "deploy must not publish ports 5432, 8080, or 8090" >&2
   exit 1
 fi
 
 if [[ "${1:-}" == "up" ]]; then
+  "${compose[@]}" build backend
+  trivy_image="aquasec/trivy:0.66.0@sha256:086971aaf400beebd94e8300fd8ea623774419597169156cec56eec5b00dfb1e"
+  if command -v trivy >/dev/null 2>&1; then
+    trivy image --severity HIGH,CRITICAL --exit-code 1 backend:latest
+  else
+    docker run --rm \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      "$trivy_image" image --severity HIGH,CRITICAL --exit-code 1 backend:latest
+  fi
   "${compose[@]}" up -d db
   ready=0
   for _ in $(seq 1 30); do

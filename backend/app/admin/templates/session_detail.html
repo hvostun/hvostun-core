@@ -101,6 +101,7 @@
 <p class="text-muted">Нет доступных рекомендаций для добавления.</p>
 {% else %}
 <form method="post" action="/sessions/{{ session_row.id }}/recommendations" class="mt-2">
+  {% include "csrf.html" %}
   <div class="mb-3">
     <label class="form-label" for="recomendation_id">Рекомендация</label>
     <select class="form-select" id="recomendation_id" name="recomendation_id" required>
@@ -118,6 +119,7 @@
 <p class="text-muted">Нет рекомендаций.</p>
 {% else %}
 <form method="post" action="/sessions/{{ session_row.id }}/recommendations/save">
+  {% include "csrf.html" %}
   {% for group in rec_groups %}
   {% for item in group.recommendations %}
   <div class="card mb-2">
@@ -144,8 +146,7 @@
             </div>
             <div class="row">
               <input type="range" id="weight-{{ item.id }}" name="weight" min="0" max="1" step="0.1"
-                value="{{ item.weight }}"
-                oninput="document.getElementById('weight-value-{{ item.id }}').textContent = this.value" />
+                value="{{ item.weight }}" data-weight-output="weight-value-{{ item.id }}" />
             </div>
           </div>
         </div>
@@ -165,7 +166,7 @@
           {% if item.user_id == user.id or can_manage_all_recommendations %}
           <button class="btn btn-danger" type="submit"
             formaction="/sessions/{{ session_row.id }}/recommendations/{{ item.id }}/delete" formmethod="post"
-            onclick="return confirm('Удалить рекомендацию?')">Удалить</button>
+            data-confirm="Удалить рекомендацию?">Удалить</button>
           {% endif %}
         </div>
       </div>

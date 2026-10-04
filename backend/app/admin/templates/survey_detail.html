@@ -12,6 +12,7 @@
 {% endif %}
 {% if can_edit %}
 <form method="post" action="/surveys/{{ survey.id }}">
+  {% include "csrf.html" %}
   <table class="table table-sm table-striped">
     <thead>
       <tr>

@@ -45,12 +45,26 @@ def test_production_rejects_known_local_secrets() -> None:
                 "postgresql://postgres:local-dev-postgres@localhost:5432/ignored"
             )
         )
+    with pytest.raises(ValidationError, match="DATABASE_URL password"):
+        _settings(
+            DATABASE_URL=(
+                "postgresql://hvostun_app:local-dev-app@localhost:5432/ignored"
+            )
+        )
 
 
 def test_local_env_warns_instead_of_raising() -> None:
     with pytest.warns(UserWarning, match="known local default"):
         local = _settings(FASTAPI_ENV="development", SECRET_KEY="changethis")
     assert local.ACCESS_TOKEN_EXPIRE_MINUTES == _LOCAL_TOKEN_MINUTES
+
+
+def test_is_deployed_only_for_staging_and_production() -> None:
+    assert _settings(FASTAPI_ENV="staging").is_deployed
+    assert _settings().is_deployed
+    local = _settings(FASTAPI_ENV="development")
+    assert not local.is_deployed
+    assert not _settings(FASTAPI_ENV="test").is_deployed
 
 
 def test_deployed_cookie_defaults_to_twelve_hours(

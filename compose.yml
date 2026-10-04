@@ -1,13 +1,30 @@
 services:
 
-  proxy:
-    image: traefik:v3.7
+  # Traefik talks to the Docker API only through this proxy. The socket is not
+  # mounted into the proxy service.
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0@sha256:9e4b9e7517a6b660f2cc903a19b257b1852d5b3344794e3ea334ff00ae677ac2
+    restart: unless-stopped
+    networks:
+      - socket
     volumes:
-      # Add Docker as a mounted volume, so that Traefik can read the labels of other services
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CONTAINERS: 1
+      EVENTS: 1
+      NETWORKS: 1
+      POST: 0
+
+  proxy:
+    image: traefik:v3.7@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0
+    networks:
+      - default
+      - socket
     command:
       # Enable Docker in Traefik, so that it reads labels from Docker services
       - --providers.docker
+      - --providers.docker.endpoint=tcp://socket-proxy:2375
+      - --providers.docker.network=hvostun_public
       # Do not expose all Docker services, only the ones explicitly exposed
       - --providers.docker.exposedbydefault=false
       # Create an entrypoint "http" listening on port 80
@@ -19,7 +36,7 @@ services:
 
   # Единственная OLTP admin-контура. БД: hvostun_{FASTAPI_ENV}.
   db:
-    image: postgres:18.6
+    image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d hvostun_${FASTAPI_ENV:-development}"]
       interval: 10s
@@ -32,13 +49,48 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Variable not set}
       - POSTGRES_DB=hvostun_${FASTAPI_ENV:-development}
 
-  # Admin-контур: FastAPI HTML-админка, без второго HTTP-сервиса.
-  backend:
-    image: backend:latest
+  # Creates hvostun_migrator and hvostun_app on every start, including existing volumes.
+  db-roles:
+    image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
     depends_on:
       db:
         condition: service_healthy
-        restart: true
+    restart: "no"
+    environment:
+      PGHOST: db
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Variable not set}
+      POSTGRES_DB: hvostun_${FASTAPI_ENV:-development}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?Variable not set}
+      POSTGRES_MIGRATOR_PASSWORD: ${POSTGRES_MIGRATOR_PASSWORD:?Variable not set}
+    volumes:
+      - ./scripts/postgres/roles.sh:/roles.sh:ro
+    entrypoint: ["bash", "/roles.sh"]
+
+  # Admin-контур: FastAPI HTML-админка, без второго HTTP-сервиса.
+  prestart:
+    image: backend:latest
+    depends_on:
+      db-roles:
+        condition: service_completed_successfully
+    restart: "no"
+    environment:
+      PROJECT_NAME: ${PROJECT_NAME:?Variable not set}
+      SECRET_KEY: ${SECRET_KEY:?Variable not set}
+      FASTAPI_ENV: ${FASTAPI_ENV:-development}
+      FIRST_SUPERUSER: ${FIRST_SUPERUSER:?Variable not set}
+      FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD:?Variable not set}
+      DATABASE_URL: postgresql://hvostun_migrator:${POSTGRES_MIGRATOR_PASSWORD:?Variable not set}@db:5432/hvostun_${FASTAPI_ENV:-development}
+    command: ["bash", "scripts/prestart.sh"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+
+  backend:
+    image: backend:latest
+    depends_on:
+      prestart:
+        condition: service_completed_successfully
     environment:
       PROJECT_NAME: ${PROJECT_NAME:?Variable not set}
       SECRET_KEY: ${SECRET_KEY:?Variable not set}
@@ -49,7 +101,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAILS_FROM_EMAIL: ${EMAILS_FROM_EMAIL}
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Variable not set}@db:5432/hvostun_${FASTAPI_ENV:-development}
+      DATABASE_URL: postgresql://hvostun_app:${POSTGRES_APP_PASSWORD:?Variable not set}@db:5432/hvostun_${FASTAPI_ENV:-development}
       SENTRY_DSN: ${SENTRY_DSN:-}
 
     healthcheck:
@@ -81,3 +133,10 @@ services:
 
 volumes:
   hvostun-db-data:
+
+networks:
+  default:
+    name: hvostun_public
+  socket:
+    name: hvostun_socket
+    internal: true

@@ -22,6 +22,8 @@ _KNOWN_LOCAL_SECRETS = frozenset(
         "local-dev-secret-change-me",
         "local-dev-password",
         "local-dev-postgres",
+        "local-dev-app",
+        "local-dev-migrator",
     }
 )
 _MIN_SECRET_KEY_BYTES = 32
@@ -50,6 +52,11 @@ class Settings(BaseSettings):
     @property
     def postgres_db(self) -> str:
         return f"hvostun_{self.FASTAPI_ENV}"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def is_deployed(self) -> bool:
+        return self.FASTAPI_ENV in _DEPLOYED_ENVS
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

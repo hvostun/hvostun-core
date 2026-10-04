@@ -8,8 +8,14 @@ from fastapi.templating import Jinja2Templates
 from app.models import User
 from app.pagination import DEFAULT_PAGE_SIZE, page_count
 
+
+def _template_context(request: Request) -> dict[str, Any]:
+    return {"csrf_token": getattr(request.state, "csrf_token", "")}
+
+
 templates = Jinja2Templates(
-    directory=str(Path(__file__).resolve().parent / "templates")
+    directory=str(Path(__file__).resolve().parent / "templates"),
+    context_processors=[_template_context],
 )
 PAGE_SIZE = DEFAULT_PAGE_SIZE
 

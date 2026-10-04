@@ -4,6 +4,7 @@ import sentry_sdk
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from app.admin.deps import CsrfCookieMiddleware
 from app.admin.router import router as admin_router
 from app.core.config import settings
 
@@ -17,6 +18,7 @@ app = FastAPI(
     redoc_url=None,
 )
 
+app.add_middleware(CsrfCookieMiddleware)
 app.include_router(admin_router)
 app.mount(
     "/static",
