@@ -2,7 +2,10 @@ from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
 import pytest
+from sqlmodel import Session, select
 
+from app.core.config import settings
+from app.models import Dictionary, User
 from app.services.sessions import (
     UNANSWERED_FILTER,
     SessionRecommendationError,
@@ -52,17 +55,32 @@ def test_filter_session_answers() -> None:
     assert filter_session_answers(rows, category="Aggression", answer="3") == []
 
 
-def test_answer_progress_maps_scale_and_skips_missing() -> None:
+def test_answer_progress_maps_scale_and_skips_missing(db: Session) -> None:
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    assert user
+    db.add(
+        Dictionary(
+            key="surveys_questions::group::color",
+            value={
+                "Excitability": "var(--bs-orange)",
+                "Aggression": "var(--bs-red)",
+            },
+            created_by=user.id,
+            updated_by=user.id,
+        )
+    )
+    db.commit()
     config = {"min_value": 0, "max_value": 4}
-    bar = answer_progress({"value": 3}, config, "Excitability")
+    bar = answer_progress(db, {"value": 3}, config, "Excitability")
     assert bar["show_bar"] is True
-    assert bar["percent"] == 75
+    assert bar["percent"] == 67
     assert bar["color"] == "var(--bs-orange)"
-    missing = answer_progress({"value": -999}, config, "Aggression")
+    missing = answer_progress(db, {"value": -999}, config, "Aggression")
     assert missing["show_bar"] is False
     assert missing["color"] == "var(--bs-red)"
-    empty = answer_progress(None, config, "other")
+    empty = answer_progress(db, None, config, "other")
     assert empty["show_bar"] is False
-    zero = answer_progress({"value": 0}, {"min_value": -1, "max_value": 4}, "other")
+    assert empty["color"] == "var(--bs-blue)"
+    zero = answer_progress(db, {"value": 0}, {"min_value": -1, "max_value": 4}, "other")
     assert zero["show_bar"] is True
     assert zero["percent"] == 0

@@ -228,6 +228,9 @@ def dog_update(
     status_at: str = Form(""),
     breed: str = Form(""),
     mixed: str = Form(""),
+    weight: str = Form(""),
+    height: str = Form(""),
+    history: str = Form(""),
 ) -> Any:
     form = _form_values(
         name=name,
@@ -242,6 +245,9 @@ def dog_update(
         status_at=status_at,
         breed=breed,
         mixed=mixed,
+        weight=weight,
+        height=height,
+        history=history,
     )
     try:
         dog_service.update_dog(

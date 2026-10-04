@@ -54,9 +54,15 @@ hvostun-core/
 Старт.
 
 ```
+cd backend/
 docker compose build
 docker compose up -d
 docker compose logs backend -f --tail=10
+```
+
+```
+cd backend/
+uv run pytest
 ```
 
 http://localhost:8000/ - экспертный контур

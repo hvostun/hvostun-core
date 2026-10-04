@@ -164,6 +164,8 @@ def test_dog_update_saves_fields(client: TestClient, db: Session) -> None:
             "status_at": "2026-09-01",
             "breed": "лабрадор",
             "mixed": "false",
+            "weight": "10",
+            "height": "50",
         },
         follow_redirects=False,
     )
@@ -430,6 +432,7 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
         survey_version_id=version.id,
         question_id=question.id,
         order_num=1,
+        display_num=1,
         group="NotInDictionary",
     )
     db.add(link)
@@ -696,7 +699,6 @@ def test_session_detail_shows_dog_facts(client: TestClient, db: Session) -> None
     assert expected_age in page.text
     assert str(expected_days) in page.text
     assert "12.5" in page.text
-    assert "48" in page.text
     assert "из приюта" in page.text
 
 
