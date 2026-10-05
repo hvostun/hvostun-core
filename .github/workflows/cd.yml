@@ -90,7 +90,7 @@ jobs:
           set -euo pipefail
           image="ghcr.io/hvostun/hvostun-backend:${SHA}"
           if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
-            digest="$(docker buildx imagetools inspect "$image" --format '{{.Digest}}')"
+            digest="$(docker buildx imagetools inspect "$image" --format '{{.Manifest.Digest}}')"
             if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
               echo "unexpected digest for ${image}" >&2
               exit 1
