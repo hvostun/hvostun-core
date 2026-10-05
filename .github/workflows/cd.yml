@@ -1,0 +1,227 @@
+name: cd
+
+on:
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full commit SHA to publish or roll back
+        required: true
+        type: string
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    outputs:
+      sha: ${{ steps.sha.outputs.value }}
+      digest: ${{ steps.result.outputs.digest }}
+    steps:
+      - name: Resolve SHA
+        id: sha
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_SHA: ${{ inputs.sha }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            sha="$INPUT_SHA"
+          else
+            sha="$HEAD_SHA"
+          fi
+          if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "sha must be 40 lowercase hex characters" >&2
+            exit 1
+          fi
+          echo "value=$sha" >> "$GITHUB_OUTPUT"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.sha.outputs.value }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify SHA is on main and passed CI
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          SHA: ${{ steps.sha.outputs.value }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "${SHA} is not on main" >&2
+            exit 1
+          fi
+          runs="$(gh api "repos/${REPO}/actions/workflows/ci.yml/runs?head_sha=${SHA}&event=push&branch=main&status=success&per_page=1" --jq '.total_count')"
+          if [[ "$runs" -lt 1 ]]; then
+            echo "no successful ci run on push to main for ${SHA}" >&2
+            exit 1
+          fi
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Login to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Lookup existing image
+        id: lookup
+        env:
+          SHA: ${{ steps.sha.outputs.value }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/hvostun/hvostun-backend:${SHA}"
+          if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+            digest="$(docker buildx imagetools inspect "$image" --format '{{.Digest}}')"
+            if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "unexpected digest for ${image}" >&2
+              exit 1
+            fi
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "digest=" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build and push
+        id: build
+        if: steps.lookup.outputs.exists != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/hvostun/hvostun-backend:${{ steps.sha.outputs.value }}
+            ${{ github.event_name == 'workflow_run' && 'ghcr.io/hvostun/hvostun-backend:main' || '' }}
+          labels: org.opencontainers.image.revision=${{ steps.sha.outputs.value }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Select digest
+        id: result
+        env:
+          EXISTING: ${{ steps.lookup.outputs.digest }}
+          BUILT: ${{ steps.build.outputs.digest }}
+          EXISTS: ${{ steps.lookup.outputs.exists }}
+        run: |
+          set -euo pipefail
+          if [[ "$EXISTS" == "true" ]]; then
+            digest="$EXISTING"
+          else
+            digest="$BUILT"
+          fi
+          if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "image digest missing" >&2
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Logout
+        if: always()
+        run: docker logout ghcr.io
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Deploy over SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SHA: ${{ needs.publish.outputs.sha }}
+          DIGEST: ${{ needs.publish.outputs.digest }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "sha must be 40 lowercase hex characters" >&2
+            exit 1
+          fi
+          if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "digest must be sha256 and 64 hex characters" >&2
+            exit 1
+          fi
+          if ! [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]] || [[ "$DEPLOY_PATH" == *..* ]]; then
+            echo "DEPLOY_PATH must be an absolute path" >&2
+            exit 1
+          fi
+          if ! [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
+            echo "DEPLOY_HOST must be a hostname" >&2
+            exit 1
+          fi
+          if ! [[ "$DEPLOY_USER" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "DEPLOY_USER must be a login name" >&2
+            exit 1
+          fi
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/known_hosts" "$HOME/.ssh/deploy_key"
+          image="ghcr.io/hvostun/hvostun-backend@${DIGEST}"
+          remote="$RUNNER_TEMP/deploy.sh"
+          {
+            printf '%s\n' 'set -euo pipefail'
+            printf '%s\n' "trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT"
+            printf 'cd %q\n' "$DEPLOY_PATH"
+            printf '%s\n' 'git fetch --prune origin'
+            printf 'git checkout --detach %q\n' "$SHA"
+            printf "printf '%%s\\\\n' %q | docker login ghcr.io -u %q --password-stdin\n" "$GITHUB_TOKEN" "$GITHUB_ACTOR"
+            printf 'BACKEND_IMAGE=%q bash scripts/deploy.sh up -d\n' "$image"
+          } > "$remote"
+          ssh -i "$HOME/.ssh/deploy_key" \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            bash -s < "$remote"
+      - name: Smoke
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]]; then
+            echo "DOMAIN must be a hostname" >&2
+            exit 1
+          fi
+          body="$(curl --retry 10 --retry-all-errors --retry-delay 5 -fsS "https://${DOMAIN}/health")"
+          python3 -c 'import json,sys; assert json.load(sys.stdin) == {"status": "ok"}' <<<"$body"
+          ctype="$(curl --retry 10 --retry-all-errors --retry-delay 5 -fsS -o /dev/null -w '%{content_type}' "https://${DOMAIN}/login")"
+          if [[ "${ctype,,}" != text/html* ]]; then
+            echo "GET /login did not return text/html" >&2
+            exit 1
+          fi
+          for port in 5432 8080 8090; do
+            if nc -z -w 3 "$DOMAIN" "$port"; then
+              echo "port ${port} on ${DOMAIN} accepts connections" >&2
+              exit 1
+            fi
+          done
