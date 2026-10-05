@@ -19,6 +19,11 @@ for arg in "$@"; do
   esac
 done
 
+if [[ ! "${BACKEND_IMAGE:-}" =~ ^ghcr\.io/hvostun/hvostun-backend@sha256:[0-9a-f]{64}$ ]]; then
+  echo "BACKEND_IMAGE must be ghcr.io/hvostun/hvostun-backend@sha256:<64 hex>" >&2
+  exit 1
+fi
+
 compose=(docker compose -f compose.yml -f compose.deploy.yml)
 config="$("${compose[@]}" config)"
 
@@ -45,14 +50,14 @@ if grep -E -q 'published: "?(5432|8080|8090)"?' <<<"$config"; then
 fi
 
 if [[ "${1:-}" == "up" ]]; then
-  "${compose[@]}" build backend
+  "${compose[@]}" pull prestart backend
   trivy_image="aquasec/trivy:0.66.0@sha256:086971aaf400beebd94e8300fd8ea623774419597169156cec56eec5b00dfb1e"
   if command -v trivy >/dev/null 2>&1; then
-    trivy image --severity HIGH,CRITICAL --exit-code 1 backend:latest
+    trivy image --severity HIGH,CRITICAL --exit-code 1 "${BACKEND_IMAGE}"
   else
     docker run --rm \
       -v /var/run/docker.sock:/var/run/docker.sock \
-      "$trivy_image" image --severity HIGH,CRITICAL --exit-code 1 backend:latest
+      "$trivy_image" image --severity HIGH,CRITICAL --exit-code 1 "${BACKEND_IMAGE}"
   fi
   "${compose[@]}" up -d db
   ready=0
@@ -72,3 +77,46 @@ if [[ "${1:-}" == "up" ]]; then
 fi
 
 "${compose[@]}" "$@"
+
+detach=0
+for arg in "$@"; do
+  if [[ "${arg}" == "-d" || "${arg}" == "--detach" ]]; then
+    detach=1
+  fi
+done
+
+if [[ "${1:-}" == "up" && "${detach}" -eq 1 ]]; then
+  deadline=$((SECONDS + 120))
+  healthy=0
+  while (( SECONDS < deadline )); do
+    if "${compose[@]}" ps --format json | python3 -c '
+import json
+import sys
+
+raw = sys.stdin.read().strip()
+if not raw:
+    sys.exit(1)
+if raw.startswith("["):
+    items = json.loads(raw)
+else:
+    items = [json.loads(line) for line in raw.splitlines() if line.strip()]
+for item in items:
+    if item.get("Service") != "backend":
+        continue
+    health = item.get("Health") or ""
+    status = item.get("Status") or ""
+    if health == "healthy" or "(healthy)" in status:
+        sys.exit(0)
+sys.exit(1)
+'; then
+      healthy=1
+      break
+    fi
+    sleep 2
+  done
+  if [[ "${healthy}" -ne 1 ]]; then
+    echo "backend did not become healthy within 120s" >&2
+    "${compose[@]}" logs --no-color backend prestart >&2 || true
+    exit 1
+  fi
+fi

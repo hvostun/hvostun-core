@@ -76,7 +76,7 @@ The `compose.deploy.yml` file contains the deployment-specific settings, includi
 Set a public `DOMAIN`, `LETSENCRYPT_EMAIL`, and production secrets, then deploy with:
 
 ```bash
-bash scripts/deploy.sh up -d --build
+BACKEND_IMAGE=ghcr.io/hvostun/hvostun-backend@sha256:<digest> bash scripts/deploy.sh up -d
 ```
 
 The deployment override forces `FASTAPI_ENV=production`, uses the
@@ -85,8 +85,11 @@ one-shot `prestart` service, and does not start or expose `db-ui`.
 
 `scripts/deploy.sh` refuses a config that enables Traefik `--api`, publishes
 `5432`, `8080`, or `8090`, or mounts the Docker socket into `proxy`. Traefik
-reads labels through `socket-proxy`. On `up`, the script builds the backend
-image and scans it with Trivy (`HIGH,CRITICAL`) before the pre-migration backup.
+reads labels through `socket-proxy`. `BACKEND_IMAGE` must be
+`ghcr.io/hvostun/hvostun-backend@sha256:` plus 64 hex characters. On `up`, the
+script pulls that digest, scans it with Trivy (`HIGH,CRITICAL`) before the
+pre-migration backup, and after `up -d` waits up to 120 seconds for `backend`
+to become healthy.
 
 Postgres roles, created by the one-shot `db-roles` service:
 

@@ -42,10 +42,8 @@ services:
       - traefik.enable=false
 
   prestart:
-    image: backend:latest
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    image: ${BACKEND_IMAGE:?Variable not set}
+    build: !reset null
     depends_on:
       db:
         condition: service_healthy
@@ -60,6 +58,8 @@ services:
     command: ["bash", "scripts/prestart.sh"]
 
   backend:
+    image: ${BACKEND_IMAGE:?Variable not set}
+    build: !reset null
     restart: unless-stopped
     depends_on:
       prestart:

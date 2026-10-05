@@ -69,7 +69,7 @@ services:
 
   # Admin-контур: FastAPI HTML-админка, без второго HTTP-сервиса.
   prestart:
-    image: backend:latest
+    image: ${BACKEND_IMAGE:-backend:latest}
     depends_on:
       db-roles:
         condition: service_completed_successfully
@@ -87,7 +87,7 @@ services:
       dockerfile: backend/Dockerfile
 
   backend:
-    image: backend:latest
+    image: ${BACKEND_IMAGE:-backend:latest}
     depends_on:
       prestart:
         condition: service_completed_successfully
