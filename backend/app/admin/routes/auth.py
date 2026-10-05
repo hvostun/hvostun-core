@@ -51,13 +51,13 @@ def login_submit(
         token,
         httponly=True,
         samesite="lax",
-        secure=settings.FASTAPI_ENV == "production",
+        secure=settings.is_deployed,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
     return response
 
 
-@router.get("/logout")
+@router.post("/logout")
 def logout() -> RedirectResponse:
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(COOKIE_NAME)

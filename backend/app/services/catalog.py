@@ -138,6 +138,7 @@ def create_survey_version(
                 survey_version_id=version.id,
                 question_id=question_id,
                 order_num=order_num,
+                display_num=order_num,
                 user_id=user_id,
             )
         )
@@ -149,7 +150,7 @@ def create_survey_version(
 def update_survey_question_layout(
     session: Session,
     survey_version_id: uuid.UUID,
-    updates: Sequence[tuple[uuid.UUID, int | None, str]],
+    updates: Sequence[tuple[uuid.UUID, int, str]],
 ) -> None:
     links = {
         link.question_id: link
@@ -165,7 +166,9 @@ def update_survey_question_layout(
     session.commit()
 
 
-def get_recommendation(session: Session, recommendation_id: uuid.UUID) -> Recommendation:
+def get_recommendation(
+    session: Session, recommendation_id: uuid.UUID
+) -> Recommendation:
     row = session.get(Recommendation, recommendation_id)
     if row is None:
         raise CatalogNotFoundError("Recommendation not found")

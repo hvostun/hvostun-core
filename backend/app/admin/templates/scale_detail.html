@@ -6,6 +6,7 @@
 <p class="font-monospace text-muted">{{ scale.id }}</p>
 {% if can_edit %}
 <form method="post" action="/scales/{{ scale.id }}" class="mt-3">
+  {% include "csrf.html" %}
   <div class="mb-3">
     <label class="form-label" for="name">Название</label>
     <input

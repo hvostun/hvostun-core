@@ -508,7 +508,9 @@ def user_detail(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if target.is_superuser and not user.is_superuser:
         raise HTTPException(status_code=403, detail="Forbidden")
-    return _user_form_response(request, user, form=_user_form_from_row(target), target=target)
+    return _user_form_response(
+        request, user, form=_user_form_from_row(target), target=target
+    )
 
 
 @router.post("/users/{user_id}")

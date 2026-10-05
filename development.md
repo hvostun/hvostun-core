@@ -35,14 +35,15 @@ Mailpit: <http://localhost:8025>
 
 The catalog `frontend/` is an inactive React template for a future user UI. It
 is not served, built, deployed, or allowed through CORS by the backend. Its
-generated client is not kept in sync with the current API.
+generated client is not kept in sync with the current API. Dependencies are
+locked in `frontend/bun.lock` (`axios` 1.20.0, `js-yaml` overridden to 4.3.2).
 
 ## Full Stack with Docker Compose
 
 To run the backend (HTML admin) in Docker Compose:
 
 ```bash
-docker compose run --rm backend bash scripts/prestart.sh
+docker compose run --rm prestart
 docker compose watch
 ```
 
@@ -75,12 +76,31 @@ The `compose.deploy.yml` file contains the deployment-specific settings, includi
 Set a public `DOMAIN`, `LETSENCRYPT_EMAIL`, and production secrets, then deploy with:
 
 ```bash
-docker compose -f compose.yml -f compose.deploy.yml up -d --build
+BACKEND_IMAGE=ghcr.io/hvostun/hvostun-backend@sha256:<digest> bash scripts/deploy.sh up -d
 ```
 
 The deployment override forces `FASTAPI_ENV=production`, uses the
 `hvostun_production` database, runs Alembic and initial superuser setup in a
 one-shot `prestart` service, and does not start or expose `db-ui`.
+
+`scripts/deploy.sh` refuses a config that enables Traefik `--api`, publishes
+`5432`, `8080`, or `8090`, or mounts the Docker socket into `proxy`. Traefik
+reads labels through `socket-proxy`. `BACKEND_IMAGE` must be
+`ghcr.io/hvostun/hvostun-backend@sha256:` plus 64 hex characters. On `up`, the
+script pulls that digest, scans it with Trivy (`HIGH,CRITICAL`) before the
+pre-migration backup, and after `up -d` waits up to 120 seconds for `backend`
+to become healthy.
+
+Postgres roles, created by the one-shot `db-roles` service:
+
+- `hvostun_migrator` owns the schema and is the `prestart` login.
+- `hvostun_app` is the backend login and can only read and write rows.
+- `postgres` stays the superuser used by backups and by host-side pytest.
+
+`POSTGRES_APP_PASSWORD` and `POSTGRES_MIGRATOR_PASSWORD` must be set. Do not
+reuse the local example values in production. After restoring a dump, or after
+migrating `hvostun_development` from the host as `postgres`, run
+`docker compose run --rm db-roles` so grants and ownership match the roles.
 
 The backend reads local settings from the `.env` file (copy from `.env.example`). Docker Compose also uses it for variable interpolation and passes the settings each container needs.
 
@@ -96,17 +116,21 @@ docker compose watch
 
 The Postgres database name is `hvostun_{FASTAPI_ENV}` (local default: `hvostun_development`). Settings rewrites `DATABASE_URL` to that name, so `FASTAPI_ENV=test` always uses `hvostun_test`. Backend tests set `FASTAPI_ENV=test` and create/migrate `hvostun_test` on first run (`uv run pytest` from `backend/`, or `uv run bash scripts/test.sh`).
 
+The host `DATABASE_URL` stays the `postgres` superuser so pytest can create `hvostun_test`. Compose does not use that URL: `prestart` connects as `hvostun_migrator`, and `backend` connects as `hvostun_app`. Cookie `Secure` is set when `FASTAPI_ENV` is `staging` or `production`. Deployed Traefik adds HSTS, `nosniff`, `X-Frame-Options: DENY`, and a Content-Security-Policy, and limits `POST /login` to 5 requests per minute per client IP (burst 10). Admin POST forms require a double-submit CSRF token; logout is `POST /logout`.
+
 Dump the local development database (catalog and PII stay out of git):
 
 ```bash
 bash scripts/db_backup.sh
 ```
 
-The script writes `.data/backup/hvostun_development_YYYY-MM-DD_HHMMSS.sql` and copies it to `.data/backup/hvostun_development.sql`. Restore with:
+The script writes `.data/backup/hvostun_development_YYYY-MM-DD_HHMMSS.sql` and copies it to `.data/backup/hvostun_development.sql`. The database name comes from `POSTGRES_DB`, or `hvostun_${FASTAPI_ENV:-development}` when that variable is unset. This local dump includes `--clean`. Restore with:
 
 ```bash
 docker compose exec -T db psql -U postgres -d hvostun_development < .data/backup/hvostun_development.sql
 ```
+
+`bash scripts/deploy.sh up` dumps `hvostun_production` without `--clean` before `prestart` runs `alembic upgrade`. `pull` and `config` do not dump.
 
 Do not store deployment secrets in `.env`. Keep production secrets in your host/CI secret store.
 

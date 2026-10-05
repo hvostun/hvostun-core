@@ -7,7 +7,8 @@ from app.models import Dictionary, User
 DOGS_SEX_KEY = "dogs::sex"
 DOGS_STATUS_KEY = "dogs::status"
 SURVEYS_QUESTIONS_GROUP_KEY = "surveys_questions::group"
-SURVEYS_QUESTIONS_GROUP_COLOR_KEY = "surveys_questions::group::color"
+SURVEYS_QUESTIONS_CONSTS_KEY = "surveys_questions::consts"
+DEFAULT_GROUP_COLOR = "var(--bs-blue)"
 
 
 def get_value(session: Session, key: str) -> Any | None:
@@ -23,6 +24,38 @@ def label_for(session: Session, key: str, code: str | None) -> str:
         return ""
     label = value[code]
     return "" if label is None else str(label)
+
+
+def _group_entry(session: Session, code: str) -> dict[str, Any] | None:
+    value = get_value(session, SURVEYS_QUESTIONS_GROUP_KEY)
+    if not isinstance(value, dict):
+        return None
+    entry = value.get(code)
+    return entry if isinstance(entry, dict) else None
+
+
+def group_name(session: Session, code: str | None) -> str:
+    text = "" if code is None else str(code)
+    if not text:
+        return ""
+    entry = _group_entry(session, text)
+    if entry is None:
+        return text
+    name = entry.get("name")
+    if isinstance(name, str) and name:
+        return name
+    return text
+
+
+def group_color(session: Session, code: str | None) -> str:
+    text = "" if code is None else str(code)
+    entry = _group_entry(session, text) if text else None
+    if entry is None:
+        return DEFAULT_GROUP_COLOR
+    color = entry.get("color")
+    if isinstance(color, str) and color:
+        return color
+    return DEFAULT_GROUP_COLOR
 
 
 class DictionaryNotFoundError(LookupError):

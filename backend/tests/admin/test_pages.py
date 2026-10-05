@@ -1,12 +1,14 @@
 import re
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
+from typing import Any
 
 from fastapi.testclient import TestClient
+from httpx import Response
 from sqlmodel import Session, select
 
 from app import crud
-from app.admin.deps import COOKIE_NAME
+from app.admin.deps import COOKIE_NAME, CSRF_COOKIE_NAME
 from app.core.config import settings
 from app.models import (
     AnswerEvent,
@@ -26,6 +28,10 @@ from app.models import (
     UserCreate,
     UserGroup,
 )
+from app.services.dictionaries import (
+    SURVEYS_QUESTIONS_CONSTS_KEY,
+    SURVEYS_QUESTIONS_GROUP_KEY,
+)
 from app.services.sessions import (
     days_since_status,
     format_dog_age,
@@ -34,11 +40,27 @@ from app.services.sessions import (
 from tests.utils.utils import random_lower_string
 
 
+def post(
+    client: TestClient,
+    url: str,
+    data: dict[str, str] | None = None,
+    **kwargs: Any,
+) -> Response:
+    if CSRF_COOKIE_NAME not in client.cookies:
+        client.get("/login")
+    payload: dict[str, str] = {"csrf_token": client.cookies[CSRF_COOKIE_NAME]}
+    if data:
+        payload.update(data)
+    return client.post(url, data=payload, **kwargs)
+
+
 def test_login_page_is_html(client: TestClient) -> None:
     response = client.get("/login")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "Войти" in response.text
+    assert 'name="csrf_token"' in response.text
+    assert CSRF_COOKIE_NAME in client.cookies
     assert "/static/theme.css" in response.text
     theme = client.get("/static/theme.css")
     assert theme.status_code == 200
@@ -53,7 +75,8 @@ def test_dogs_redirects_without_cookie(client: TestClient) -> None:
 
 
 def test_login_sets_cookie_and_opens_dogs(client: TestClient) -> None:
-    response = client.post(
+    response = post(
+        client,
         "/login",
         data={
             "email": settings.FIRST_SUPERUSER,
@@ -83,7 +106,8 @@ def test_dogs_page_shows_owner_name(client: TestClient, db: Session) -> None:
     dog = Dog(name="Rex", owner_id=owner.id, shelter_id=shelter.id)
     db.add(dog)
     db.commit()
-    client.post(
+    post(
+        client,
         "/login",
         data={
             "email": settings.FIRST_SUPERUSER,
@@ -149,7 +173,8 @@ def test_dog_update_saves_fields(client: TestClient, db: Session) -> None:
     db.commit()
     db.refresh(dog)
     _login_superuser(client)
-    response = client.post(
+    response = post(
+        client,
         f"/dogs/{dog.id}",
         data={
             "name": "After",
@@ -190,7 +215,8 @@ def test_dog_update_rejects_empty_name(client: TestClient, db: Session) -> None:
     db.commit()
     db.refresh(dog)
     _login_superuser(client)
-    response = client.post(
+    response = post(
+        client,
         f"/dogs/{dog.id}",
         data={
             "name": "   ",
@@ -240,7 +266,8 @@ def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> N
     db.add(session_row)
     db.commit()
     db.refresh(session_row)
-    client.post(
+    post(
+        client,
         "/login",
         data={
             "email": settings.FIRST_SUPERUSER,
@@ -249,7 +276,7 @@ def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> N
     )
     sessions = client.get("/sessions")
     assert sessions.status_code == 200
-    assert "Пользователь" in sessions.text
+    assert "Моя рекомендация" in sessions.text
     assert "Собака" in sessions.text
     assert "Анкета" in sessions.text
     assert "Рекомендации" in sessions.text
@@ -262,7 +289,7 @@ def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> N
     assert str(dog.id) not in sessions.text
     assert str(survey.id) not in sessions.text
     assert re.search(
-        r"C-BARQ Sessions · v1\s*</td>\s*<td>\s*0\s*</td>\s*<td>\s*0\s*</td>",
+        r"C-BARQ Sessions · v1\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*0\s*</td>\s*<td>\s*0\s*</td>",
         sessions.text,
     )
 
@@ -281,7 +308,9 @@ def test_sessions_page_shows_recommendation_counts(
         ),
     )
     dog = Dog(name="Rex Rec Counts")
-    survey = Survey(name="C-BARQ Rec Counts", slug=f"cbarq-rec-counts-{random_lower_string()}")
+    survey = Survey(
+        name="C-BARQ Rec Counts", slug=f"cbarq-rec-counts-{random_lower_string()}"
+    )
     first = Recommendation(
         name="Первая",
         slug=f"first-{random_lower_string()}",
@@ -355,18 +384,19 @@ def test_sessions_page_shows_recommendation_counts(
     db.add(empty_dog)
     db.add(empty_session)
     db.commit()
-    client.post(
+    post(
+        client,
         "/login",
         data={
             "email": settings.FIRST_SUPERUSER,
             "password": settings.FIRST_SUPERUSER_PASSWORD,
         },
     )
-    sessions = client.get("/sessions")
+    sessions = client.get("/sessions", params={"mine": ""})
     assert sessions.status_code == 200
     assert "Rex Rec Counts" in sessions.text
     assert re.search(
-        r"C-BARQ Rec Counts · v1\s*</td>\s*<td>\s*3\s*</td>\s*<td>\s*2\s*</td>",
+        r"C-BARQ Rec Counts · v1\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*3\s*</td>\s*<td>\s*2\s*</td>",
         sessions.text,
     )
     assert 'name="has_my_recommendation"' not in sessions.text
@@ -375,14 +405,25 @@ def test_sessions_page_shows_recommendation_counts(
     assert mine_row is not None and "checked" in mine_row.group(0)
     assert empty_row is not None and "checked" not in empty_row.group(0)
 
-    ascending = client.get("/sessions", params={"users_sort": "asc"})
+    ascending = client.get("/sessions", params={"users_sort": "asc", "mine": ""})
     assert ascending.text.index("Rex Without Recommendations") < ascending.text.index(
         "Rex Rec Counts"
     )
-    descending = client.get("/sessions", params={"users_sort": "desc"})
+    descending = client.get("/sessions", params={"users_sort": "desc", "mine": ""})
     assert descending.text.index("Rex Rec Counts") < descending.text.index(
         "Rex Without Recommendations"
     )
+    assert 'name="mine"' in sessions.text
+    assert "Мои рекомендации" in sessions.text
+    assert "Без моей рекомендации" in sessions.text
+    only_mine = client.get("/sessions", params={"mine": "yes"})
+    assert "Rex Rec Counts" in only_mine.text
+    assert "Rex Without Recommendations" not in only_mine.text
+    assert 'value="yes" selected' in only_mine.text
+    without_mine = client.get("/sessions", params={"mine": "no"})
+    assert "Rex Without Recommendations" in without_mine.text
+    assert "Rex Rec Counts" not in without_mine.text
+    assert 'value="no" selected' in without_mine.text
 
 
 def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> None:
@@ -403,14 +444,23 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
             },
         },
     )
-    db.add(
-        Dictionary(
-            key="surveys_questions::group",
-            value={"other": "Прочее", "Excitability": "Возбудимость"},
-            created_by=user.id,
-            updated_by=user.id,
+    group_labels = {
+        "other": {"name": "Прочее", "color": "var(--bs-blue)"},
+        "Excitability": {"name": "Возбудимость", "color": "var(--bs-orange)"},
+    }
+    group_row = db.get(Dictionary, "surveys_questions::group")
+    if group_row is None:
+        db.add(
+            Dictionary(
+                key="surveys_questions::group",
+                value=group_labels,
+                created_by=user.id,
+                updated_by=user.id,
+            )
         )
-    )
+    else:
+        group_row.value = group_labels
+        db.add(group_row)
     db.add(dog)
     db.add(survey)
     db.add(scale)
@@ -453,14 +503,15 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
     )
     db.add(event)
     db.commit()
-    client.post(
+    post(
+        client,
         "/login",
         data={
             "email": settings.FIRST_SUPERUSER,
             "password": settings.FIRST_SUPERUSER_PASSWORD,
         },
     )
-    page = client.get(f"/sessions/{session_row.id}")
+    page = client.get(f"/sessions/{session_row.id}", params={"view": "flat"})
     assert page.status_code == 200
     assert "Как часто лает?" in page.text
     assert "Категория" in page.text
@@ -483,7 +534,9 @@ def test_session_detail_hides_progress_for_missing_answer(
     user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
     assert user
     dog = Dog(name="Missing Bar Dog")
-    survey = Survey(name="Missing Bar Survey", slug=f"missing-bar-{random_lower_string()}")
+    survey = Survey(
+        name="Missing Bar Survey", slug=f"missing-bar-{random_lower_string()}"
+    )
     scale = Scale(
         name="Балл",
         type="integer",
@@ -509,6 +562,7 @@ def test_session_detail_hides_progress_for_missing_answer(
             survey_version_id=version.id,
             question_id=question.id,
             order_num=1,
+            display_num=1,
             group="Aggression",
         )
     )
@@ -531,7 +585,7 @@ def test_session_detail_hides_progress_for_missing_answer(
     )
     db.commit()
     _login_superuser(client)
-    page = client.get(f"/sessions/{session_row.id}")
+    page = client.get(f"/sessions/{session_row.id}", params={"view": "flat"})
     assert page.status_code == 200
     assert "Не применимо?" in page.text
     assert "progress-bar" not in page.text
@@ -573,6 +627,7 @@ def test_session_detail_filters_questions_by_category_and_answer(
             survey_version_id=version.id,
             question_id=first.id,
             order_num=1,
+            display_num=1,
             group="Excitability",
         )
     )
@@ -581,6 +636,7 @@ def test_session_detail_filters_questions_by_category_and_answer(
             survey_version_id=version.id,
             question_id=second.id,
             order_num=2,
+            display_num=2,
             group="Aggression",
         )
     )
@@ -603,27 +659,31 @@ def test_session_detail_filters_questions_by_category_and_answer(
     )
     db.commit()
     _login_superuser(client)
-    page = client.get(f"/sessions/{session_row.id}")
+    page = client.get(f"/sessions/{session_row.id}", params={"view": "flat"})
     assert page.status_code == 200
     assert "Лает на гостей?" in page.text
     assert "Рычит на собак?" in page.text
     by_category = client.get(
-        f"/sessions/{session_row.id}", params={"category": "Excitability"}
+        f"/sessions/{session_row.id}",
+        params={"view": "flat", "category": "Excitability"},
     )
     assert by_category.status_code == 200
     assert "Лает на гостей?" in by_category.text
     assert "Рычит на собак?" not in by_category.text
-    by_answer = client.get(f"/sessions/{session_row.id}", params={"answer": "3"})
+    by_answer = client.get(
+        f"/sessions/{session_row.id}", params={"view": "flat", "answer": "3"}
+    )
     assert "Лает на гостей?" in by_answer.text
     assert "Рычит на собак?" not in by_answer.text
     unanswered = client.get(
-        f"/sessions/{session_row.id}", params={"answer": "unanswered"}
+        f"/sessions/{session_row.id}",
+        params={"view": "flat", "answer": "unanswered"},
     )
     assert "Рычит на собак?" in unanswered.text
     assert "Лает на гостей?" not in unanswered.text
     empty = client.get(
         f"/sessions/{session_row.id}",
-        params={"category": "Aggression", "answer": "3"},
+        params={"view": "flat", "category": "Aggression", "answer": "3"},
     )
     assert "Нет вопросов по фильтру." in empty.text
     assert "Лает на гостей?" not in empty.text
@@ -682,7 +742,8 @@ def test_session_detail_shows_dog_facts(client: TestClient, db: Session) -> None
         dog.birthday, session_calendar_date(session_row.created_at)
     )
     expected_days = days_since_status(dog.status_at, session_row.created_at)
-    client.post(
+    post(
+        client,
         "/login",
         data={
             "email": settings.FIRST_SUPERUSER,
@@ -733,6 +794,7 @@ def test_answer_events_page_is_visible_to_logged_in_user(
             survey_version_id=version.id,
             question_id=question.id,
             order_num=1,
+            display_num=1,
         )
     )
     session_row = SurveySession(
@@ -752,7 +814,8 @@ def test_answer_events_page_is_visible_to_logged_in_user(
     )
     db.add(event)
     db.commit()
-    client.post(
+    post(
+        client,
         "/login",
         data={
             "email": settings.FIRST_SUPERUSER,
@@ -766,7 +829,9 @@ def test_answer_events_page_is_visible_to_logged_in_user(
 
 
 def test_users_page_shows_group(client: TestClient, db: Session) -> None:
-    current = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    current = db.exec(
+        select(User).where(User.email == settings.FIRST_SUPERUSER)
+    ).first()
     assert current
     _login_superuser(client)
     page = client.get("/users")
@@ -778,9 +843,7 @@ def test_users_page_shows_group(client: TestClient, db: Session) -> None:
     assert "/users/new" in page.text
 
 
-def test_users_new_forbidden_for_non_superuser(
-    client: TestClient, db: Session
-) -> None:
+def test_users_new_forbidden_for_non_superuser(client: TestClient, db: Session) -> None:
     password = f"Exp1-{random_lower_string()[:8]}"
     email = f"expert-{random_lower_string()}@example.com"
     crud.create_user(
@@ -791,10 +854,11 @@ def test_users_new_forbidden_for_non_superuser(
             group=UserGroup.EXPERT,
         ),
     )
-    client.post("/login", data={"email": email, "password": password})
+    post(client, "/login", data={"email": email, "password": password})
     page = client.get("/users/new", follow_redirects=False)
     assert page.status_code == 403
-    create = client.post(
+    create = post(
+        client,
         "/users/new",
         data={
             "email": f"blocked-{random_lower_string()}@example.com",
@@ -817,7 +881,8 @@ def test_admin_can_manage_regular_users_but_cannot_grant_superuser(
     assert 'name="is_superuser" value="false"' in form.text
 
     regular_email = f"regular-{random_lower_string()}@example.com"
-    created = client.post(
+    created = post(
+        client,
         "/users/new",
         data={
             "email": regular_email,
@@ -833,7 +898,8 @@ def test_admin_can_manage_regular_users_but_cannot_grant_superuser(
     assert regular is not None
     assert regular.is_superuser is False
 
-    blocked = client.post(
+    blocked = post(
+        client,
         "/users/new",
         data={
             "email": f"blocked-super-{random_lower_string()}@example.com",
@@ -854,7 +920,8 @@ def test_user_create_and_update(client: TestClient, db: Session) -> None:
     assert "Новый администратор" in form.text
     assert "Создать" in form.text
     email = f"new-admin-{random_lower_string()}@example.com"
-    response = client.post(
+    response = post(
+        client,
         "/users/new",
         data={
             "email": email,
@@ -880,7 +947,8 @@ def test_user_create_and_update(client: TestClient, db: Session) -> None:
     assert detail.status_code == 200
     assert created.email in detail.text
     assert "Сохранить" in detail.text
-    update = client.post(
+    update = post(
+        client,
         f"/users/{created.id}",
         data={
             "email": email,
@@ -903,7 +971,8 @@ def test_user_create_and_update(client: TestClient, db: Session) -> None:
 
 def test_user_create_rejects_duplicate_email(client: TestClient) -> None:
     _login_superuser(client)
-    response = client.post(
+    response = post(
+        client,
         "/users/new",
         data={
             "email": settings.FIRST_SUPERUSER,
@@ -921,10 +990,13 @@ def test_user_create_rejects_duplicate_email(client: TestClient) -> None:
 
 
 def test_user_update_rejects_self_demote(client: TestClient, db: Session) -> None:
-    current = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    current = db.exec(
+        select(User).where(User.email == settings.FIRST_SUPERUSER)
+    ).first()
     assert current
     _login_superuser(client)
-    response = client.post(
+    response = post(
+        client,
         f"/users/{current.id}",
         data={
             "email": current.email,
@@ -944,7 +1016,8 @@ def test_user_update_rejects_self_demote(client: TestClient, db: Session) -> Non
 
 
 def _login_superuser(client: TestClient) -> None:
-    client.post(
+    post(
+        client,
         "/login",
         data={
             "email": settings.FIRST_SUPERUSER,
@@ -1004,7 +1077,8 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert "Добавить рекомендацию" in page.text
     assert recommendation.name in page.text
 
-    response = client.post(
+    response = post(
+        client,
         f"/sessions/{session_row.id}/recommendations",
         data={
             "recomendation_id": str(recommendation.id),
@@ -1052,7 +1126,8 @@ def test_session_recommendation_rejects_duplicate(
     )
     db.commit()
     _login_superuser(client)
-    response = client.post(
+    response = post(
+        client,
         f"/sessions/{session_row.id}/recommendations",
         data={"recomendation_id": str(recommendation.id), "comment": ""},
     )
@@ -1080,7 +1155,7 @@ def test_user_can_delete_own_session_recommendation(
 
     page = client.get(f"/sessions/{session_row.id}")
     assert delete_path in page.text
-    response = client.post(delete_path, follow_redirects=False)
+    response = post(client, delete_path, follow_redirects=False)
 
     assert response.status_code == 303
     assert response.headers["location"] == f"/sessions/{session_row.id}"
@@ -1108,11 +1183,12 @@ def test_user_cannot_delete_another_users_session_recommendation(
     page = client.get(f"/sessions/{session_row.id}")
     assert delete_path not in page.text
     assert f'name="recommendation_id" value="{row.id}"' not in page.text
-    response = client.post(delete_path, follow_redirects=False)
+    response = post(client, delete_path, follow_redirects=False)
 
     assert response.status_code == 403
     assert db.get(SessionRecommendation, row.id) is not None
-    forged_update = client.post(
+    forged_update = post(
+        client,
         f"/sessions/{session_row.id}/recommendations/save",
         data={
             "recommendation_id": [str(row.id)],
@@ -1125,9 +1201,7 @@ def test_user_cannot_delete_another_users_session_recommendation(
     assert forged_update.status_code == 403
 
 
-def test_session_recommendation_can_be_updated(
-    client: TestClient, db: Session
-) -> None:
+def test_session_recommendation_can_be_updated(client: TestClient, db: Session) -> None:
     session_row, recommendation, user = _session_with_recommendation_catalog(db)
     row = SessionRecommendation(
         user_id=user.id,
@@ -1149,7 +1223,8 @@ def test_session_recommendation_can_be_updated(
     assert page.text.count("Сохранить") == 1
     assert f"/sessions/{session_row.id}/recommendations/save" in page.text
     assert f'/sessions/{session_row.id}/recommendations/{row.id}"' not in page.text
-    response = client.post(
+    response = post(
+        client,
         f"/sessions/{session_row.id}/recommendations/save",
         data={
             "recommendation_id": [str(row.id)],
@@ -1200,7 +1275,8 @@ def test_session_recommendations_can_be_saved_together(
     db.refresh(first_row)
     db.refresh(second_row)
     _login_superuser(client)
-    response = client.post(
+    response = post(
+        client,
         f"/sessions/{session_row.id}/recommendations/save",
         data={
             "recommendation_id": [str(first_row.id), str(second_row.id)],
@@ -1236,7 +1312,8 @@ def test_session_recommendation_update_rejects_bad_weight(
     db.commit()
     db.refresh(row)
     _login_superuser(client)
-    response = client.post(
+    response = post(
+        client,
         f"/sessions/{session_row.id}/recommendations/save",
         data={
             "recommendation_id": [str(row.id)],
@@ -1261,7 +1338,7 @@ def _login_admin(client: TestClient, db: Session) -> User:
             group=UserGroup.ADMIN,
         ),
     )
-    client.post("/login", data={"email": user.email, "password": password})
+    post(client, "/login", data={"email": user.email, "password": password})
     return user
 
 
@@ -1275,7 +1352,7 @@ def _login_expert(client: TestClient, db: Session) -> User:
             group=UserGroup.EXPERT,
         ),
     )
-    client.post("/login", data={"email": user.email, "password": password})
+    post(client, "/login", data={"email": user.email, "password": password})
     return user
 
 
@@ -1342,7 +1419,8 @@ def test_admin_can_create_and_edit_recommendation(
     assert form.status_code == 200
     assert "Новая рекомендация" in form.text
     slug = f"rec-{random_lower_string()}"
-    created = client.post(
+    created = post(
+        client,
         "/recommendations/new",
         data={
             "name": "Прогулка",
@@ -1362,7 +1440,8 @@ def test_admin_can_create_and_edit_recommendation(
     page = client.get(f"/recommendations/{row.id}")
     assert page.status_code == 200
     assert "Сохранить" in page.text
-    updated = client.post(
+    updated = post(
+        client,
         f"/recommendations/{row.id}",
         data={
             "name": "Длинная прогулка",
@@ -1377,7 +1456,8 @@ def test_admin_can_create_and_edit_recommendation(
     db.refresh(row)
     assert row.name == "Длинная прогулка"
     assert row.description is None
-    duplicate = client.post(
+    duplicate = post(
+        client,
         "/recommendations/new",
         data={
             "name": "Другая",
@@ -1389,7 +1469,8 @@ def test_admin_can_create_and_edit_recommendation(
     )
     assert duplicate.status_code == 400
     assert "slug" in duplicate.text
-    missing = client.post(
+    missing = post(
+        client,
         "/recommendations/new",
         data={
             "name": "",
@@ -1420,7 +1501,8 @@ def test_expert_cannot_open_recommendation_form(
         client.get(f"/recommendations/{row.id}", follow_redirects=False).status_code
         == 403
     )
-    response = client.post(
+    response = post(
+        client,
         f"/recommendations/{row.id}",
         data={
             "name": "Changed",
@@ -1462,7 +1544,8 @@ def test_scale_update_forbidden_for_expert(client: TestClient, db: Session) -> N
     db.commit()
     db.refresh(scale)
     _login_expert(client, db)
-    response = client.post(
+    response = post(
+        client,
         f"/scales/{scale.id}",
         data={
             "name": "Changed",
@@ -1487,7 +1570,8 @@ def test_scale_update_allowed_for_admin(client: TestClient, db: Session) -> None
     page = client.get(f"/scales/{scale.id}")
     assert page.status_code == 200
     assert "Сохранить" in page.text
-    response = client.post(
+    response = post(
+        client,
         f"/scales/{scale.id}",
         data={
             "name": "Updated scale",
@@ -1504,9 +1588,7 @@ def test_scale_update_allowed_for_admin(client: TestClient, db: Session) -> None
     assert scale.config == {"min_value": 0, "max_value": 5}
 
 
-def test_dictionaries_page_lists_and_opens_row(
-    client: TestClient, db: Session
-) -> None:
+def test_dictionaries_page_lists_and_opens_row(client: TestClient, db: Session) -> None:
     user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
     assert user
     key = f"ns::{random_lower_string()}"
@@ -1545,7 +1627,8 @@ def test_dictionary_can_be_updated(client: TestClient, db: Session) -> None:
     db.add(row)
     db.commit()
     _login_superuser(client)
-    response = client.post(
+    response = post(
+        client,
         f"/dictionaries/{key}",
         data={"value": '{"home": "дома", "shelter": "приют"}'},
         follow_redirects=False,
@@ -1572,7 +1655,8 @@ def test_dictionary_update_rejects_invalid_json(
     db.add(row)
     db.commit()
     _login_superuser(client)
-    response = client.post(
+    response = post(
+        client,
         f"/dictionaries/{key}",
         data={"value": "{not json"},
     )
@@ -1622,7 +1706,39 @@ def test_survey_detail_sorts_questions_by_display_num(
     _login_superuser(client)
     page = client.get(f"/surveys/{survey.id}")
     assert page.status_code == 200
-    assert page.text.index("Показывается первым") < page.text.index("Показывается вторым")
+    assert page.text.index("Показывается первым") < page.text.index(
+        "Показывается вторым"
+    )
+    assert "display_num ↑" in page.text
+    by_order = client.get(f"/surveys/{survey.id}?sort=order")
+    assert by_order.status_code == 200
+    assert "order ↑" in by_order.text
+    assert by_order.text.index("Показывается вторым") < by_order.text.index(
+        "Показывается первым"
+    )
+    by_order_desc = client.get(f"/surveys/{survey.id}?sort=-order")
+    assert "order ↓" in by_order_desc.text
+    assert by_order_desc.text.index("Показывается первым") < by_order_desc.text.index(
+        "Показывается вторым"
+    )
+    by_display_desc = client.get(f"/surveys/{survey.id}?sort=-display")
+    assert "display_num ↓" in by_display_desc.text
+    assert by_display_desc.text.index(
+        "Показывается вторым"
+    ) < by_display_desc.text.index("Показывается первым")
+    saved = client.post(
+        f"/surveys/{survey.id}",
+        data={
+            "csrf_token": client.cookies[CSRF_COOKIE_NAME],
+            "question_id": [str(later.id), str(earlier.id)],
+            "display_num": ["2", "1"],
+            "group": ["other", "other"],
+            "sort": "order",
+        },
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    assert saved.headers["location"].endswith("?sort=order")
 
 
 def test_admin_can_edit_survey_question_layout(client: TestClient, db: Session) -> None:
@@ -1655,7 +1771,8 @@ def test_admin_can_edit_survey_question_layout(client: TestClient, db: Session) 
     assert 'name="display_num"' in page.text
     assert 'name="group"' in page.text
     assert "Сохранить" in page.text
-    saved = client.post(
+    saved = post(
+        client,
         f"/surveys/{survey.id}",
         data={
             "question_id": str(question.id),
@@ -1668,7 +1785,8 @@ def test_admin_can_edit_survey_question_layout(client: TestClient, db: Session) 
     db.refresh(link)
     assert link.display_num == 1
     assert link.group == "Household"
-    cleared = client.post(
+    cleared = post(
+        client,
         f"/surveys/{survey.id}",
         data={
             "question_id": str(question.id),
@@ -1677,10 +1795,12 @@ def test_admin_can_edit_survey_question_layout(client: TestClient, db: Session) 
         },
         follow_redirects=False,
     )
-    assert cleared.status_code == 303
+    assert cleared.status_code == 400
+    assert "обязателен" in cleared.text
     db.refresh(link)
-    assert link.display_num is None
-    invalid = client.post(
+    assert link.display_num == 1
+    invalid = post(
+        client,
         f"/surveys/{survey.id}",
         data={
             "question_id": str(question.id),
@@ -1691,7 +1811,7 @@ def test_admin_can_edit_survey_question_layout(client: TestClient, db: Session) 
     assert invalid.status_code == 400
     assert "целым" in invalid.text
     db.refresh(link)
-    assert link.display_num is None
+    assert link.display_num == 1
 
 
 def test_expert_cannot_edit_survey_question_layout(
@@ -1715,6 +1835,7 @@ def test_expert_cannot_edit_survey_question_layout(
         survey_version_id=version.id,
         question_id=question.id,
         order_num=1,
+        display_num=1,
         group="other",
     )
     db.add(link)
@@ -1724,7 +1845,8 @@ def test_expert_cannot_edit_survey_question_layout(
     assert page.status_code == 200
     assert "Сохранить" not in page.text
     assert 'name="group"' not in page.text
-    response = client.post(
+    response = post(
+        client,
         f"/surveys/{survey.id}",
         data={
             "question_id": str(question.id),
@@ -1735,7 +1857,7 @@ def test_expert_cannot_edit_survey_question_layout(
     assert response.status_code == 403
     db.refresh(link)
     assert link.group == "other"
-    assert link.display_num is None
+    assert link.display_num == 1
 
 
 def test_json_api_is_gone(client: TestClient) -> None:
@@ -1743,7 +1865,282 @@ def test_json_api_is_gone(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+def test_session_detail_groups_answers_by_cbarq_domains(
+    client: TestClient, db: Session
+) -> None:
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    assert user
+    dog = Dog(name="Domain Dog")
+    survey = Survey(name="Domain Survey", slug=f"domains-{random_lower_string()}")
+    scale = Scale(
+        name="Балл доменов",
+        type="integer",
+        config={"min_value": 0, "max_value": 4},
+    )
+    db.add(dog)
+    db.add(survey)
+    db.add(scale)
+    group_labels = {
+        "Excitability": {"name": "Возбудимость", "color": "var(--bs-orange)"},
+        "Trainability": {
+            "name": "Трудность дрессировки",
+            "color": "var(--bs-green)",
+        },
+    }
+    group_row = db.get(Dictionary, SURVEYS_QUESTIONS_GROUP_KEY)
+    if group_row is None:
+        db.add(
+            Dictionary(
+                key=SURVEYS_QUESTIONS_GROUP_KEY,
+                value=group_labels,
+                created_by=user.id,
+                updated_by=user.id,
+            )
+        )
+    else:
+        group_row.value = group_labels
+        db.add(group_row)
+    consts_value = {"c-barq-short-42": {"domain_threshold": 0.5, "reverse": [27, 28]}}
+    consts_row = db.get(Dictionary, SURVEYS_QUESTIONS_CONSTS_KEY)
+    if consts_row is None:
+        db.add(
+            Dictionary(
+                key=SURVEYS_QUESTIONS_CONSTS_KEY,
+                value=consts_value,
+                created_by=user.id,
+                updated_by=user.id,
+            )
+        )
+    else:
+        consts_row.value = consts_value
+        db.add(consts_row)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(survey)
+    db.refresh(scale)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    texts = {
+        1: ("Возбуждается дома", "Excitability"),
+        2: ("Возбуждается на улице", "Excitability"),
+        11: ("Знакомая собака", "Dog_rivalry"),
+        27: ("Сразу сидит", "Trainability"),
+        28: ("Сразу жди", "Trainability"),
+        29: ("Легко отвлекается", "Trainability"),
+        32: ("Тянет поводок", "other"),
+        99: ("Общий вопрос", "other"),
+    }
+    questions: dict[int, Question] = {}
+    for order, (text, group) in texts.items():
+        question = Question(text=text, scale_id=scale.id)
+        db.add(question)
+        db.commit()
+        db.refresh(question)
+        questions[order] = question
+        db.add(
+            SurveyQuestion(
+                survey_version_id=version.id,
+                question_id=question.id,
+                order_num=order,
+                display_num=order,
+                group=group,
+            )
+        )
+    session_row = SurveySession(
+        owner_id=_create_owner(db).id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+    values = {1: 2, 2: 4, 27: 0, 32: 3, 99: 1}
+    for order, value in values.items():
+        db.add(
+            AnswerEvent(
+                surveys_session_id=session_row.id,
+                survey_version_id=version.id,
+                question_id=questions[order].id,
+                value={"value": value},
+            )
+        )
+    db.commit()
+    _login_superuser(client)
+    page = client.get(f"/sessions/{session_row.id}")
+    assert page.status_code == 200
+    assert "По доменам" in page.text
+    assert "Возбудимость" in page.text
+    assert "7.50" in page.text
+    assert "из 10" in page.text
+    assert "2 из 2" in page.text
+    assert "Трудность дрессировки" not in page.text
+    assert "мало ответов" not in page.text
+    assert "Dog_rivalry" not in page.text
+    assert "Прочее" not in page.text
+    assert "Вне скоринга" in page.text
+    assert "Общий вопрос" in page.text
+    assert 'id="category"' not in page.text
+    flat = client.get(f"/sessions/{session_row.id}", params={"view": "flat"})
+    assert flat.status_code == 200
+    assert "Все категории" in flat.text
+    assert "Возбуждается дома" in flat.text
+    assert "Общий вопрос" in flat.text
+    filtered = client.get(
+        f"/sessions/{session_row.id}",
+        params={"view": "flat", "answer": "4"},
+    )
+    assert "Возбуждается на улице" in filtered.text
+    assert "Общий вопрос" not in filtered.text
+
+
+def test_sessions_page_shows_answer_percent(client: TestClient, db: Session) -> None:
+    owner = _create_owner(db, "Владелец процента списка")
+    dog = Dog(name="Listed Percent Dog")
+    empty_dog = Dog(name="Listed Empty Dog")
+    survey = Survey(name="Listed Percent", slug=f"listed-{random_lower_string()}")
+    scale = Scale(
+        name="Балл списка", type="integer", config={"min_value": 0, "max_value": 4}
+    )
+    db.add(dog)
+    db.add(empty_dog)
+    db.add(survey)
+    db.add(scale)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(empty_dog)
+    db.refresh(survey)
+    db.refresh(scale)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    empty_version = SurveyVersion(survey_id=survey.id, version_num=2)
+    db.add(version)
+    db.add(empty_version)
+    db.commit()
+    db.refresh(version)
+    db.refresh(empty_version)
+    first = Question(text="Список 1", scale_id=scale.id)
+    second = Question(text="Список 2", scale_id=scale.id)
+    db.add(first)
+    db.add(second)
+    db.commit()
+    db.refresh(first)
+    db.refresh(second)
+    db.add(
+        SurveyQuestion(
+            survey_version_id=version.id,
+            question_id=first.id,
+            order_num=1,
+            display_num=1,
+        )
+    )
+    db.add(
+        SurveyQuestion(
+            survey_version_id=version.id,
+            question_id=second.id,
+            order_num=2,
+            display_num=2,
+        )
+    )
+    answered = SurveySession(
+        owner_id=owner.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    empty = SurveySession(
+        owner_id=owner.id,
+        dog_id=empty_dog.id,
+        survey_version_id=empty_version.id,
+        status="draft",
+    )
+    db.add(answered)
+    db.add(empty)
+    db.commit()
+    db.refresh(answered)
+    db.add(
+        AnswerEvent(
+            surveys_session_id=answered.id,
+            survey_version_id=version.id,
+            question_id=first.id,
+            value={"value": -999},
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    )
+    db.add(
+        AnswerEvent(
+            surveys_session_id=answered.id,
+            survey_version_id=version.id,
+            question_id=first.id,
+            value={"value": 1},
+            created_at=datetime(2026, 2, 1, tzinfo=UTC),
+        )
+    )
+    db.add(
+        AnswerEvent(
+            surveys_session_id=answered.id,
+            survey_version_id=version.id,
+            question_id=second.id,
+            value={"value": -999},
+            created_at=datetime(2026, 2, 1, tzinfo=UTC),
+        )
+    )
+    db.commit()
+    _login_superuser(client)
+    page = client.get("/sessions")
+    assert page.status_code == 200
+    assert "Ответов, %" in page.text
+    assert re.search(r"Listed Percent · v1\s*</td>\s*<td>\s*50\s*</td>", page.text)
+    assert re.search(r"Listed Percent · v2\s*</td>\s*<td>\s*—\s*</td>", page.text)
+
+
 def test_health_check(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_post_without_csrf_token_is_rejected(client: TestClient) -> None:
+    client.get("/login")
+    response = client.post(
+        "/login",
+        data={
+            "email": settings.FIRST_SUPERUSER,
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "CSRF check failed"
+
+
+def test_post_with_foreign_csrf_token_is_rejected(client: TestClient) -> None:
+    client.get("/login")
+    response = client.post(
+        "/login",
+        data={
+            "email": settings.FIRST_SUPERUSER,
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
+            "csrf_token": "not-the-cookie",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 403
+
+
+def test_logout_is_post_only(client: TestClient) -> None:
+    missing = client.get("/logout", follow_redirects=False)
+    assert missing.status_code == 405
+    response = post(client, "/logout", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+    post(
+        client,
+        "/login",
+        data={
+            "email": settings.FIRST_SUPERUSER,
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
+        },
+        follow_redirects=False,
+    )

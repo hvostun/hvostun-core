@@ -1,10 +1,13 @@
 import json
 import re
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
 
+from sqlalchemy import Text, case, cast, literal_column
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
@@ -134,9 +137,7 @@ def dog_session_facts(
         "status": dictionary_service.label_for(
             session, dictionary_service.DOGS_STATUS_KEY, dog.status
         ),
-        "days_since_status": days_since_status(
-            dog.status_at, session_row.created_at
-        ),
+        "days_since_status": days_since_status(dog.status_at, session_row.created_at),
         "weight": dog.weight,
         "height": dog.height,
         "history": dog.history,
@@ -214,18 +215,16 @@ def _scale_bounds(config: object) -> tuple[float, float]:
 def answer_progress(
     session: Session, value: object, config: object, category: object
 ) -> dict[str, Any]:
-    color = dictionary_service.label_for(
-            session,
-            dictionary_service.SURVEYS_QUESTIONS_GROUP_COLOR_KEY,
-            str(category),
-        ) or "var(--bs-blue)"
+    color = dictionary_service.group_color(session, str(category))
     hidden = {"show_bar": False, "percent": 0, "color": color}
     scalar = answer_scalar(value)
     if scalar is None or scalar == "":
         return hidden
+    if not isinstance(scalar, int | float | str):
+        return hidden
     try:
         number = float(scalar)
-    except (TypeError, ValueError):
+    except ValueError:
         return hidden
     if number == MISSING_ANSWER:
         return hidden
@@ -234,10 +233,10 @@ def answer_progress(
     min_value, max_value = _scale_bounds(config)
     span = max_value - min_value - 1
     if span <= 0:
-        percent = 0
+        raw_percent = 0.0
     else:
-        percent = (number - min_value - 1) / span * 100
-    percent = max(0, min(100, round(percent)))
+        raw_percent = (number - min_value - 1) / span * 100
+    percent = max(0, min(100, round(raw_percent)))
     return {"show_bar": True, "percent": percent, "color": color}
 
 
@@ -277,7 +276,7 @@ def get_session_context(
 ) -> SessionContext:
     get_accessible_session(session, session_id, current_user)
     result = session.exec(
-        select(  # type: ignore[call-overload]
+        select(  # type: ignore[call-overload]  # ty: ignore[no-matching-overload]
             SurveySession, Owner, Dog, SurveyVersion, Survey
         )
         .where(SurveySession.id == session_id)
@@ -335,14 +334,7 @@ def group_label(session: Session, code: str | None) -> str:
     text = "" if code is None else str(code)
     if not text:
         return ""
-    return (
-        dictionary_service.label_for(
-            session,
-            dictionary_service.SURVEYS_QUESTIONS_GROUP_KEY,
-            text,
-        )
-        or text
-    )
+    return dictionary_service.group_name(session, text)
 
 
 def session_answer_categories(
@@ -404,20 +396,102 @@ def session_recommendation_counts(
     counts = dict.fromkeys(session_ids, (0, 0))
     if not session_ids:
         return counts
-    statement = (
-        select(
-            SessionRecommendation.session_id,
-            func.count(),
-            func.count(func.distinct(SessionRecommendation.user_id)),
-        )
-        .where(col(SessionRecommendation.session_id).in_(session_ids))
-    )
+    statement = select(
+        SessionRecommendation.session_id,
+        func.count(),
+        func.count(func.distinct(SessionRecommendation.user_id)),
+    ).where(col(SessionRecommendation.session_id).in_(session_ids))
     if not can_manage_all_session_recommendations(current_user):
         statement = statement.where(SessionRecommendation.user_id == current_user.id)
-    rows = session.exec(statement.group_by(SessionRecommendation.session_id)).all()
+    rows = session.exec(statement.group_by(col(SessionRecommendation.session_id))).all()
     for session_id, rec_count, user_count in rows:
         counts[session_id] = (int(rec_count), int(user_count))
     return counts
+
+
+def answer_rates(
+    session: Session, session_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, int | None]:
+    """Share of latest answers that are not the missing-answer marker.
+
+    Computed only for the given sessions (one list page). Sorting the
+    session list by this percent is deferred: it would aggregate
+    answer_events before LIMIT.
+    """
+    rates: dict[uuid.UUID, int | None] = dict.fromkeys(session_ids)
+    if not session_ids:
+        return rates
+    latest = (
+        select(
+            AnswerEvent.surveys_session_id,
+            AnswerEvent.question_id,
+            AnswerEvent.value,
+        )
+        .where(col(AnswerEvent.surveys_session_id).in_(session_ids))
+        .distinct(
+            col(AnswerEvent.surveys_session_id),
+            col(AnswerEvent.question_id),
+        )
+        .order_by(
+            col(AnswerEvent.surveys_session_id),
+            col(AnswerEvent.question_id),
+            col(AnswerEvent.created_at).desc(),
+            col(AnswerEvent.id).desc(),
+        )
+        .subquery()
+    )
+    value_json = cast(latest.c.value, JSONB)
+    value_type = func.jsonb_typeof(value_json)
+    # Stored answers are a bare JSON number. Wrapped {"value": ...} is also accepted.
+    scalar_text = case(
+        (value_type == "number", cast(value_json, Text)),
+        (value_type == "string", value_json.op("#>>")(literal_column("'{}'::text[]"))),
+        (value_type == "object", value_json["value"].astext),
+    )
+    answered = (
+        select(
+            latest.c.surveys_session_id.label("session_id"),
+            func.count().label("answered"),
+        )
+        .where(scalar_text.is_not(None))
+        .where(scalar_text != str(MISSING_ANSWER))
+        .group_by(latest.c.surveys_session_id)
+        .subquery()
+    )
+    totals = (
+        select(
+            SurveyQuestion.survey_version_id,
+            func.count().label("total"),
+        )
+        .where(
+            col(SurveyQuestion.survey_version_id).in_(
+                select(SurveySession.survey_version_id).where(
+                    col(SurveySession.id).in_(session_ids)
+                )
+            )
+        )
+        .group_by(col(SurveyQuestion.survey_version_id))
+        .subquery()
+    )
+    rows = session.exec(
+        select(
+            SurveySession.id,
+            totals.c.total,
+            func.coalesce(answered.c.answered, 0),
+        )
+        .where(col(SurveySession.id).in_(session_ids))
+        .outerjoin(
+            totals,
+            col(SurveySession.survey_version_id) == totals.c.survey_version_id,
+        )
+        .outerjoin(answered, col(SurveySession.id) == answered.c.session_id)
+    ).all()
+    for session_id, total, answered_count in rows:
+        if total is None or int(total) == 0:
+            rates[session_id] = None
+            continue
+        rates[session_id] = round(int(answered_count) * 100 / int(total))
+    return rates
 
 
 def list_catalog_recommendations(session: Session) -> list[Recommendation]:
@@ -532,7 +606,7 @@ def update_session_recommendations(
     *,
     session_id: uuid.UUID,
     current_user: User,
-    updates: list[tuple[uuid.UUID, int, float, str | None]],
+    updates: Sequence[tuple[uuid.UUID, int, float, str | None]],
 ) -> list[SessionRecommendation]:
     get_accessible_session(session, session_id, current_user)
     try:

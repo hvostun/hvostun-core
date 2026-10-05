@@ -5,6 +5,7 @@
 <h1 class="h3">{{ dog.name }}</h1>
 <p class="font-monospace text-muted">{{ dog.id }}</p>
 <form method="post" action="/dogs/{{ dog.id }}" class="mt-3">
+  {% include "csrf.html" %}
   <div class="mb-3">
     <label class="form-label" for="name">Имя</label>
     <input class="form-control" id="name" name="name" required value="{{ form.name }}" />

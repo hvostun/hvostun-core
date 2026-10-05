@@ -77,6 +77,7 @@ def _catalog(
         survey_version_id=version.id,
         question_id=question.id,
         order_num=1,
+        display_num=1,
         user_id=user.id,
     )
     db.add(link)
@@ -187,6 +188,7 @@ def test_version_composition_closes_after_first_session(db: Session) -> None:
             survey_version_id=version.id,
             question_id=second.id,
             order_num=2,
+            display_num=2,
         )
     )
     with pytest.raises(CatalogImmutableError):
@@ -354,6 +356,7 @@ def test_survey_question_accepts_any_group(db: Session) -> None:
         survey_version_id=version.id,
         question_id=extra.id,
         order_num=2,
+        display_num=2,
         group="NotInDictionary",
     )
     db.add(link)
