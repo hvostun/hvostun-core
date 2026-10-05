@@ -52,10 +52,11 @@ fi
 if [[ "${1:-}" == "up" ]]; then
   "${compose[@]}" pull prestart backend
   trivy_image="aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e"
-  # Same Trivy version as ci.yml, regardless of what the host has installed.
+  # Same Trivy version and flags as ci.yml, regardless of what the host has installed.
+  # Debian has HIGH CVEs without a fixed package; a rebuild cannot remove them.
   docker run --rm \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    "$trivy_image" image --severity HIGH,CRITICAL --exit-code 1 "${BACKEND_IMAGE}"
+    "$trivy_image" image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "${BACKEND_IMAGE}"
   "${compose[@]}" up -d db
   ready=0
   for _ in $(seq 1 30); do

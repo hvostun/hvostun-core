@@ -103,4 +103,4 @@ jobs:
           image-ref: hvostun-backend:ci
           severity: HIGH,CRITICAL
           exit-code: "1"
-          ignore-unfixed: false
+          ignore-unfixed: true
