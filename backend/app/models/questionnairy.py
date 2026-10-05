@@ -177,7 +177,7 @@ class SurveyQuestion(CreatedAtMixin, SQLModel, table=True):
         ondelete="RESTRICT",
     )
     order_num: int
-    display_num: int | None = None
+    display_num: int
     group: str = Field(
         default="other",
         sa_column=Column(

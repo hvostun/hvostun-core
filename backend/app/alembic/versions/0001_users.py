@@ -16,7 +16,14 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
+    # The Compose db-roles script creates this extension as a superuser.
+    # hvostun_migrator cannot run CREATE EXTENSION, so skip it when present.
+    bind = op.get_bind()
+    exists = bind.execute(
+        sa.text("SELECT 1 FROM pg_extension WHERE extname = 'uuid-ossp'")
+    ).scalar()
+    if not exists:
+        op.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
     op.create_table(
         "users",
         uuid_pk(),

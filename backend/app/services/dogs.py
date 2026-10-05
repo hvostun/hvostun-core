@@ -32,7 +32,9 @@ def get_dog(session: Session, dog_id: uuid.UUID) -> Dog:
 
 
 def list_shelters(session: Session) -> list[Shelter]:
-    return list(session.exec(select(Shelter).order_by(col(Shelter.name), col(Shelter.id))))
+    return list(
+        session.exec(select(Shelter).order_by(col(Shelter.name), col(Shelter.id)))
+    )
 
 
 def list_owners(session: Session) -> list[Owner]:
@@ -42,9 +44,7 @@ def list_owners(session: Session) -> list[Owner]:
 def list_volunteers(session: Session) -> list[User]:
     return list(
         session.exec(
-            select(User)
-            .where(User.is_active)
-            .order_by(col(User.email), col(User.id))
+            select(User).where(User.is_active).order_by(col(User.email), col(User.id))
         )
     )
 
@@ -100,7 +100,9 @@ def update_dog(
     dog.sex = sex.strip() if sex and sex.strip() else None
     dog.neutered = neutered
     dog.status = status
-    dog.description = description.strip() if description and description.strip() else None
+    dog.description = (
+        description.strip() if description and description.strip() else None
+    )
     dog.shelter_id = shelter_id
     dog.assigned_volunteer_id = assigned_volunteer_id
     dog.owner_id = owner_id

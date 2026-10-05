@@ -6,7 +6,10 @@ set -x
 
 docker compose build
 docker compose down -v --remove-orphans # Remove possibly previous broken stacks left hanging after an error
-docker compose run --rm backend bash scripts/prestart.sh
 docker compose up -d
-docker compose exec -T backend bash scripts/tests-start.sh "$@"
+# Pytest creates hvostun_test and migrates it. The runtime role cannot do that.
+pg_password="$(docker compose exec -T db printenv POSTGRES_PASSWORD | tr -d '\r')"
+docker compose exec -T \
+  -e "DATABASE_URL=postgresql://postgres:${pg_password}@db:5432/hvostun_test" \
+  backend bash scripts/tests-start.sh "$@"
 docker compose down -v --remove-orphans

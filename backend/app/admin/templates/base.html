@@ -33,7 +33,10 @@
           {% endif %}
         </div>
         <span class="navbar-text me-3">{{ user.email }}</span>
-        <a class="btn btn-outline-light btn-sm" href="/logout">Выйти</a>
+        <form method="post" action="/logout" class="d-inline">
+          {% include "csrf.html" %}
+          <button class="btn btn-outline-light btn-sm" type="submit">Выйти</button>
+        </form>
       </div>
     </nav>
     {% endif %}
@@ -43,5 +46,6 @@
       {% endif %}
       {% block content %}{% endblock %}
     </main>
+    <script src="/static/admin.js"></script>
   </body>
 </html>

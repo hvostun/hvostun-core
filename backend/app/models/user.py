@@ -111,5 +111,7 @@ class Consent(SQLModel, table=True):
     )
     user_id: uuid.UUID = Field(foreign_key="users.id", ondelete="RESTRICT")
     type: str = Field(sa_type=Text)
-    accepted_at: datetime = Field(sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    accepted_at: datetime = Field(
+        sa_type=DateTime(timezone=True)  # type: ignore[call-overload]  # ty: ignore[invalid-argument-type]
+    )
     version: str = Field(sa_type=Text)
