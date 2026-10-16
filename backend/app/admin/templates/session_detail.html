@@ -71,6 +71,98 @@
 {% block content %}
 <div class="container-fluid">
   <p><a href="/sessions">← Ответы</a></p>
+  <div class="accordion mb-4" id="recommendations-accordion">
+    <details class="accordion-item" {% if has_my_recommendations %} open{% endif %}>
+      <summary class="accordion-button">Рекомендации</summary>
+      <div class="accordion-body">
+        <h3 class="h6">Добавить рекомендацию</h3>
+        {% if not available_recommendations %}
+        <p class="text-muted">Нет доступных рекомендаций для добавления.</p>
+        {% else %}
+        <form method="post" action="/sessions/{{ session_row.id }}/recommendations" class="row g-2 mb-4">
+          {% include "csrf.html" %}
+          <div class="input-group mb-3">
+            <label class="form-label visually-hidden" for="recomendation_id">Рекомендация</label>
+            <select class="form-select" id="recomendation_id" name="recomendation_id" required>
+              <option value="">Выберите рекомендацию</option>
+              {% for rec in available_recommendations %}
+              <option value="{{ rec.id }}">{{ rec.name }}{% if rec.slug %} · {{ rec.slug }}{% endif %}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-outline-primary" type="submit">Добавить</button>
+          </div>
+        </form>
+        {% endif %}
+        <h3 class="h6 mt-3">Назначенные</h3>
+        {% if not rec_groups %}
+        <p class="text-muted">Нет рекомендаций.</p>
+        {% else %}
+        <form method="post" action="/sessions/{{ session_row.id }}/recommendations/save">
+          {% include "csrf.html" %}
+          {% for group in rec_groups %}
+          {% for item in group.recommendations %}
+          <div class="card mb-2">
+            <div class="card-body">
+              <input type="hidden" name="recommendation_id" value="{{ item.id }}" />
+              <div class="row">
+                <div class="col-sm-12">
+                  <h3 class="h6 mb-3">{{ item.recommendation_name }}: {{ item.recommendation_text }}</h3>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-sm-2">
+                  <div class="mb-3">
+                    <label class="form-label" for="chart_number-{{ item.id }}">Важность</label>
+                    <select class="form-select" id="chart_number-{{ item.id }}" name="chart_number">
+                      <option value="0">Высокая</option>
+                      <option value="1">Средняя</option>
+                      <option value="2">Низкая</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="col-sm-3">
+                  <div class="mb-3">
+                    <div class="row">
+                      <label class="form-label" for="weight-{{ item.id }}">Критичность: <span
+                          id="weight-value-{{ item.id }}">{{
+                          item.weight }}</span></label>
+                    </div>
+                    <div class="row">
+                      <input type="range" id="weight-{{ item.id }}" name="weight" min="0" max="1" step="0.1"
+                        value="{{ item.weight }}" data-weight-output="weight-value-{{ item.id }}" />
+                    </div>
+                  </div>
+                </div>
+                <div class="col-sm-7">
+                  <div class="mb-6">
+                    <label class="form-label" for="comment-{{ item.id }}">Комментарий</label>
+                    <textarea class="form-control" id="comment-{{ item.id }}" name="comment"
+                      rows="2">{{ item.comment or "" }}</textarea>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-sm-10">
+                  Автор рекомендации: {{ item.author_name }}
+                </div>
+                <div class="col-sm-2">
+                  {% if item.user_id == user.id or can_manage_all_recommendations %}
+                  <button class="btn btn-danger" type="submit"
+                    formaction="/sessions/{{ session_row.id }}/recommendations/{{ item.id }}/delete" formmethod="post"
+                    data-confirm="Удалить рекомендацию?">Удалить</button>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+          {% endfor %}
+          <button class="btn btn-primary" type="submit">Сохранить</button>
+        </form>
+        {% endif %}
+      </div>
+    </details>
+  </div>
   <dl class="row mb-0">
     <div class="row">
       <div class="col-sm-5">
@@ -100,21 +192,27 @@
 </div>
 <div class="col-sm-7">
   <h2 class="h5 mt-4">Вопросы и ответы</h2>
-  {% if has_domains %}
   <p class="mb-3">
+    {% if has_domains %}
     {% if view == "domains" %}
     <span class="fw-semibold">По доменам</span>
     {% else %}
     <a href="/sessions/{{ session_row.id }}?view=domains">По доменам</a>
     {% endif %}
     ·
+    {% endif %}
     {% if view == "flat" %}
     <span class="fw-semibold">Все вопросы</span>
     {% else %}
     <a href="/sessions/{{ session_row.id }}?view=flat">Все вопросы</a>
     {% endif %}
+    ·
+    {% if view == "summary" %}
+    <span class="fw-semibold">Сводка</span>
+    {% else %}
+    <a href="/sessions/{{ session_row.id }}?view=summary">Сводка</a>
+    {% endif %}
   </p>
-  {% endif %}
   {% if view == "flat" %}
   <form class="row g-2 mb-3" method="get" action="/sessions/{{ session_row.id }}">
     <input type="hidden" name="view" value="flat" />
@@ -158,93 +256,76 @@
   </div>
 </details>
 {% endif %}
+{% elif view == "summary" %}
+{% if summary_source == "gigachat" and summary_text.narrative %}
+{% if summary_facts and summary_facts.red_flags %}
+<div class="alert alert-danger">
+  <div class="fw-semibold mb-2">Тревожные сигналы</div>
+  <ul class="mb-0">
+    {% for item in summary_facts.red_flags %}
+    <li>
+      {{ item.text }}
+      {% if item.refs %}
+      <span class="small text-muted">
+        ({% for ref in item.refs %}<a href="/sessions/{{ session_row.id }}?view=flat">п. {{ ref }}</a>{% if not
+        loop.last %}, {% endif %}{% endfor %})
+      </span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+<div class="card mb-3">
+  <div class="card-body">
+    <h3 class="h6">Рассказ для эксперта</h3>
+    {% if summary_facts and summary_facts.dog %}
+    <p class="small text-muted mb-2">{{ summary_facts.dog | join(" · ") }}</p>
+    {% endif %}
+    <p class="mb-0" style="white-space: pre-wrap;">{{ summary_text.narrative }}</p>
+  </div>
+</div>
+{% if summary_facts and summary_facts.gaps %}
+<div class="mb-3">
+  <h3 class="h6 text-muted">Нет данных</h3>
+  <ul class="text-muted">
+    {% for gap in summary_facts.gaps %}
+    <li>{{ gap }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endif %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+  {% if summary_source == "gigachat" and summary_meta %}
+  <span class="small text-muted">
+    Черновик, сгенерирован {{ summary_meta.model }}{% if summary_meta.generated_at %}, {{
+    summary_meta.generated_at.strftime("%d.%m.%Y") }}{% endif %}
+  </span>
+  {% endif %}
+  {% if can_generate_summary %}
+  <form method="post" action="/sessions/{{ session_row.id }}/summary"
+    class="ms-auto d-flex flex-wrap align-items-center gap-2">
+    {% include "csrf.html" %}
+    {% if gigachat_models %}
+    <label class="form-label visually-hidden" for="gigachat_model">Модель</label>
+    <select class="form-select form-select-sm" id="gigachat_model" name="model" style="width: auto;">
+      {% for item in gigachat_models %}
+      <option value="{{ item.id }}" {% if item.id==gigachat_default_model %}selected{% endif %}>{{ item.label }}
+      </option>
+      {% endfor %}
+    </select>
+    {% endif %}
+    <button class="btn btn-primary btn-sm" type="submit">
+      {% if summary_source == "gigachat" %}Обновить{% else %}Сформировать текст GigaChat{% endif %}
+    </button>
+  </form>
+  {% endif %}
+</div>
 {% elif not answers %}
 <p class="text-muted">{% if has_questions %}Нет вопросов по фильтру.{% else %}Нет вопросов.{% endif %}</p>
 {% else %}
 {{ answer_table(answers) }}
-{% endif %}<h3 class="h6 mt-4">Добавить рекомендацию</h3>
-{% if not available_recommendations %}
-<p class="text-muted">Нет доступных рекомендаций для добавления.</p>
-{% else %}
-<form method="post" action="/sessions/{{ session_row.id }}/recommendations" class="mt-2">
-  {% include "csrf.html" %}
-  <div class="mb-3">
-    <label class="form-label" for="recomendation_id">Рекомендация</label>
-    <select class="form-select" id="recomendation_id" name="recomendation_id" required>
-      <option value="">Выберите рекомендацию</option>
-      {% for rec in available_recommendations %}
-      <option value="{{ rec.id }}">{{ rec.name }}{% if rec.slug %} · {{ rec.slug }}{% endif %}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <button class="btn btn-primary" type="submit">Добавить</button>
-</form>
-{% endif %}
-<h2 class="h5 mt-4">Рекомендации</h2>
-{% if not rec_groups %}
-<p class="text-muted">Нет рекомендаций.</p>
-{% else %}
-<form method="post" action="/sessions/{{ session_row.id }}/recommendations/save">
-  {% include "csrf.html" %}
-  {% for group in rec_groups %}
-  {% for item in group.recommendations %}
-  <div class="card mb-2">
-    <div class="card-body">
-      <input type="hidden" name="recommendation_id" value="{{ item.id }}" />
-      <div class="row">
-        <div class="col-sm-12">
-          <h3 class="h6 mb-3">{{ item.recommendation_name }}: {{ item.recommendation_text }}</h3>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col-sm-2">
-          <div class="mb-3">
-            <label class="form-label" for="chart_number-{{ item.id }}">Важность</label>
-            <select class="form-select" id="chart_number-{{ item.id }}" name="chart_number">
-              <option value="0">Высокая</option>
-              <option value="1">Средняя</option>
-              <option value="2">Низкая</option>
-            </select>
-          </div>
-        </div>
-        <div class="col-sm-3">
-          <div class="mb-3">
-            <div class="row">
-              <label class="form-label" for="weight-{{ item.id }}">Критичность: <span id="weight-value-{{ item.id }}">{{
-                  item.weight }}</span></label>
-            </div>
-            <div class="row">
-              <input type="range" id="weight-{{ item.id }}" name="weight" min="0" max="1" step="0.1"
-                value="{{ item.weight }}" data-weight-output="weight-value-{{ item.id }}" />
-            </div>
-          </div>
-        </div>
-        <div class="col-sm-7">
-          <div class="mb-6">
-            <label class="form-label" for="comment-{{ item.id }}">Комментарий</label>
-            <textarea class="form-control" id="comment-{{ item.id }}" name="comment"
-              rows="2">{{ item.comment or "" }}</textarea>
-          </div>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col-sm-10">
-          Автор рекомендации: {{ item.author_name }}
-        </div>
-        <div class="col-sm-2">
-          {% if item.user_id == user.id or can_manage_all_recommendations %}
-          <button class="btn btn-danger" type="submit"
-            formaction="/sessions/{{ session_row.id }}/recommendations/{{ item.id }}/delete" formmethod="post"
-            data-confirm="Удалить рекомендацию?">Удалить</button>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-  {% endfor %}
-  {% endfor %}
-  <button class="btn btn-primary" type="submit">Сохранить</button>
-</form>
 {% endif %}
 
 </div>

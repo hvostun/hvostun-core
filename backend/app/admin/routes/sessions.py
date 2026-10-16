@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Any
 
@@ -5,21 +6,17 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
-from app.admin.deps import CurrentUser, SessionDep, SuperUser
+from app.admin.deps import AdminUser, CurrentUser, SessionDep, SuperUser, is_admin
 from app.admin.templating import PAGE_SIZE, cell, filter_qs, list_context, templates
-from app.models import (
-    AnswerEvent,
-    Dog,
-    Owner,
-    SessionRecommendation,
-    Survey,
-    SurveySession,
-    SurveyVersion,
-)
+from app.core.config import settings
+from app.models import AnswerEvent, Dog, SessionRecommendation, SurveySession
 from app.pagination import execute_page, page_window
+from app.services import dictionaries as dictionary_service
 from app.services import scoring as scoring_service
 from app.services import sessions as session_service
+from app.services import summary as summary_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -83,21 +80,12 @@ def sessions_page(
     ).subquery()
     count_stmt = select(func.count()).select_from(SurveySession)
     stmt = (
-        select(  # type: ignore[call-overload]  # ty: ignore[no-matching-overload]
+        select(
             SurveySession,
-            Owner,
             Dog,
-            SurveyVersion,
-            Survey,
             my_recommendation,
         )
-        .join(Owner, col(SurveySession.owner_id) == Owner.id)
         .join(Dog, col(SurveySession.dog_id) == Dog.id)
-        .join(
-            SurveyVersion,
-            col(SurveySession.survey_version_id) == SurveyVersion.id,
-        )
-        .join(Survey, col(SurveyVersion.survey_id) == Survey.id)
         .outerjoin(
             recommendation_users_subquery,
             col(SurveySession.id) == recommendation_users_subquery.c.session_id,
@@ -122,7 +110,9 @@ def sessions_page(
         limit=limit,
     )
     page_ids = [row.id for row, *_ in rows]
-    rec_counts = session_service.session_recommendation_counts(session, page_ids, user)
+    user_counts = session_service.session_recommendation_user_counts(
+        session, page_ids, user
+    )
     rates = session_service.answer_rates(session, page_ids)
     return templates.TemplateResponse(
         request,
@@ -133,21 +123,13 @@ def sessions_page(
             title="Ответы",
             columns=[
                 {"key": "dog", "label": "Собака"},
-                {"key": "status", "label": "status"},
-                {"key": "owner", "label": "Заполнил"},
-                {"key": "survey", "label": "Анкета"},
                 {"key": "answer_rate", "label": "Ответов, %"},
-                {"key": "recommendations", "label": "Рекомендации (кол-во)"},
                 {
                     "key": "users",
                     "label": (
-                        "Пользователи (кол-во) ↑"
+                        "Оценили ↑"
                         if users_sort == "asc"
-                        else (
-                            "Пользователи (кол-во) ↓"
-                            if users_sort == "desc"
-                            else "Пользователи (кол-во)"
-                        )
+                        else ("Оценили ↓" if users_sort == "desc" else "Оценили")
                     ),
                     "sort_href": (
                         "?"
@@ -167,7 +149,7 @@ def sessions_page(
                 },
                 {
                     "key": "has_mine",
-                    "label": "Моя рекомендация",
+                    "label": "Моя оценка",
                     "type": "checkbox",
                 },
             ],
@@ -176,18 +158,14 @@ def sessions_page(
                     "href": f"/sessions/{row.id}",
                     "cells": {
                         "dog": cell(dog.name),
-                        "status": cell(row.status),
-                        "owner": cell(owner.name),
-                        "survey": f"{survey.name} · v{version.version_num}",
                         "answer_rate": (
-                            "—" if rates[row.id] is None else cell(rates[row.id])
+                            "—" if rates[row.id] is None else cell(rates[row.id]) + " %"
                         ),
-                        "recommendations": cell(rec_counts[row.id][0]),
-                        "users": cell(rec_counts[row.id][1]),
+                        "users": cell(user_counts[row.id]),
                         "has_mine": has_mine,
                     },
                 }
-                for row, owner, dog, version, survey, has_mine in rows
+                for row, dog, has_mine in rows
             ],
             count=count,
             page=page,
@@ -195,7 +173,7 @@ def sessions_page(
                 {
                     "name": "mine",
                     "type": "select",
-                    "label": "Моя рекомендация",
+                    "label": "Моя оценка",
                     "value": mine,
                     "options": [
                         {"value": "no", "label": "Без моей рекомендации"},
@@ -248,11 +226,11 @@ def answer_events_page(
             user=user,
             title="События ответов",
             columns=[
-                {"key": "id", "label": "id"},
-                {"key": "surveys_session_id", "label": "session"},
-                {"key": "question_id", "label": "question"},
-                {"key": "value", "label": "value"},
-                {"key": "created_at", "label": "created_at"},
+                {"key": "id", "label": "Идентификатор"},
+                {"key": "surveys_session_id", "label": "Сессия"},
+                {"key": "question_id", "label": "Вопрос"},
+                {"key": "value", "label": "Значение"},
+                {"key": "created_at", "label": "Создано"},
             ],
             rows=[
                 {
@@ -272,17 +250,17 @@ def answer_events_page(
             filters=[
                 {
                     "name": "surveys_session_id",
-                    "label": "session",
+                    "label": "Сессия",
                     "value": surveys_session_id,
                 },
                 {
                     "name": "survey_version_id",
-                    "label": "version",
+                    "label": "Версия анкеты",
                     "value": survey_version_id,
                 },
                 {
                     "name": "question_id",
-                    "label": "question",
+                    "label": "Вопрос",
                     "value": question_id,
                 },
             ],
@@ -296,9 +274,63 @@ def answer_events_page(
 
 
 def _active_view(requested: str, has_domains: bool) -> str:
+    if requested == "summary":
+        return "summary"
     if not has_domains or requested == "flat":
         return "flat"
     return "domains"
+
+
+def _summary_context(
+    session: SessionDep,
+    context: session_service.SessionContext,
+    answers: list[session_service.SessionAnswer],
+    scoring: scoring_service.DomainScoring | None,
+) -> dict[str, Any]:
+    dog_facts = session_service.dog_session_facts(session, context.dog, context.row)
+    facts = summary_service.build_facts(session, scoring, answers, dog_facts)
+    anonymized = summary_service.anonymize_history(
+        dog_facts.get("history") if isinstance(dog_facts.get("history"), str) else None,
+        context.owner,
+        context.dog,
+    )
+    stored = summary_service.parse_stored_summary(context.row.summary)
+    if stored is not None:
+        summary_text = {"narrative": stored.narrative}
+        summary_source = "gigachat"
+        summary_meta = {
+            "model": stored.model,
+            "generated_at": stored.generated_at,
+        }
+        summary_facts = {
+            "red_flags": [
+                {"text": item.text, "refs": list(item.refs)} for item in facts.red_flags
+            ],
+            "gaps": list(facts.gaps),
+            "dog": list(facts.dog),
+            "overview": list(facts.overview),
+        }
+    else:
+        summary_text = {"narrative": ""}
+        summary_source = "rules"
+        summary_meta = None
+        summary_facts = {
+            "red_flags": [],
+            "gaps": [],
+            "dog": [],
+            "overview": [],
+        }
+    return {
+        "summary_facts": summary_facts,
+        "summary_text": summary_text,
+        "summary_source": summary_source,
+        "summary_meta": summary_meta,
+        "gigachat_enabled": settings.gigachat_enabled,
+        "can_generate_summary": False,
+        "gigachat_models": [],
+        "gigachat_default_model": settings.GIGACHAT_MODEL,
+        "anonymized_history": anonymized,
+    }
 
 
 def _session_detail_response(
@@ -336,6 +368,36 @@ def _session_detail_response(
         session_id=session_id,
         user_id=user.id,
     )
+    dog_facts = session_service.dog_session_facts(session, context.dog, context.row)
+    can_generate_summary = settings.gigachat_enabled and is_admin(user)
+    gigachat_models = dictionary_service.list_gigachat_models(session)
+    summary_ctx = (
+        _summary_context(session, context, answers, scoring)
+        if active_view == "summary"
+        else {
+            "summary_facts": None,
+            "summary_text": None,
+            "summary_source": "rules",
+            "summary_meta": None,
+            "gigachat_enabled": settings.gigachat_enabled,
+            "can_generate_summary": False,
+            "gigachat_models": [],
+            "gigachat_default_model": settings.GIGACHAT_MODEL,
+        }
+    )
+    if active_view == "summary":
+        summary_ctx = {
+            **summary_ctx,
+            "can_generate_summary": can_generate_summary,
+            "gigachat_models": [
+                {
+                    "id": model_id,
+                    "label": dictionary_service.gigachat_model_label(session, model_id),
+                }
+                for model_id in gigachat_models
+            ],
+            "gigachat_default_model": settings.GIGACHAT_MODEL,
+        }
     return templates.TemplateResponse(
         request,
         "session_detail.html",
@@ -344,7 +406,7 @@ def _session_detail_response(
             "session_row": context.row,
             "survey": context.survey,
             "version": context.version,
-            "dog": session_service.dog_session_facts(session, context.dog, context.row),
+            "dog": dog_facts,
             "answers": [scoring_service.answer_row(session, item) for item in filtered],
             "view": active_view,
             "has_domains": scoring is not None,
@@ -359,11 +421,17 @@ def _session_detail_response(
             "unanswered_filter": session_service.UNANSWERED_FILTER,
             "has_questions": bool(answers),
             "rec_groups": rec_groups,
+            "has_my_recommendations": any(
+                item["user_id"] == user.id
+                for group in rec_groups
+                for item in group["recommendations"]
+            ),
             "can_manage_all_recommendations": (
                 session_service.can_manage_all_session_recommendations(user)
             ),
             "available_recommendations": available,
             "error": error,
+            **summary_ctx,
         },
         status_code=status_code,
     )
@@ -388,6 +456,74 @@ def session_detail(
         answer=answer,
         view=view,
     )
+
+
+@router.post("/sessions/{session_id}/summary")
+def generate_session_summary(
+    request: Request,
+    session: SessionDep,
+    user: AdminUser,
+    session_id: uuid.UUID,
+    model: str = Form(""),
+) -> Any:
+    if not settings.gigachat_enabled:
+        return _session_detail_response(
+            request,
+            session,
+            user,
+            session_id,
+            view="summary",
+            error="GigaChat не настроен",
+            status_code=400,
+        )
+    try:
+        context = session_service.get_session_context(session, session_id, user)
+    except session_service.SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    allowed = dictionary_service.list_gigachat_models(session)
+    chosen = model.strip()
+    if chosen and chosen not in allowed:
+        return _session_detail_response(
+            request,
+            session,
+            user,
+            session_id,
+            view="summary",
+            error="Неизвестная модель GigaChat",
+            status_code=400,
+        )
+    outcome = summary_service.generate_and_store_summary(
+        session,
+        context,
+        generated_by=user.id,
+        force=True,
+        model=chosen or None,
+    )
+    if outcome.status == "error":
+        logger.warning(
+            "session summary failed session_id=%s detail=%s",
+            session_id,
+            outcome.detail,
+        )
+        if outcome.detail.startswith("GigaChat"):
+            error = outcome.detail
+            status_code = 502
+        elif outcome.detail == "ответ не прошёл проверку":
+            error = "Сводку не удалось проверить"
+            status_code = 400
+        else:
+            error = outcome.detail
+            status_code = 400
+        return _session_detail_response(
+            request,
+            session,
+            user,
+            session_id,
+            view="summary",
+            error=error,
+            status_code=status_code,
+        )
+    return RedirectResponse(f"/sessions/{session_id}?view=summary", status_code=303)
 
 
 @router.post("/sessions/{session_id}/recommendations")

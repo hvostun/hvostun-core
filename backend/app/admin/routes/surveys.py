@@ -53,11 +53,11 @@ def surveys_page(
             user=user,
             title="Анкеты",
             columns=[
-                {"key": "id", "label": "id"},
-                {"key": "name", "label": "name"},
-                {"key": "slug", "label": "slug"},
+                {"key": "id", "label": "Идентификатор"},
+                {"key": "name", "label": "Название"},
+                {"key": "slug", "label": "Код"},
                 {"key": "version", "label": "Версия"},
-                {"key": "description", "label": "description"},
+                {"key": "description", "label": "Описание"},
             ],
             rows=[
                 {
@@ -75,8 +75,8 @@ def surveys_page(
             count=count,
             page=page,
             filters=[
-                {"name": "name", "label": "name", "value": name},
-                {"name": "slug", "label": "slug", "value": slug},
+                {"name": "name", "label": "Название", "value": name},
+                {"name": "slug", "label": "Код", "value": slug},
             ],
             filter_values={"name": name, "slug": slug},
         ),
@@ -177,8 +177,8 @@ def _survey_detail_response(
                 sort,
             ),
             "sort": _active_sort(sort),
-            "order_sort": _sort_header("order", "order", sort),
-            "display_sort": _sort_header("display_num", "display", sort),
+            "order_sort": _sort_header("Порядок", "order", sort),
+            "display_sort": _sort_header("Номер", "display", sort),
         },
         status_code=status_code,
     )

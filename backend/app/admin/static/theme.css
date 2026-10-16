@@ -131,3 +131,24 @@ body {
 .text-muted {
   color: var(--muted-foreground) !important;
 }
+
+details.accordion-item > summary.accordion-button {
+  list-style: none;
+  cursor: pointer;
+}
+
+details.accordion-item > summary.accordion-button::-webkit-details-marker {
+  display: none;
+}
+
+details.accordion-item:not([open]) > summary.accordion-button {
+  color: var(--bs-accordion-btn-color);
+  background-color: var(--bs-accordion-btn-bg);
+  box-shadow: none;
+  border-radius: var(--bs-accordion-inner-border-radius);
+}
+
+details.accordion-item:not([open]) > summary.accordion-button::after {
+  background-image: var(--bs-accordion-btn-icon);
+  transform: none;
+}

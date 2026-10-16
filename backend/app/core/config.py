@@ -92,6 +92,20 @@ class Settings(BaseSettings):
     def emails_enabled(self) -> bool:
         return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
 
+    GIGACHAT_AUTH_KEY: str | None = None
+    GIGACHAT_SCOPE: str = "GIGACHAT_API_PERS"
+    GIGACHAT_MODEL: str = "GigaChat-2-Max"
+    GIGACHAT_BASE_URL: str = "https://api.giga.chat/v1"
+    GIGACHAT_OAUTH_URL: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+    # PEM with the Russian Trusted Root CA; GigaChat OAuth is signed by it.
+    GIGACHAT_CA_BUNDLE: str | None = None
+    GIGACHAT_TIMEOUT_SECONDS: float = 60.0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def gigachat_enabled(self) -> bool:
+        return bool(self.GIGACHAT_AUTH_KEY)
+
     EMAIL_TEST_USER: EmailStr = "test@example.com"
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str

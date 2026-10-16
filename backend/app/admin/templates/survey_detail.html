@@ -20,9 +20,9 @@
       <tr>
         <th><a href="{{ order_sort.href }}">{{ order_sort.label }}</a></th>
         <th><a href="{{ display_sort.href }}">{{ display_sort.label }}</a></th>
-        <th>group</th>
-        <th>text</th>
-        <th>scale_name</th>
+        <th>Группа</th>
+        <th>Вопрос</th>
+        <th>Шкала</th>
       </tr>
     </thead>
     <tbody>
@@ -34,11 +34,11 @@
         </td>
         <td>
           <input class="form-control form-control-sm" name="display_num" inputmode="numeric" required
-            value="{{ item.display_num }}" aria-label="display_num" />
+            value="{{ item.display_num }}" aria-label="Номер" />
         </td>
         <td>
           <input class="form-control form-control-sm" name="group" required value="{{ item.group }}"
-            aria-label="group" />
+            aria-label="Группа" />
         </td>
         <td>{{ item.text }}</td>
         <td>{{ item.scale_name }}</td>
@@ -54,11 +54,11 @@
 <table class="table table-sm table-striped">
   <thead>
     <tr>
-      <th>order</th>
-      <th>display_num</th>
-      <th>group</th>
-      <th>text</th>
-      <th>scale_name</th>
+      <th>Порядок</th>
+      <th>Номер</th>
+      <th>Группа</th>
+      <th>Вопрос</th>
+      <th>Шкала</th>
     </tr>
   </thead>
   <tbody>

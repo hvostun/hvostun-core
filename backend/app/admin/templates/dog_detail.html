@@ -92,9 +92,9 @@
 <dl class="row mt-4 text-muted">
   <dt class="col-sm-3">Создал</dt>
   <dd class="col-sm-9">{% if created_by %}{{ created_by.full_name or created_by.email }}{% else %}—{% endif %}</dd>
-  <dt class="col-sm-3">created_at</dt>
+  <dt class="col-sm-3">Создано</dt>
   <dd class="col-sm-9">{{ dog.created_at or "—" }}</dd>
-  <dt class="col-sm-3">updated_at</dt>
+  <dt class="col-sm-3">Изменено</dt>
   <dd class="col-sm-9">{{ dog.updated_at or "—" }}</dd>
 </dl>
 {% endblock %}

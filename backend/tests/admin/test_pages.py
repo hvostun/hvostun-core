@@ -276,20 +276,20 @@ def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> N
     )
     sessions = client.get("/sessions")
     assert sessions.status_code == 200
-    assert "Моя рекомендация" in sessions.text
+    assert "Моя оценка" in sessions.text
     assert "Собака" in sessions.text
-    assert "Анкета" in sessions.text
-    assert "Рекомендации" in sessions.text
-    assert "Пользователи" in sessions.text
-    assert owner.name in sessions.text
+    assert "Оценили" in sessions.text
+    for removed in ("Статус", "Заполнил", "Анкета", "Рекомендации (кол-во)"):
+        assert f"<th>{removed}</th>" not in sessions.text
+    assert owner.name not in sessions.text
+    assert "C-BARQ Sessions" not in sessions.text
     assert "Rex Sessions" in sessions.text
-    assert "C-BARQ Sessions" in sessions.text
     assert str(session_row.id) in sessions.text
     assert str(user.id) not in sessions.text
     assert str(dog.id) not in sessions.text
     assert str(survey.id) not in sessions.text
     assert re.search(
-        r"C-BARQ Sessions · v1\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*0\s*</td>\s*<td>\s*0\s*</td>",
+        r"Rex Sessions</a>\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*0\s*</td>",
         sessions.text,
     )
 
@@ -396,7 +396,7 @@ def test_sessions_page_shows_recommendation_counts(
     assert sessions.status_code == 200
     assert "Rex Rec Counts" in sessions.text
     assert re.search(
-        r"C-BARQ Rec Counts · v1\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*3\s*</td>\s*<td>\s*2\s*</td>",
+        r"Rex Rec Counts</a>\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*2\s*</td>",
         sessions.text,
     )
     assert 'name="has_my_recommendation"' not in sessions.text
@@ -520,7 +520,8 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
     assert 'value="other"' in page.text
     assert "Обычно" in page.text
     assert "progress-bar" in page.text
-    assert "width: 75%" in page.text
+    assert "width: 70%" in page.text
+    assert re.search(r'aria-valuemax="100">7\s*</div>', page.text)
     assert "var(--bs-blue)" in page.text
     assert "Значение" in page.text
     assert "<td>1</td>" in page.text
@@ -670,8 +671,10 @@ def test_session_detail_filters_questions_by_category_and_answer(
     assert by_category.status_code == 200
     assert "Лает на гостей?" in by_category.text
     assert "Рычит на собак?" not in by_category.text
+    assert '<option value="7"' in page.text
+    assert '<option value="3"' not in page.text
     by_answer = client.get(
-        f"/sessions/{session_row.id}", params={"view": "flat", "answer": "3"}
+        f"/sessions/{session_row.id}", params={"view": "flat", "answer": "7"}
     )
     assert "Лает на гостей?" in by_answer.text
     assert "Рычит на собак?" not in by_answer.text
@@ -836,7 +839,7 @@ def test_users_page_shows_group(client: TestClient, db: Session) -> None:
     _login_superuser(client)
     page = client.get("/users")
     assert page.status_code == 200
-    assert ">group<" in page.text
+    assert ">Группа<" in page.text
     assert "expert" in page.text
     assert "Создать администратора" in page.text
     assert f"/users/{current.id}" in page.text
@@ -910,7 +913,7 @@ def test_admin_can_manage_regular_users_but_cannot_grant_superuser(
         },
     )
     assert blocked.status_code == 403
-    assert "Только superuser" in blocked.text
+    assert "Только суперпользователь" in blocked.text
 
 
 def test_user_create_and_update(client: TestClient, db: Session) -> None:
@@ -1010,7 +1013,7 @@ def test_user_update_rejects_self_demote(client: TestClient, db: Session) -> Non
         },
     )
     assert response.status_code == 400
-    assert "superuser" in response.text
+    assert "Нельзя снять у себя флаг суперпользователя" in response.text
     db.refresh(current)
     assert current.is_superuser is True
 
@@ -1075,7 +1078,11 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     page = client.get(f"/sessions/{session_row.id}")
     assert page.status_code == 200
     assert "Добавить рекомендацию" in page.text
+    assert page.text.index("Добавить рекомендацию") < page.text.index(
+        "Вопросы и ответы"
+    )
     assert recommendation.name in page.text
+    assert '<details class="accordion-item">' in page.text
 
     response = post(
         client,
@@ -1109,6 +1116,49 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert "приоритет на первую неделю" in detail.text
     assert f"Автор рекомендации: {user.full_name or user.email}" in detail.text
     assert f'value="{recommendation.id}"' not in detail.text
+    assert '<details class="accordion-item" open>' in detail.text
+
+
+def test_session_recommendations_sorted_by_id_desc_and_collapsed_without_mine(
+    client: TestClient, db: Session
+) -> None:
+    session_row, first, _user = _session_with_recommendation_catalog(db)
+    second = Recommendation(
+        name="Длинная прогулка",
+        slug=f"long-walk-{random_lower_string()}",
+        text="Выходите на час.",
+    )
+    db.add(second)
+    db.commit()
+    db.refresh(second)
+    other = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"other-{random_lower_string()}@example.com",
+            password=f"Oth3r-{random_lower_string()[:8]}",
+            group=UserGroup.EXPERT,
+        ),
+    )
+    for rec_id, catalog in (
+        (uuid.UUID(int=1), first),
+        (uuid.UUID(int=2), second),
+    ):
+        db.add(
+            SessionRecommendation(
+                id=rec_id,
+                user_id=other.id,
+                session_id=session_row.id,
+                recomendation_id=catalog.id,
+                chart_number=0,
+                weight=1.0,
+            )
+        )
+    db.commit()
+    _login_superuser(client)
+    page = client.get(f"/sessions/{session_row.id}")
+    assert page.status_code == 200
+    assert page.text.index("Длинная прогулка:") < page.text.index("Короткая прогулка:")
+    assert '<details class="accordion-item">' in page.text
 
 
 def test_session_recommendation_rejects_duplicate(
@@ -1377,6 +1427,17 @@ def test_expert_access_matrix(client: TestClient, db: Session) -> None:
     assert 'href="/dogs"' not in home.text
     assert 'href="/recommendations"' not in home.text
     assert 'href="/users"' not in home.text
+    assert "экспертный контур Hvostun.pro для разметки данных" in home.text
+    assert "Сводка" in home.text
+    assert "Рассказ для эксперта" in home.text
+    assert "вкладка пустая" in home.text
+    assert "только администратор" in home.text
+    assert "gigachat::models" in home.text
+    assert "Сформировать текст GigaChat" in home.text
+    assert "прошлое до семьи" in home.text
+    assert "шкале эксперта от 0 до 10" in home.text
+    assert 'href="https://hvostun.com"' in home.text
+
 
 
 def test_admin_access_matrix(client: TestClient, db: Session) -> None:
@@ -1468,7 +1529,7 @@ def test_admin_can_create_and_edit_recommendation(
         },
     )
     assert duplicate.status_code == 400
-    assert "slug" in duplicate.text
+    assert "Такой код уже есть" in duplicate.text
     missing = post(
         client,
         "/recommendations/new",
@@ -1607,11 +1668,75 @@ def test_dictionaries_page_lists_and_opens_row(client: TestClient, db: Session) 
     assert "Справочники" in page.text
     assert key in page.text
     assert f"/dictionaries/{key}" in page.text
+    assert 'href="/dictionaries/new"' in page.text
     detail = client.get(f"/dictionaries/{key}")
     assert detail.status_code == 200
     assert key in detail.text
     assert "сука" in detail.text
     assert "Сохранить" in detail.text
+
+
+def test_dictionary_can_be_created(client: TestClient, db: Session) -> None:
+    _login_superuser(client)
+    form = client.get("/dictionaries/new")
+    assert form.status_code == 200
+    assert "Новый справочник" in form.text
+    assert "Создать" in form.text
+    key = f"ns::{random_lower_string()}"
+    response = post(
+        client,
+        "/dictionaries/new",
+        data={"key": key, "value": '["GigaChat-2-Pro", "GigaChat"]'},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/dictionaries/{key}"
+    row = db.get(Dictionary, key)
+    assert row is not None
+    assert row.value == ["GigaChat-2-Pro", "GigaChat"]
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    assert user
+    assert row.created_by == user.id
+    assert row.updated_by == user.id
+
+
+def test_dictionary_create_rejects_duplicate_and_invalid_json(
+    client: TestClient, db: Session
+) -> None:
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    assert user
+    key = f"ns::{random_lower_string()}"
+    db.add(
+        Dictionary(
+            key=key,
+            value={},
+            created_by=user.id,
+            updated_by=user.id,
+        )
+    )
+    db.commit()
+    _login_superuser(client)
+    duplicate = post(
+        client,
+        "/dictionaries/new",
+        data={"key": key, "value": "{}"},
+    )
+    assert duplicate.status_code == 400
+    assert "уже есть" in duplicate.text
+    invalid = post(
+        client,
+        "/dictionaries/new",
+        data={"key": f"new::{random_lower_string()}", "value": "{not json"},
+    )
+    assert invalid.status_code == 400
+    assert "Некорректный JSON" in invalid.text
+    bad_key = post(
+        client,
+        "/dictionaries/new",
+        data={"key": "bad key", "value": "{}"},
+    )
+    assert bad_key.status_code == 400
+    assert "Ключ" in bad_key.text
 
 
 def test_dictionary_can_be_updated(client: TestClient, db: Session) -> None:
@@ -1709,20 +1834,20 @@ def test_survey_detail_sorts_questions_by_display_num(
     assert page.text.index("Показывается первым") < page.text.index(
         "Показывается вторым"
     )
-    assert "display_num ↑" in page.text
+    assert "Номер ↑" in page.text
     by_order = client.get(f"/surveys/{survey.id}?sort=order")
     assert by_order.status_code == 200
-    assert "order ↑" in by_order.text
+    assert "Порядок ↑" in by_order.text
     assert by_order.text.index("Показывается вторым") < by_order.text.index(
         "Показывается первым"
     )
     by_order_desc = client.get(f"/surveys/{survey.id}?sort=-order")
-    assert "order ↓" in by_order_desc.text
+    assert "Порядок ↓" in by_order_desc.text
     assert by_order_desc.text.index("Показывается первым") < by_order_desc.text.index(
         "Показывается вторым"
     )
     by_display_desc = client.get(f"/surveys/{survey.id}?sort=-display")
-    assert "display_num ↓" in by_display_desc.text
+    assert "Номер ↓" in by_display_desc.text
     assert by_display_desc.text.index(
         "Показывается вторым"
     ) < by_display_desc.text.index("Показывается первым")
@@ -1990,7 +2115,7 @@ def test_session_detail_groups_answers_by_cbarq_domains(
     assert "Общий вопрос" in flat.text
     filtered = client.get(
         f"/sessions/{session_row.id}",
-        params={"view": "flat", "answer": "4"},
+        params={"view": "flat", "answer": "10"},
     )
     assert "Возбуждается на улице" in filtered.text
     assert "Общий вопрос" not in filtered.text
@@ -2091,8 +2216,8 @@ def test_sessions_page_shows_answer_percent(client: TestClient, db: Session) -> 
     page = client.get("/sessions")
     assert page.status_code == 200
     assert "Ответов, %" in page.text
-    assert re.search(r"Listed Percent · v1\s*</td>\s*<td>\s*50\s*</td>", page.text)
-    assert re.search(r"Listed Percent · v2\s*</td>\s*<td>\s*—\s*</td>", page.text)
+    assert re.search(r"Listed Percent Dog</a>\s*</td>\s*<td>\s*50 %\s*</td>", page.text)
+    assert re.search(r"Listed Empty Dog</a>\s*</td>\s*<td>\s*—\s*</td>", page.text)
 
 
 def test_health_check(client: TestClient) -> None:
@@ -2144,3 +2269,198 @@ def test_logout_is_post_only(client: TestClient) -> None:
         },
         follow_redirects=False,
     )
+
+
+def _session_for_summary(db: Session) -> SurveySession:
+    dog = Dog(name="Summary Dog", history="Живёт с семьёй 2 месяца")
+    survey = Survey(name="Summary Survey", slug=f"summary-{random_lower_string()}")
+    scale = Scale(
+        name="Балл",
+        type="integer",
+        config={"min_value": 0, "max_value": 4},
+    )
+    db.add(dog)
+    db.add(survey)
+    db.add(scale)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(survey)
+    db.refresh(scale)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    questions: dict[int, Question] = {}
+    for order, group, text in (
+        (1, "Excitability", "Возбуждается"),
+        (2, "Excitability", "Лает"),
+        (10, "Aggression", "Кусается"),
+        (11, "Aggression", "Рычит"),
+    ):
+        question = Question(text=text, scale_id=scale.id)
+        db.add(question)
+        db.commit()
+        db.refresh(question)
+        questions[order] = question
+        db.add(
+            SurveyQuestion(
+                survey_version_id=version.id,
+                question_id=question.id,
+                order_num=order,
+                display_num=order,
+                group=group,
+            )
+        )
+    session_row = SurveySession(
+        owner_id=_create_owner(db).id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+    for order, value in ((1, 0), (2, 0), (10, 4), (11, 2)):
+        db.add(
+            AnswerEvent(
+                surveys_session_id=session_row.id,
+                survey_version_id=version.id,
+                question_id=questions[order].id,
+                value={"value": value},
+            )
+        )
+    db.commit()
+    return session_row
+
+
+def test_session_summary_tab_empty_without_gigachat(
+    client: TestClient, db: Session, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(settings, "GIGACHAT_AUTH_KEY", None)
+    session_row = _session_for_summary(db)
+    _login_superuser(client)
+    page = client.get(f"/sessions/{session_row.id}", params={"view": "summary"})
+    assert page.status_code == 200
+    assert "Сводка" in page.text
+    assert "Рассказ для эксперта" not in page.text
+    assert "Сводка по правилам" not in page.text
+    assert "Тревожные сигналы" not in page.text
+    assert "Сформировать текст GigaChat" not in page.text
+    assert ">Сводка</span>" in page.text
+    assert "?view=flat" in page.text
+
+
+def test_session_summary_generate_button_admin_only(
+    client: TestClient, db: Session, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(settings, "GIGACHAT_AUTH_KEY", "test-key")
+    session_row = _session_for_summary(db)
+
+    _login_expert(client, db)
+    expert_page = client.get(f"/sessions/{session_row.id}", params={"view": "summary"})
+    assert expert_page.status_code == 200
+    assert "Сформировать текст GigaChat" not in expert_page.text
+    expert_post = post(
+        client,
+        f"/sessions/{session_row.id}/summary",
+        follow_redirects=False,
+    )
+    assert expert_post.status_code == 403
+
+    _login_admin(client, db)
+    admin_page = client.get(f"/sessions/{session_row.id}", params={"view": "summary"})
+    assert admin_page.status_code == 200
+    assert "Сформировать текст GigaChat" in admin_page.text
+
+
+def test_session_summary_post_without_key_returns_400(
+    client: TestClient, db: Session, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(settings, "GIGACHAT_AUTH_KEY", None)
+    session_row = _session_for_summary(db)
+    _login_superuser(client)
+    response = post(
+        client,
+        f"/sessions/{session_row.id}/summary",
+        follow_redirects=False,
+    )
+    assert response.status_code == 400
+    assert "GigaChat не настроен" in response.text
+
+
+def test_session_summary_post_saves_gigachat_text(
+    client: TestClient, db: Session, monkeypatch: Any
+) -> None:
+    import json
+
+    from app.services import gigachat as gigachat_service
+
+    monkeypatch.setattr(settings, "GIGACHAT_AUTH_KEY", "test-key")
+    session_row = _session_for_summary(db)
+
+    class _FakeClient:
+        model = "GigaChat-2-Max"
+        enabled = True
+
+        def rewrite_summary(
+            self,
+            *,
+            facts_payload: dict[str, Any],
+            anonymized_history: str,
+            model: str | None = None,
+        ) -> str:
+            assert facts_payload["overview"]
+            assert "семья" in anonymized_history or anonymized_history
+            _ = model
+            return json.dumps(
+                {
+                    "narrative": (
+                        "У нас собака живёт с семьёй 2 месяца. "
+                        "Замечаем рычание и укусы чаще, чем возбуждение."
+                    ),
+                },
+                ensure_ascii=False,
+            )
+
+    monkeypatch.setattr(gigachat_service, "get_client", lambda: _FakeClient())
+    _login_superuser(client)
+    response = post(
+        client,
+        f"/sessions/{session_row.id}/summary",
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/sessions/{session_row.id}?view=summary"
+    db.refresh(session_row)
+    assert session_row.summary is not None
+    assert "живёт с семьёй 2 месяца" in session_row.summary["narrative"]
+    page = client.get(f"/sessions/{session_row.id}", params={"view": "summary"})
+    assert page.status_code == 200
+    assert "Рассказ для эксперта" in page.text
+    assert "Черновик, сгенерирован GigaChat-2-Max" in page.text
+    assert "живёт с семьёй 2 месяца" in page.text
+    assert "Сильные стороны" not in page.text
+    assert "Ответы изменились после генерации" not in page.text
+    assert "Обновить" in page.text
+
+    link = db.exec(
+        select(SurveyQuestion).where(
+            SurveyQuestion.survey_version_id == session_row.survey_version_id,
+            SurveyQuestion.order_num == 1,
+        )
+    ).first()
+    assert link is not None
+    db.add(
+        AnswerEvent(
+            surveys_session_id=session_row.id,
+            survey_version_id=session_row.survey_version_id,
+            question_id=link.question_id,
+            value={"value": 4},
+        )
+    )
+    db.commit()
+    after_change = client.get(f"/sessions/{session_row.id}", params={"view": "summary"})
+    assert "Ответы изменились после генерации" not in after_change.text
+    assert "Рассказ для эксперта" in after_change.text
+    assert "живёт с семьёй 2 месяца" in after_change.text
+    assert "Обновить" in after_change.text
