@@ -1439,7 +1439,6 @@ def test_expert_access_matrix(client: TestClient, db: Session) -> None:
     assert 'href="https://hvostun.com"' in home.text
 
 
-
 def test_admin_access_matrix(client: TestClient, db: Session) -> None:
     _login_admin(client, db)
     for path in (

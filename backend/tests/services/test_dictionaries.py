@@ -103,9 +103,7 @@ def test_create_dictionary_writes_row(db: Session) -> None:
     user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
     assert user
     key = f"ns::{random_lower_string()}"
-    row = create_dictionary(
-        db, key=f"  {key}  ", value=["a", "b"], created_by=user
-    )
+    row = create_dictionary(db, key=f"  {key}  ", value=["a", "b"], created_by=user)
     assert row.key == key
     assert row.value == ["a", "b"]
     assert row.created_by == user.id

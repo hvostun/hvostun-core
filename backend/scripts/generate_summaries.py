@@ -84,7 +84,9 @@ def _actor(session: Session) -> User:
         select(User).where(User.email == settings.FIRST_SUPERUSER)
     ).first()
     if user is None:
-        user = session.exec(select(User).where(col(User.is_superuser).is_(True))).first()
+        user = session.exec(
+            select(User).where(col(User.is_superuser).is_(True))
+        ).first()
     if user is None:
         raise SystemExit("Нет пользователя для generated_by (superuser)")
     return user
@@ -170,7 +172,9 @@ def _run(
             )
             if outcome.status == "ok":
                 ok += 1
-                preview = (outcome.stored.narrative[:80] + "…") if outcome.stored else ""
+                preview = (
+                    (outcome.stored.narrative[:80] + "…") if outcome.stored else ""
+                )
                 print(f"{prefix} ok: {preview}")
             elif outcome.status == "skipped":
                 skipped += 1
