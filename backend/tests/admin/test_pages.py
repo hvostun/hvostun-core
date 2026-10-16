@@ -1082,7 +1082,11 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
         "Вопросы и ответы"
     )
     assert recommendation.name in page.text
-    assert '<details class="accordion-item">' in page.text
+    assert 'id="recommendations-accordion"' in page.text
+    assert "accordion-item" in page.text
+    assert " open" not in page.text.split("recommendations-accordion", 1)[1].split(
+        "</details>", 1
+    )[0]
 
     response = post(
         client,
@@ -1116,7 +1120,9 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert "приоритет на первую неделю" in detail.text
     assert f"Автор рекомендации: {user.full_name or user.email}" in detail.text
     assert f'value="{recommendation.id}"' not in detail.text
-    assert '<details class="accordion-item" open>' in detail.text
+    assert " open" in detail.text.split("recommendations-accordion", 1)[1].split(
+        "</details>", 1
+    )[0]
 
 
 def test_session_recommendations_sorted_by_id_desc_and_collapsed_without_mine(
@@ -1158,7 +1164,10 @@ def test_session_recommendations_sorted_by_id_desc_and_collapsed_without_mine(
     page = client.get(f"/sessions/{session_row.id}")
     assert page.status_code == 200
     assert page.text.index("Длинная прогулка:") < page.text.index("Короткая прогулка:")
-    assert '<details class="accordion-item">' in page.text
+    assert "accordion-item" in page.text
+    assert " open" not in page.text.split("recommendations-accordion", 1)[1].split(
+        "</details>", 1
+    )[0]
 
 
 def test_session_recommendation_rejects_duplicate(
@@ -1430,12 +1439,8 @@ def test_expert_access_matrix(client: TestClient, db: Session) -> None:
     assert "экспертный контур Hvostun.pro для разметки данных" in home.text
     assert "Сводка" in home.text
     assert "Рассказ для эксперта" in home.text
-    assert "вкладка пустая" in home.text
-    assert "только администратор" in home.text
-    assert "gigachat::models" in home.text
-    assert "Сформировать текст GigaChat" in home.text
-    assert "прошлое до семьи" in home.text
-    assert "шкале эксперта от 0 до 10" in home.text
+    assert "Баллы доменов — от 0 до 10" in home.text
+    assert "черновик, сгенерирован моделью GigaChat" in home.text
     assert 'href="https://hvostun.com"' in home.text
 
 

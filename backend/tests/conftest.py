@@ -35,8 +35,10 @@ def _ensure_test_database() -> None:
 
 
 def _upgrade_test_database() -> None:
-    ini = Path(__file__).resolve().parents[1] / "alembic.ini"
-    config = Config(str(ini))
+    backend_root = Path(__file__).resolve().parents[1]
+    config = Config(str(backend_root / "alembic.ini"))
+    # Absolute path so `uv run pytest` works from repo root, not only backend/.
+    config.set_main_option("script_location", str(backend_root / "app" / "alembic"))
     command.upgrade(config, "head")
 
 

@@ -1,5 +1,6 @@
 import os
 import warnings
+from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import urlparse, urlunparse
 
@@ -29,12 +30,13 @@ _KNOWN_LOCAL_SECRETS = frozenset(
 _MIN_SECRET_KEY_BYTES = 32
 _LOCAL_TOKEN_MINUTES = 60 * 24 * 8
 _DEPLOYED_TOKEN_MINUTES = 60 * 12
+# backend/app/core/config.py → repo root .env (independent of process cwd)
+_REPO_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        # Use top level .env file (one level above ./backend/)
-        env_file="../.env",
+        env_file=_REPO_ENV_FILE,
         env_ignore_empty=True,
         extra="ignore",
     )
