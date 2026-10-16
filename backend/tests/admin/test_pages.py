@@ -1084,9 +1084,12 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert recommendation.name in page.text
     assert 'id="recommendations-accordion"' in page.text
     assert "accordion-item" in page.text
-    assert " open" not in page.text.split("recommendations-accordion", 1)[1].split(
-        "</details>", 1
-    )[0]
+    assert (
+        " open"
+        not in page.text.split("recommendations-accordion", 1)[1].split(
+            "</details>", 1
+        )[0]
+    )
 
     response = post(
         client,
@@ -1120,9 +1123,12 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert "приоритет на первую неделю" in detail.text
     assert f"Автор рекомендации: {user.full_name or user.email}" in detail.text
     assert f'value="{recommendation.id}"' not in detail.text
-    assert " open" in detail.text.split("recommendations-accordion", 1)[1].split(
-        "</details>", 1
-    )[0]
+    assert (
+        " open"
+        in detail.text.split("recommendations-accordion", 1)[1].split("</details>", 1)[
+            0
+        ]
+    )
 
 
 def test_session_recommendations_sorted_by_id_desc_and_collapsed_without_mine(
@@ -1165,9 +1171,12 @@ def test_session_recommendations_sorted_by_id_desc_and_collapsed_without_mine(
     assert page.status_code == 200
     assert page.text.index("Длинная прогулка:") < page.text.index("Короткая прогулка:")
     assert "accordion-item" in page.text
-    assert " open" not in page.text.split("recommendations-accordion", 1)[1].split(
-        "</details>", 1
-    )[0]
+    assert (
+        " open"
+        not in page.text.split("recommendations-accordion", 1)[1].split(
+            "</details>", 1
+        )[0]
+    )
 
 
 def test_session_recommendation_rejects_duplicate(
