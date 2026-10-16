@@ -21,14 +21,14 @@ def surveys_page(
     user: CurrentUser,
     page: int = 1,
     name: str = "",
-    slug: str = "",
+    description: str = "",
 ) -> Any:
     offset, limit, page = page_window(page, PAGE_SIZE)
     filters: list[Any] = []
     if name:
         filters.append(col(Survey.name).ilike(f"%{name}%"))
-    if slug:
-        filters.append(col(Survey.slug).ilike(f"%{slug}%"))
+    if description:
+        filters.append(col(Survey.description).ilike(f"%{description}%"))
     count_stmt = select(func.count()).select_from(Survey)
     stmt = (
         select(Survey, func.max(SurveyVersion.version_num))
@@ -55,7 +55,6 @@ def surveys_page(
             columns=[
                 {"key": "id", "label": "Идентификатор"},
                 {"key": "name", "label": "Название"},
-                {"key": "slug", "label": "Код"},
                 {"key": "version", "label": "Версия"},
                 {"key": "description", "label": "Описание"},
             ],
@@ -65,7 +64,6 @@ def surveys_page(
                     "cells": {
                         "id": cell(survey.id),
                         "name": cell(survey.name),
-                        "slug": cell(survey.slug),
                         "version": cell(version_num),
                         "description": cell(survey.description),
                     },
@@ -76,9 +74,9 @@ def surveys_page(
             page=page,
             filters=[
                 {"name": "name", "label": "Название", "value": name},
-                {"name": "slug", "label": "Код", "value": slug},
+                {"name": "description", "label": "Описание", "value": description},
             ],
-            filter_values={"name": name, "slug": slug},
+            filter_values={"name": name, "description": description},
         ),
     )
 

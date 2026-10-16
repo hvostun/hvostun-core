@@ -524,7 +524,8 @@ def test_session_detail_shows_scale_legend(client: TestClient, db: Session) -> N
     assert re.search(r'aria-valuemax="100">7\s*</div>', page.text)
     assert "var(--bs-blue)" in page.text
     assert "Значение" in page.text
-    assert "<td>1</td>" in page.text
+    assert "№ 1" in page.text
+    assert "answer-item" in page.text
     assert "Все категории" in page.text
     assert "Все ответы" in page.text
 
@@ -1074,6 +1075,9 @@ def _session_with_recommendation_catalog(
 
 def test_session_detail_can_add_recommendation(client: TestClient, db: Session) -> None:
     session_row, recommendation, user = _session_with_recommendation_catalog(db)
+    recommendation.description = "Коротко прогуливаться"
+    db.add(recommendation)
+    db.commit()
     _login_superuser(client)
     page = client.get(f"/sessions/{session_row.id}")
     assert page.status_code == 200
@@ -1081,7 +1085,14 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert page.text.index("Добавить рекомендацию") < page.text.index(
         "Вопросы и ответы"
     )
+    assert "представить собаку с этой карточки" in page.text
+    assert "экспертное решение" in page.text
+    assert "Важность" in page.text
+    assert "Критичность" in page.text
+    assert "Другое" in page.text
     assert recommendation.name in page.text
+    assert recommendation.description in page.text
+    assert recommendation.slug not in page.text
     assert 'id="recommendations-accordion"' in page.text
     assert "accordion-item" in page.text
     assert (
@@ -1445,11 +1456,18 @@ def test_expert_access_matrix(client: TestClient, db: Session) -> None:
     assert 'href="/dogs"' not in home.text
     assert 'href="/recommendations"' not in home.text
     assert 'href="/users"' not in home.text
+    assert "navbar-toggler" in home.text
+    assert 'id="admin-nav"' in home.text
     assert "экспертный контур Hvostun.pro для разметки данных" in home.text
+    assert "Как размечать — по шагам" in home.text
+    assert "Ваша задача:" in home.text
+    assert "Сначала сводка, потом детали" in home.text
+    assert "Назначьте рекомендации" in home.text
+    assert "Начать разметку" in home.text
     assert "Сводка" in home.text
     assert "Рассказ для эксперта" in home.text
     assert "Баллы доменов — от 0 до 10" in home.text
-    assert "черновик, сгенерирован моделью GigaChat" in home.text
+    assert "черновик от GigaChat" in home.text
     assert 'href="https://hvostun.com"' in home.text
 
 
@@ -1842,8 +1860,15 @@ def test_survey_detail_sorts_questions_by_display_num(
     )
     db.commit()
     _login_superuser(client)
+    listing = client.get("/surveys")
+    assert listing.status_code == 200
+    assert "Display order" in listing.text
+    assert survey.slug not in listing.text
+    assert ">Код<" not in listing.text
     page = client.get(f"/surveys/{survey.id}")
     assert page.status_code == 200
+    assert survey.slug not in page.text
+    assert "версия 1" in page.text
     assert page.text.index("Показывается первым") < page.text.index(
         "Показывается вторым"
     )
