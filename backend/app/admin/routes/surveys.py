@@ -21,14 +21,14 @@ def surveys_page(
     user: CurrentUser,
     page: int = 1,
     name: str = "",
-    slug: str = "",
+    description: str = "",
 ) -> Any:
     offset, limit, page = page_window(page, PAGE_SIZE)
     filters: list[Any] = []
     if name:
         filters.append(col(Survey.name).ilike(f"%{name}%"))
-    if slug:
-        filters.append(col(Survey.slug).ilike(f"%{slug}%"))
+    if description:
+        filters.append(col(Survey.description).ilike(f"%{description}%"))
     count_stmt = select(func.count()).select_from(Survey)
     stmt = (
         select(Survey, func.max(SurveyVersion.version_num))
@@ -53,11 +53,10 @@ def surveys_page(
             user=user,
             title="Анкеты",
             columns=[
-                {"key": "id", "label": "id"},
-                {"key": "name", "label": "name"},
-                {"key": "slug", "label": "slug"},
+                {"key": "id", "label": "Идентификатор"},
+                {"key": "name", "label": "Название"},
                 {"key": "version", "label": "Версия"},
-                {"key": "description", "label": "description"},
+                {"key": "description", "label": "Описание"},
             ],
             rows=[
                 {
@@ -65,7 +64,6 @@ def surveys_page(
                     "cells": {
                         "id": cell(survey.id),
                         "name": cell(survey.name),
-                        "slug": cell(survey.slug),
                         "version": cell(version_num),
                         "description": cell(survey.description),
                     },
@@ -75,10 +73,10 @@ def surveys_page(
             count=count,
             page=page,
             filters=[
-                {"name": "name", "label": "name", "value": name},
-                {"name": "slug", "label": "slug", "value": slug},
+                {"name": "name", "label": "Название", "value": name},
+                {"name": "description", "label": "Описание", "value": description},
             ],
-            filter_values={"name": name, "slug": slug},
+            filter_values={"name": name, "description": description},
         ),
     )
 
@@ -177,8 +175,8 @@ def _survey_detail_response(
                 sort,
             ),
             "sort": _active_sort(sort),
-            "order_sort": _sort_header("order", "order", sort),
-            "display_sort": _sort_header("display_num", "display", sort),
+            "order_sort": _sort_header("Порядок", "order", sort),
+            "display_sort": _sort_header("Номер", "display", sort),
         },
         status_code=status_code,
     )

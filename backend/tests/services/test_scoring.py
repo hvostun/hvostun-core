@@ -20,8 +20,9 @@ from app.services.scoring import (
     parse_scoring_consts,
     score_domains,
     score_session,
+    scoring_view,
 )
-from app.services.sessions import SessionAnswer, answer_rates
+from app.services.sessions import SessionAnswer, answer_rates, expert_points
 from tests.utils.utils import random_lower_string
 
 
@@ -102,11 +103,14 @@ def test_score_domains_groups_by_question_group() -> None:
     ]
     assert excitability.answered == 1
     assert excitability.total == 2
-    assert excitability.score == 2.0
-    assert training.score == 1.67
+    assert excitability.score == 5.0
+    assert training.score == 4.33
     assert training.points[0].scored == 4
+    assert training.points[0].points == 10
     assert training.points[0].reversed is True
     assert training.points[1].scored == 0
+    assert training.points[1].points == 0
+    assert training.points[2].points == 3
     assert [item.question.text for item in result.unscored] == ["вне"]
     below = score_domains(
         [
@@ -128,7 +132,57 @@ def test_score_domains_without_threshold_uses_any_answer() -> None:
         ],
         ScoringConsts(None, frozenset()),
     )
-    assert result.domains[0].score == 2.0
+    assert result.domains[0].score == 5.0
+
+
+def test_score_domains_maps_answers_to_ten_points() -> None:
+    result = score_domains(
+        [_answer(order, order - 1, group="Fear") for order in range(1, 6)],
+        ScoringConsts(None, frozenset()),
+    )
+    domain = result.domains[0]
+    assert [point.points for point in domain.points] == [0, 3, 5, 7, 10]
+    assert domain.score == 5.0
+    twos = score_domains(
+        [_answer(1, 2, group="Fear"), _answer(2, 2, group="Fear")],
+        ScoringConsts(None, frozenset()),
+    )
+    assert twos.domains[0].score == 5.0
+
+
+def test_scoring_view_explains_points(db: Session) -> None:
+    scoring = score_domains(
+        [_answer(1, 2, group="Fear"), _answer(27, 1, group="Fear")],
+        _consts(threshold=None),
+    )
+    section = scoring_view(db, scoring)["domains"][0]
+    assert section["score_label"] == "6.00"
+    assert section["bar_percent"] == 60
+    assert [item["scored_note"] for item in section["items"]] == [
+        "",
+        "обратный пункт: в балл 10 − 3 = 7",
+    ]
+
+
+def test_expert_points_only_for_zero_to_four_scales() -> None:
+    config = {"min_value": 0, "max_value": 4}
+    assert [expert_points({"value": raw}, config) for raw in range(5)] == [
+        0,
+        3,
+        5,
+        7,
+        10,
+    ]
+    assert expert_points(2, None) == 5
+    with_unseen = {"min_value": -1, "max_value": 4}
+    assert expert_points({"value": 4}, with_unseen) == 10
+    assert expert_points({"value": -1}, with_unseen) is None
+    assert expert_points({"value": 2.0}, config) == 5
+    assert expert_points({"value": -999}, config) is None
+    assert expert_points({"value": 2.5}, config) is None
+    assert expert_points({"value": True}, config) is None
+    assert expert_points({"value": "2"}, config) is None
+    assert expert_points({"value": 2}, {"min_value": 1, "max_value": 5}) is None
 
 
 def test_score_domains_skips_non_integers() -> None:
@@ -147,7 +201,7 @@ def test_score_session_without_consts_skips_only_other(db: Session) -> None:
     assert score_session(db, [_answer(1, 1, group="other")]) is None
     scored = score_session(db, [_answer(1, 2, group="Excitability")])
     assert scored is not None
-    assert scored.domains[0].score == 2.0
+    assert scored.domains[0].score == 5.0
 
 
 def test_answer_rates_uses_latest_event_and_skips_missing(db: Session) -> None:

@@ -31,7 +31,7 @@ def _parse_config(raw: str) -> dict[str, object] | None:
         return None
     parsed = json.loads(text)
     if not isinstance(parsed, dict):
-        raise ValueError("config must be a JSON object")
+        raise ValueError("Конфигурация должна быть JSON-объектом")
     return parsed
 
 
@@ -117,8 +117,8 @@ def scales_page(
             count=count,
             page=page,
             filters=[
-                {"name": "name", "label": "name", "value": name},
-                {"name": "type", "label": "type", "value": type},
+                {"name": "name", "label": "Шкала", "value": name},
+                {"name": "type", "label": "Тип данных", "value": type},
             ],
             filter_values={"name": name, "type": type},
         ),

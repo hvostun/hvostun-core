@@ -13,7 +13,7 @@
     <input class="form-control" id="name" name="name" required value="{{ form.name }}" />
   </div>
   <div class="mb-3">
-    <label class="form-label" for="slug">Slug</label>
+    <label class="form-label" for="slug">Код</label>
     <input class="form-control" id="slug" name="slug" required value="{{ form.slug }}" />
   </div>
   <div class="mb-3">
@@ -36,9 +36,9 @@
 </form>
 {% if target %}
 <dl class="row mt-4 text-muted">
-  <dt class="col-sm-3">created_at</dt>
+  <dt class="col-sm-3">Создано</dt>
   <dd class="col-sm-9">{{ target.created_at or "—" }}</dd>
-  <dt class="col-sm-3">updated_at</dt>
+  <dt class="col-sm-3">Изменено</dt>
   <dd class="col-sm-9">{{ target.updated_at or "—" }}</dd>
 </dl>
 {% endif %}

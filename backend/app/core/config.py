@@ -1,5 +1,6 @@
 import os
 import warnings
+from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import urlparse, urlunparse
 
@@ -29,12 +30,13 @@ _KNOWN_LOCAL_SECRETS = frozenset(
 _MIN_SECRET_KEY_BYTES = 32
 _LOCAL_TOKEN_MINUTES = 60 * 24 * 8
 _DEPLOYED_TOKEN_MINUTES = 60 * 12
+# backend/app/core/config.py → repo root .env (independent of process cwd)
+_REPO_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        # Use top level .env file (one level above ./backend/)
-        env_file="../.env",
+        env_file=_REPO_ENV_FILE,
         env_ignore_empty=True,
         extra="ignore",
     )
@@ -91,6 +93,20 @@ class Settings(BaseSettings):
     @property
     def emails_enabled(self) -> bool:
         return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
+
+    GIGACHAT_AUTH_KEY: str | None = None
+    GIGACHAT_SCOPE: str = "GIGACHAT_API_PERS"
+    GIGACHAT_MODEL: str = "GigaChat-2-Max"
+    GIGACHAT_BASE_URL: str = "https://api.giga.chat/v1"
+    GIGACHAT_OAUTH_URL: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+    # PEM with the Russian Trusted Root CA; GigaChat OAuth is signed by it.
+    GIGACHAT_CA_BUNDLE: str | None = None
+    GIGACHAT_TIMEOUT_SECONDS: float = 60.0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def gigachat_enabled(self) -> bool:
+        return bool(self.GIGACHAT_AUTH_KEY)
 
     EMAIL_TEST_USER: EmailStr = "test@example.com"
     FIRST_SUPERUSER: EmailStr

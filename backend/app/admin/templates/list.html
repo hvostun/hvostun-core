@@ -10,7 +10,7 @@
 {% if filters %}
 <form class="row g-2 mb-3" method="get">
   {% for field in filters %}
-  <div class="col-auto">
+  <div class="col-12 col-sm-6 col-md-auto">
     {% if field.type == "select" %}
     <label class="form-label" for="{{ field.name }}">{{ field.label }}</label>
     <select class="form-select" id="{{ field.name }}" name="{{ field.name }}">
@@ -30,8 +30,8 @@
     {% endif %}
   </div>
   {% endfor %}
-  <div class="col-auto">
-    <button class="btn btn-secondary" type="submit">Фильтр</button>
+  <div class="col-12 col-md-auto align-self-end">
+    <button class="btn btn-secondary w-100 w-md-auto" type="submit">Фильтр</button>
   </div>
 </form>
 {% endif %}

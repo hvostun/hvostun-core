@@ -59,7 +59,7 @@ def create_admin_user(
     is_superuser: str,
 ) -> User:
     if crud.get_user_by_email(session=session, email=email.strip()):
-        raise UserFormError("Email уже занят")
+        raise UserFormError("Эл. почта уже занята")
     if len(password) < MIN_PASSWORD_LENGTH:
         raise UserFormError(f"Пароль не короче {MIN_PASSWORD_LENGTH} символов")
     try:
@@ -100,10 +100,10 @@ def update_admin_user(
     if user.id == current_user.id and not next_active:
         raise UserFormError("Нельзя деактивировать свою учётную запись")
     if user.id == current_user.id and current_user.is_superuser and not next_superuser:
-        raise UserFormError("Нельзя снять у себя флаг superuser")
+        raise UserFormError("Нельзя снять у себя флаг суперпользователя")
     existing = crud.get_user_by_email(session=session, email=email.strip())
     if existing is not None and existing.id != user.id:
-        raise UserFormError("Email уже занят")
+        raise UserFormError("Эл. почта уже занята")
     if password and len(password) < MIN_PASSWORD_LENGTH:
         raise UserFormError(f"Пароль не короче {MIN_PASSWORD_LENGTH} символов")
     try:
