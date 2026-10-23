@@ -37,6 +37,9 @@ UNANSWERED_FILTER = "unanswered"
 MISSING_ANSWER = -999
 DEFAULT_SCALE_MIN = 0
 DEFAULT_SCALE_MAX = 4
+# Experts read 0-4 answers on a 10-point scale; storage stays 0-4.
+EXPERT_SCALE_MAX = 10
+EXPERT_SCALE = {0: 0, 1: 3, 2: 5, 3: 7, 4: 10}
 
 _LEGEND_LINE = re.compile(r"^(-?\d+)\s*(?:[-–]\s+)?(.*)$")
 
@@ -212,11 +215,27 @@ def _scale_bounds(config: object) -> tuple[float, float]:
     return min_value, max_value
 
 
+def expert_points(value: object, config: object) -> int | None:
+    min_value, max_value = _scale_bounds(config)
+    if min_value > DEFAULT_SCALE_MIN or max_value != DEFAULT_SCALE_MAX:
+        return None
+    scalar = answer_scalar(value)
+    if isinstance(scalar, bool) or not isinstance(scalar, int | float):
+        return None
+    if isinstance(scalar, float) and not scalar.is_integer():
+        return None
+    return EXPERT_SCALE.get(int(scalar))
+
+
 def answer_progress(
     session: Session, value: object, config: object, category: object
 ) -> dict[str, Any]:
     color = dictionary_service.group_color(session, str(category))
     hidden = {"show_bar": False, "percent": 0, "color": color}
+    points = expert_points(value, config)
+    if points is not None:
+        percent = round(points / EXPERT_SCALE_MAX * 100)
+        return {"show_bar": True, "percent": percent, "color": color}
     scalar = answer_scalar(value)
     if scalar is None or scalar == "":
         return hidden
@@ -317,12 +336,13 @@ def get_session_answers(
     for question, link, scale in question_rows:
         latest_event = latest.get(question.id)
         value = latest_event.value if latest_event else None
+        points = expert_points(value, scale.config)
         answers.append(
             SessionAnswer(
                 question=question,
                 link=link,
                 event=latest_event,
-                display_value=format_answer(value),
+                display_value=format_answer(value) if points is None else str(points),
                 legend=legend_label(scale.config, value),
                 progress=answer_progress(session, value, scale.config, link.group),
             )
@@ -380,32 +400,25 @@ def get_session_recommendations(
     if not can_manage_all_session_recommendations(current_user):
         statement = statement.where(SessionRecommendation.user_id == current_user.id)
     return list(
-        session.exec(
-            statement.order_by(
-                col(SessionRecommendation.user_id),
-                col(SessionRecommendation.chart_number),
-                col(SessionRecommendation.created_at),
-            )
-        ).all()
+        session.exec(statement.order_by(col(SessionRecommendation.id).desc())).all()
     )
 
 
-def session_recommendation_counts(
+def session_recommendation_user_counts(
     session: Session, session_ids: list[uuid.UUID], current_user: User
-) -> dict[uuid.UUID, tuple[int, int]]:
-    counts = dict.fromkeys(session_ids, (0, 0))
+) -> dict[uuid.UUID, int]:
+    counts = dict.fromkeys(session_ids, 0)
     if not session_ids:
         return counts
     statement = select(
         SessionRecommendation.session_id,
-        func.count(),
         func.count(func.distinct(SessionRecommendation.user_id)),
     ).where(col(SessionRecommendation.session_id).in_(session_ids))
     if not can_manage_all_session_recommendations(current_user):
         statement = statement.where(SessionRecommendation.user_id == current_user.id)
     rows = session.exec(statement.group_by(col(SessionRecommendation.session_id))).all()
-    for session_id, rec_count, user_count in rows:
-        counts[session_id] = (int(rec_count), int(user_count))
+    for session_id, user_count in rows:
+        counts[session_id] = int(user_count)
     return counts
 
 

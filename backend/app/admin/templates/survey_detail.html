@@ -4,9 +4,7 @@
 <p><a href="/surveys">← Анкеты</a></p>
 <h1 class="h3">{{ survey.name }}</h1>
 <p class="text-muted">
-  {{ survey.slug }} · версия {{ version.version_num }}
-  {% if version.description %} — {{ version.description }}{% elif survey.description %} — {{ survey.description }}{%
-  endif %}
+  версия {{ version.version_num }}{% if version.description and version.description != survey.name %} — {{ version.description }}{% elif survey.description and survey.description != survey.name %} — {{ survey.description }}{% endif %}
 </p>
 {% if error %}
 <div class="alert alert-danger">{{ error }}</div>
@@ -20,9 +18,9 @@
       <tr>
         <th><a href="{{ order_sort.href }}">{{ order_sort.label }}</a></th>
         <th><a href="{{ display_sort.href }}">{{ display_sort.label }}</a></th>
-        <th>group</th>
-        <th>text</th>
-        <th>scale_name</th>
+        <th>Группа</th>
+        <th>Вопрос</th>
+        <th>Шкала</th>
       </tr>
     </thead>
     <tbody>
@@ -34,11 +32,11 @@
         </td>
         <td>
           <input class="form-control form-control-sm" name="display_num" inputmode="numeric" required
-            value="{{ item.display_num }}" aria-label="display_num" />
+            value="{{ item.display_num }}" aria-label="Номер" />
         </td>
         <td>
           <input class="form-control form-control-sm" name="group" required value="{{ item.group }}"
-            aria-label="group" />
+            aria-label="Группа" />
         </td>
         <td>{{ item.text }}</td>
         <td>{{ item.scale_name }}</td>
@@ -54,11 +52,11 @@
 <table class="table table-sm table-striped">
   <thead>
     <tr>
-      <th>order</th>
-      <th>display_num</th>
-      <th>group</th>
-      <th>text</th>
-      <th>scale_name</th>
+      <th>Порядок</th>
+      <th>Номер</th>
+      <th>Группа</th>
+      <th>Вопрос</th>
+      <th>Шкала</th>
     </tr>
   </thead>
   <tbody>

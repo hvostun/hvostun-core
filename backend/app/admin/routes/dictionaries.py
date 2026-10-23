@@ -28,32 +28,38 @@ def _preview_value(value: object) -> str:
 def _parse_value(raw: str) -> Any:
     text = raw.strip()
     if not text:
-        raise ValueError("value обязателен")
+        raise ValueError("Значение обязательно")
     return json.loads(text)
 
 
-def _detail_response(
+def _form_response(
     request: Request,
     user: CurrentUser,
-    row: Dictionary,
     *,
+    is_create: bool,
+    key: str = "",
+    value_text: str = "{}",
     error: str | None = None,
     status_code: int = 200,
-    value_text: str | None = None,
 ) -> Any:
     return templates.TemplateResponse(
         request,
-        "dictionary_detail.html",
+        "dictionary_form.html",
         {
             "user": user,
-            "row": row,
-            "value_text": (
-                value_text if value_text is not None else _format_value(row.value)
-            ),
+            "is_create": is_create,
+            "key": key,
+            "value_text": value_text,
             "error": error,
         },
         status_code=status_code,
     )
+
+
+def _json_error_message(exc: Exception) -> str:
+    if isinstance(exc, json.JSONDecodeError):
+        return "Некорректный JSON"
+    return str(exc)
 
 
 @router.get("/dictionaries")
@@ -88,8 +94,8 @@ def dictionaries_page(
             user=user,
             title="Справочники",
             columns=[
-                {"key": "key", "label": "key"},
-                {"key": "value", "label": "value"},
+                {"key": "key", "label": "Ключ"},
+                {"key": "value", "label": "Значение"},
             ],
             rows=[
                 {
@@ -103,10 +109,47 @@ def dictionaries_page(
             ],
             count=count,
             page=page,
-            filters=[{"name": "key", "label": "key", "value": key}],
+            filters=[{"name": "key", "label": "Ключ", "value": key}],
             filter_values={"key": key},
+            create_href="/dictionaries/new",
+            create_label="Создать",
         ),
     )
+
+
+@router.get("/dictionaries/new")
+def dictionary_new(request: Request, user: SuperUser) -> Any:
+    return _form_response(request, user, is_create=True)
+
+
+@router.post("/dictionaries/new")
+def dictionary_create(
+    request: Request,
+    session: SessionDep,
+    user: SuperUser,
+    key: str = Form(""),
+    value: str = Form("{}"),
+) -> Any:
+    try:
+        parsed = _parse_value(value)
+        created = dictionary_service.create_dictionary(
+            session, key=key, value=parsed, created_by=user
+        )
+    except (
+        ValueError,
+        json.JSONDecodeError,
+        dictionary_service.DictionaryConflictError,
+    ) as exc:
+        return _form_response(
+            request,
+            user,
+            is_create=True,
+            key=key.strip(),
+            value_text=value,
+            error=_json_error_message(exc),
+            status_code=400,
+        )
+    return RedirectResponse(f"/dictionaries/{created.key}", status_code=303)
 
 
 @router.get("/dictionaries/{key}")
@@ -120,7 +163,13 @@ def dictionary_detail(
         row = dictionary_service.get_dictionary(session, key)
     except dictionary_service.DictionaryNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return _detail_response(request, user, row)
+    return _form_response(
+        request,
+        user,
+        is_create=False,
+        key=row.key,
+        value_text=_format_value(row.value),
+    )
 
 
 @router.post("/dictionaries/{key}")
@@ -132,7 +181,7 @@ def dictionary_update(
     value: str = Form(""),
 ) -> Any:
     try:
-        row = dictionary_service.get_dictionary(session, key)
+        dictionary_service.get_dictionary(session, key)
     except dictionary_service.DictionaryNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     try:
@@ -141,16 +190,13 @@ def dictionary_update(
             session, key, value=parsed, updated_by=user
         )
     except (ValueError, json.JSONDecodeError) as exc:
-        return _detail_response(
+        return _form_response(
             request,
             user,
-            row,
-            error=(
-                "Некорректный JSON"
-                if isinstance(exc, json.JSONDecodeError)
-                else str(exc)
-            ),
-            status_code=400,
+            is_create=False,
+            key=key,
             value_text=value,
+            error=_json_error_message(exc),
+            status_code=400,
         )
     return RedirectResponse(f"/dictionaries/{key}", status_code=303)

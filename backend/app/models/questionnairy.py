@@ -254,6 +254,10 @@ class SurveySession(TimestampMixin, SQLModel, table=True):
         default=None,
         sa_column=Column(JSONB, nullable=True),
     )
+    summary: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+    )
 
 
 class SurveySessionPublic(SQLModel):

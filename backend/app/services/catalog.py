@@ -196,7 +196,7 @@ def create_recommendation(
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise CatalogUpdateError("Такой slug уже есть") from exc
+        raise CatalogUpdateError("Такой код уже есть") from exc
     session.refresh(row)
     return row
 
@@ -221,6 +221,6 @@ def update_recommendation(
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise CatalogUpdateError("Такой slug уже есть") from exc
+        raise CatalogUpdateError("Такой код уже есть") from exc
     session.refresh(row)
     return row

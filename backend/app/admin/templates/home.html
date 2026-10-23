@@ -1,6 +1,95 @@
 {% extends "base.html" %}
-{% block title %}Hvostun Admin{% endblock %}
+{% block title %}Hvostun — экспертный контур{% endblock %}
 {% block content %}
-<h1 class="h3">{{ user.full_name or user.email }}</h1>
-<p class="text-muted">Админка Hvostun. Списки слева в меню.</p>
+<p class="lead">Это экспертный контур Hvostun.pro для разметки данных.</p>
+
+<div class="alert alert-info">
+  Здесь работают эксперты и администраторы проекта. Владельцы собак сюда не заходят:
+  пользовательское приложение Hvostun развивается отдельно. Ваша разметка станет
+  обучающими данными для модели.
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-body">
+        <h2 class="h5 card-title">О проекте</h2>
+        <p>
+          Hvostun помогает собаке и новой семье пройти адаптацию после пристройства из
+          приюта. Модель оценивает риск трудностей с поведением для конкретной собаки
+          и подбирает рекомендации под её профиль.
+        </p>
+        <p>
+          Основа оценки — опросник поведения C-BARQ. Владельцы отвечают на вопросы о
+          собаке, а эксперты сопоставляют ответы с рекомендациями.
+        </p>
+        <p class="mb-0">
+          Подробнее о проекте:
+          <a href="https://hvostun.com" target="_blank" rel="noopener">hvostun.com</a>
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card h-100 border-primary">
+      <div class="card-body">
+        <h2 class="h5 card-title">Как размечать — по шагам</h2>
+        <p class="mb-3">
+          <strong>Ваша задача:</strong> для каждой сессии назначить рекомендации собаке
+          (важность, критичность, при необходимости комментарий). Ниже — порядок работы.
+        </p>
+        <ol class="home-steps list-unstyled mb-4">
+          <li class="home-step">
+            <div class="home-step-num" aria-hidden="true">1</div>
+            <div>
+              <h3 class="h6 mb-1">Откройте список сессий</h3>
+              <p class="mb-0 small">
+                Раздел <a href="/sessions">Ответы</a> → выберите собаку.
+                Колонка «Моя оценка» показывает, какие сессии вы уже разметили.
+              </p>
+            </div>
+          </li>
+          <li class="home-step">
+            <div class="home-step-num" aria-hidden="true">2</div>
+            <div>
+              <h3 class="h6 mb-1">Сначала сводка, потом детали</h3>
+              <p class="mb-0 small">
+                На карточке откройте вкладку <strong>«Сводка»</strong> и прочитайте
+                «Рассказ для эксперта» — картина поведения уже дома и то, что сказали
+                в приюте. Для уточнений смотрите профиль собаки и ответы
+                («По доменам» / «Все вопросы»). Баллы доменов — от 0 до 10.
+              </p>
+            </div>
+          </li>
+          <li class="home-step">
+            <div class="home-step-num" aria-hidden="true">3</div>
+            <div>
+              <h3 class="h6 mb-1">Назначьте рекомендации</h3>
+              <p class="mb-0 small">
+                В блоке <strong>«Рекомендации»</strong> (вверху карточки) добавьте
+                пункты из каталога для <em>этой</em> собаки/сессии: выберите важность
+                и критичность, при необходимости напишите комментарий → «Сохранить».
+              </p>
+            </div>
+          </li>
+          <li class="home-step">
+            <div class="home-step-num" aria-hidden="true">4</div>
+            <div>
+              <h3 class="h6 mb-1">Переходите к следующей сессии</h3>
+              <p class="mb-0 small">
+                Вернитесь в <a href="/sessions">Ответы</a> и возьмите следующую
+                без вашей оценки.
+              </p>
+            </div>
+          </li>
+        </ol>
+        <a class="btn btn-primary w-100 w-sm-auto" href="/sessions">Начать разметку → Ответы</a>
+        <p class="small text-muted mt-3 mb-0">
+          Рассказ на сводке — черновик от GigaChat, чтобы быстрее собрать картину
+          поведения. Решение о рекомендациях всегда за экспертом.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

@@ -98,11 +98,11 @@ def owners_page(
         statement=select(Owner).order_by(col(Owner.created_at).desc()),
         filters_sql=filters_sql,
         columns=[
-            {"key": "id", "label": "id"},
-            {"key": "name", "label": "name"},
-            {"key": "email", "label": "email"},
-            {"key": "phone", "label": "phone"},
-            {"key": "contact", "label": "contact"},
+            {"key": "id", "label": "Идентификатор"},
+            {"key": "name", "label": "Имя"},
+            {"key": "email", "label": "Эл. почта"},
+            {"key": "phone", "label": "Телефон"},
+            {"key": "contact", "label": "Контакт"},
         ],
         row_cells=lambda row: {
             "id": cell(row.id),
@@ -112,9 +112,9 @@ def owners_page(
             "contact": cell(row.contact),
         },
         filters=[
-            {"name": "name", "label": "name", "value": name},
-            {"name": "email", "label": "email", "value": email},
-            {"name": "phone", "label": "phone", "value": phone},
+            {"name": "name", "label": "Имя", "value": name},
+            {"name": "email", "label": "Эл. почта", "value": email},
+            {"name": "phone", "label": "Телефон", "value": phone},
         ],
         filter_values={"name": name, "email": email, "phone": phone},
     )
@@ -229,7 +229,7 @@ def _recommendation_fields(
         group=group,
     )
     if not name.strip() or not slug.strip() or not text.strip():
-        return form, "Название, slug и текст обязательны"
+        return form, "Название, код и текст обязательны"
     return form, None
 
 
@@ -354,24 +354,24 @@ def users_page(
         statement=select(User).order_by(col(User.created_at).desc()),
         filters_sql=filters_sql,
         columns=[
-            {"key": "email", "label": "email"},
-            {"key": "full_name", "label": "full_name"},
-            {"key": "group", "label": "group"},
-            {"key": "is_superuser", "label": "is_superuser"},
-            {"key": "is_active", "label": "is_active"},
+            {"key": "email", "label": "Эл. почта"},
+            {"key": "full_name", "label": "Имя"},
+            {"key": "group", "label": "Группа"},
+            {"key": "is_superuser", "label": "Суперпользователь", "type": "checkbox"},
+            {"key": "is_active", "label": "Активен", "type": "checkbox"},
         ],
         row_cells=lambda row: {
             "email": cell(row.email),
             "full_name": cell(row.full_name),
             "group": cell(row.group),
-            "is_superuser": cell(row.is_superuser),
-            "is_active": cell(row.is_active),
+            "is_superuser": row.is_superuser,
+            "is_active": row.is_active,
         },
         filters=[
-            {"name": "email", "label": "email", "value": email},
+            {"name": "email", "label": "Эл. почта", "value": email},
             {
                 "name": "full_name",
-                "label": "full_name",
+                "label": "Имя",
                 "value": full_name,
             },
         ],
@@ -476,7 +476,7 @@ def user_create(
             request,
             user,
             form=form,
-            error="Только superuser может назначать флаг superuser",
+            error="Только суперпользователь может назначать флаг суперпользователя",
             status_code=403,
         )
     try:
@@ -553,7 +553,7 @@ def user_update(
             user,
             form=form,
             target=target,
-            error="Только superuser может назначать флаг superuser",
+            error="Только суперпользователь может назначать флаг суперпользователя",
             status_code=403,
         )
     try:
