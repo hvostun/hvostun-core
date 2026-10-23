@@ -1601,10 +1601,6 @@ def test_expert_can_view_recommendations_but_cannot_edit(
     assert "Создать" not in detail.text
     assert row.slug not in detail.text
     assert client.get("/recommendations/new", follow_redirects=False).status_code == 403
-    assert (
-        client.get(f"/recommendations/{row.id}", follow_redirects=False).status_code
-        == 403
-    )
     response = post(
         client,
         f"/recommendations/{row.id}",

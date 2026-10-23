@@ -15,28 +15,43 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3 mb-md-4">
       <div class="container">
         <a class="navbar-brand" href="/">Hvostun</a>
-        <div class="navbar-nav me-auto">
-          {% if user.is_superuser or user.group == "admin" %}
-          <a class="nav-link" href="/dogs">Собаки</a>
-          {% endif %}
-          <a class="nav-link" href="/surveys">Анкеты</a>
-          <a class="nav-link" href="/scales">Шкалы</a>
-          <a class="nav-link" href="/sessions">Ответы</a>
-          <a class="nav-link" href="/recommendations">Рекомендации</a>
-          {% if user.is_superuser or user.group == "admin" %}
-          <a class="nav-link" href="/users">Администраторы</a>
-          {% endif %}
-          {% if user.is_superuser %}
-          <a class="nav-link" href="/dictionaries">Справочники</a>
-          <a class="nav-link" href="/answer-events">События ответов</a>
-          <a class="nav-link" href="/owners">Владельцы</a>
-          {% endif %}
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#admin-nav"
+          aria-controls="admin-nav"
+          aria-expanded="false"
+          aria-label="Меню"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="admin-nav">
+          <div class="navbar-nav me-auto">
+            {% if user.is_superuser or user.group == "admin" %}
+            <a class="nav-link" href="/dogs">Собаки</a>
+            {% endif %}
+            <a class="nav-link" href="/surveys">Анкеты</a>
+            <a class="nav-link" href="/scales">Шкалы</a>
+            <a class="nav-link" href="/sessions">Ответы</a>
+            <a class="nav-link" href="/recommendations">Рекомендации</a>
+            {% if user.is_superuser or user.group == "admin" %}
+            <a class="nav-link" href="/users">Администраторы</a>
+            {% endif %}
+            {% if user.is_superuser %}
+            <a class="nav-link" href="/dictionaries">Справочники</a>
+            <a class="nav-link" href="/answer-events">События ответов</a>
+            <a class="nav-link" href="/owners">Владельцы</a>
+            {% endif %}
+          </div>
+          <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-2 py-2 py-lg-0">
+            <span class="navbar-text mb-0 text-break">{{ user.email }}</span>
+            <form method="post" action="/logout" class="d-inline">
+              {% include "csrf.html" %}
+              <button class="btn btn-outline-light btn-sm" type="submit">Выйти</button>
+            </form>
+          </div>
         </div>
-        <span class="navbar-text me-3">{{ user.email }}</span>
-        <form method="post" action="/logout" class="d-inline">
-          {% include "csrf.html" %}
-          <button class="btn btn-outline-light btn-sm" type="submit">Выйти</button>
-        </form>
       </div>
     </nav>
     {% endif %}
@@ -46,6 +61,10 @@
       {% endif %}
       {% block content %}{% endblock %}
     </main>
-    <script src="/static/admin.js"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+      defer
+    ></script>
+    <script src="/static/admin.js" defer></script>
   </body>
 </html>
