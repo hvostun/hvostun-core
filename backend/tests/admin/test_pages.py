@@ -1358,11 +1358,10 @@ def _login_expert(client: TestClient, db: Session) -> User:
 
 def test_expert_access_matrix(client: TestClient, db: Session) -> None:
     _login_expert(client, db)
-    for path in ("/surveys", "/scales", "/sessions"):
+    for path in ("/surveys", "/scales", "/sessions", "/recommendations"):
         assert client.get(path).status_code == 200
     for path in (
         "/dogs",
-        "/recommendations",
         "/users",
         "/dictionaries",
         "/answer-events",
@@ -1374,8 +1373,8 @@ def test_expert_access_matrix(client: TestClient, db: Session) -> None:
     assert 'href="/surveys"' in home.text
     assert 'href="/scales"' in home.text
     assert 'href="/sessions"' in home.text
+    assert 'href="/recommendations"' in home.text
     assert 'href="/dogs"' not in home.text
-    assert 'href="/recommendations"' not in home.text
     assert 'href="/users"' not in home.text
 
 
@@ -1484,23 +1483,32 @@ def test_admin_can_create_and_edit_recommendation(
     assert "обязательны" in missing.text
 
 
-def test_expert_cannot_open_recommendation_form(
+def test_expert_can_view_recommendations_but_cannot_edit(
     client: TestClient, db: Session
 ) -> None:
     row = Recommendation(
         name="Closed",
         slug=f"closed-{random_lower_string()}",
-        text="Text",
+        text="Text for experts",
+        description="Short note",
     )
     db.add(row)
     db.commit()
     db.refresh(row)
     _login_expert(client, db)
+    listing = client.get("/recommendations")
+    assert listing.status_code == 200
+    assert "Closed" in listing.text
+    assert 'href="/recommendations/new"' not in listing.text
+    assert row.slug not in listing.text
+    detail = client.get(f"/recommendations/{row.id}")
+    assert detail.status_code == 200
+    assert "Text for experts" in detail.text
+    assert "Short note" in detail.text
+    assert "Сохранить" not in detail.text
+    assert "Создать" not in detail.text
+    assert row.slug not in detail.text
     assert client.get("/recommendations/new", follow_redirects=False).status_code == 403
-    assert (
-        client.get(f"/recommendations/{row.id}", follow_redirects=False).status_code
-        == 403
-    )
     response = post(
         client,
         f"/recommendations/{row.id}",
@@ -1513,6 +1521,8 @@ def test_expert_cannot_open_recommendation_form(
         },
     )
     assert response.status_code == 403
+    db.refresh(row)
+    assert row.name == "Closed"
 
 
 def test_scales_page_visible_to_logged_in_user(client: TestClient, db: Session) -> None:

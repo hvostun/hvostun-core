@@ -6,7 +6,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
-from app.admin.deps import AdminUser, SessionDep, SuperUser
+from app.admin.deps import AdminUser, CurrentUser, SessionDep, SuperUser, is_admin
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
 from app.models import Owner, Recommendation, RecommendationGroup, User, UserGroup
 from app.pagination import execute_page, page_window
@@ -124,16 +124,17 @@ def owners_page(
 def recommendations_page(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: CurrentUser,
     page: int = 1,
     name: str = "",
-    slug: str = "",
+    description: str = "",
 ) -> Any:
     filters_sql: list[Any] = []
     if name:
         filters_sql.append(col(Recommendation.name).ilike(f"%{name}%"))
-    if slug:
-        filters_sql.append(col(Recommendation.slug).ilike(f"%{slug}%"))
+    if description:
+        filters_sql.append(col(Recommendation.description).ilike(f"%{description}%"))
+    can_edit = is_admin(user)
     return _render_list(
         request=request,
         session=session,
@@ -142,24 +143,24 @@ def recommendations_page(
         title="Рекомендации",
         model=Recommendation,
         statement=select(Recommendation).order_by(
-            col(Recommendation.slug), col(Recommendation.created_at)
+            col(Recommendation.name), col(Recommendation.created_at)
         ),
         filters_sql=filters_sql,
         columns=[
-            {"key": "name", "label": "name"},
-            {"key": "description", "label": "description"},
+            {"key": "name", "label": "Название"},
+            {"key": "description", "label": "Описание"},
         ],
         row_cells=lambda row: {
             "name": cell(row.name),
             "description": cell(row.description),
         },
         filters=[
-            {"name": "name", "label": "name", "value": name},
-            {"name": "slug", "label": "slug", "value": slug},
+            {"name": "name", "label": "Название", "value": name},
+            {"name": "description", "label": "Описание", "value": description},
         ],
-        filter_values={"name": name, "slug": slug},
+        filter_values={"name": name, "description": description},
         row_href=lambda row: f"/recommendations/{row.id}",
-        create_href="/recommendations/new",
+        create_href="/recommendations/new" if can_edit else None,
         create_label="Создать",
     )
 
@@ -199,6 +200,7 @@ def _recommendation_form_response(
     target: Recommendation | None = None,
     error: str | None = None,
     status_code: int = 200,
+    can_edit: bool | None = None,
 ) -> Any:
     return templates.TemplateResponse(
         request,
@@ -210,6 +212,7 @@ def _recommendation_form_response(
             "groups": [item.value for item in RecommendationGroup],
             "error": error,
             "is_create": target is None,
+            "can_edit": is_admin(user) if can_edit is None else can_edit,
         },
         status_code=status_code,
     )
@@ -271,7 +274,7 @@ def recommendation_create(
 def recommendation_detail(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: CurrentUser,
     recommendation_id: uuid.UUID,
 ) -> Any:
     try:

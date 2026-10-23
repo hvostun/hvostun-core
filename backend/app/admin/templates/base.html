@@ -22,8 +22,8 @@
           <a class="nav-link" href="/surveys">Анкеты</a>
           <a class="nav-link" href="/scales">Шкалы</a>
           <a class="nav-link" href="/sessions">Ответы</a>
-          {% if user.is_superuser or user.group == "admin" %}
           <a class="nav-link" href="/recommendations">Рекомендации</a>
+          {% if user.is_superuser or user.group == "admin" %}
           <a class="nav-link" href="/users">Администраторы</a>
           {% endif %}
           {% if user.is_superuser %}

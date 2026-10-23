@@ -3,6 +3,7 @@
 {% block content %}
 <p><a href="/recommendations">← Рекомендации</a></p>
 <h1 class="h3">{% if is_create %}Новая рекомендация{% else %}{{ target.name }}{% endif %}</h1>
+{% if can_edit %}
 {% if target %}
 <p class="font-monospace text-muted">{{ target.id }}</p>
 {% endif %}
@@ -13,7 +14,7 @@
     <input class="form-control" id="name" name="name" required value="{{ form.name }}" />
   </div>
   <div class="mb-3">
-    <label class="form-label" for="slug">Slug</label>
+    <label class="form-label" for="slug">Код</label>
     <input class="form-control" id="slug" name="slug" required value="{{ form.slug }}" />
   </div>
   <div class="mb-3">
@@ -34,11 +35,23 @@
   </div>
   <button class="btn btn-primary" type="submit">{% if is_create %}Создать{% else %}Сохранить{% endif %}</button>
 </form>
+{% else %}
+<dl class="row mt-3">
+  <dt class="col-sm-3">Название</dt>
+  <dd class="col-sm-9">{{ form.name }}</dd>
+  <dt class="col-sm-3">Текст</dt>
+  <dd class="col-sm-9" style="white-space: pre-wrap;">{{ form.text }}</dd>
+  <dt class="col-sm-3">Описание</dt>
+  <dd class="col-sm-9">{{ form.description or "—" }}</dd>
+  <dt class="col-sm-3">Группа</dt>
+  <dd class="col-sm-9">{{ form.group }}</dd>
+</dl>
+{% endif %}
 {% if target %}
 <dl class="row mt-4 text-muted">
-  <dt class="col-sm-3">created_at</dt>
+  <dt class="col-sm-3">Создано</dt>
   <dd class="col-sm-9">{{ target.created_at or "—" }}</dd>
-  <dt class="col-sm-3">updated_at</dt>
+  <dt class="col-sm-3">Изменено</dt>
   <dd class="col-sm-9">{{ target.updated_at or "—" }}</dd>
 </dl>
 {% endif %}
