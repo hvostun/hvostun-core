@@ -1591,6 +1591,12 @@ def test_expert_can_view_recommendations_but_cannot_edit(
     listing = client.get("/recommendations")
     assert listing.status_code == 200
     assert "Closed" in listing.text
+    assert "Text for experts" in listing.text
+    assert "Short note" in listing.text
+    assert "Название" in listing.text
+    assert "Описание" in listing.text
+    assert "Текст" in listing.text
+    assert ">Группа<" not in listing.text
     assert 'href="/recommendations/new"' not in listing.text
     assert row.slug not in listing.text
     detail = client.get(f"/recommendations/{row.id}")

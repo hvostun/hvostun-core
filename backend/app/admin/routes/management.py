@@ -120,6 +120,13 @@ def owners_page(
     )
 
 
+def _preview_text(value: str | None, *, limit: int = 160) -> str:
+    text = "" if value is None else str(value).strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
 @router.get("/recommendations")
 def recommendations_page(
     request: Request,
@@ -128,12 +135,15 @@ def recommendations_page(
     page: int = 1,
     name: str = "",
     description: str = "",
+    text: str = "",
 ) -> Any:
     filters_sql: list[Any] = []
     if name:
         filters_sql.append(col(Recommendation.name).ilike(f"%{name}%"))
     if description:
         filters_sql.append(col(Recommendation.description).ilike(f"%{description}%"))
+    if text:
+        filters_sql.append(col(Recommendation.text).ilike(f"%{text}%"))
     can_edit = is_admin(user)
     return _render_list(
         request=request,
@@ -149,16 +159,19 @@ def recommendations_page(
         columns=[
             {"key": "name", "label": "Название"},
             {"key": "description", "label": "Описание"},
+            {"key": "text", "label": "Текст"},
         ],
         row_cells=lambda row: {
             "name": cell(row.name),
             "description": cell(row.description),
+            "text": cell(_preview_text(row.text)),
         },
         filters=[
             {"name": "name", "label": "Название", "value": name},
             {"name": "description", "label": "Описание", "value": description},
+            {"name": "text", "label": "Текст", "value": text},
         ],
-        filter_values={"name": name, "description": description},
+        filter_values={"name": name, "description": description, "text": text},
         row_href=lambda row: f"/recommendations/{row.id}",
         create_href="/recommendations/new" if can_edit else None,
         create_label="Создать",
