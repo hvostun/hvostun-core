@@ -47,7 +47,7 @@
     </thead>
     <tbody>
       {% for row in rows %}
-      <tr>
+      <tr{% if row.class %} class="{{ row.class }}"{% endif %}>
         {% for column in columns %}
         <td>
           {% if column.type == "checkbox" %}

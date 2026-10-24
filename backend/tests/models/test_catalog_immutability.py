@@ -303,7 +303,7 @@ def test_scale_config_validation(
         (Scale, "type", "invalid"),
         (PlacementEvent, "code", "unknown"),
         (User, "group", "invalid"),
-        (Recommendation, "group", "Excitability"),
+        (Recommendation, "group", "nope"),
     ],
 )
 def test_domain_values_reject_invalid_assignments(

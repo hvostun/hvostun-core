@@ -34,7 +34,15 @@
             <a class="nav-link" href="/surveys">Анкеты</a>
             <a class="nav-link" href="/scales">Шкалы</a>
             <a class="nav-link" href="/sessions">Ответы</a>
-            <a class="nav-link" href="/recommendations">Рекомендации</a>
+            <a
+              class="nav-link"
+              href="/recommendations{% if user.group == 'moderator' %}?status={{ 'draft' if pending_recommendation_count > 0 else 'active' }}{% endif %}"
+            >
+              Рекомендации
+              {% if user.group == "moderator" and pending_recommendation_count > 0 %}
+              <span class="badge text-bg-danger">{{ pending_recommendation_count }}</span>
+              {% endif %}
+            </a>
             {% if user.is_superuser or user.group == "admin" %}
             <a class="nav-link" href="/users">Администраторы</a>
             {% endif %}

@@ -17,6 +17,7 @@ from app.models import (
     Owner,
     Question,
     Recommendation,
+    RecommendationStatus,
     Scale,
     SessionRecommendation,
     Shelter,
@@ -1049,6 +1050,7 @@ def _session_with_recommendation_catalog(
         name="Короткая прогулка",
         slug=f"short-walk-{random_lower_string()}",
         text="Выходите на 10 минут.",
+        status=RecommendationStatus.ACTIVE,
     )
     db.add(dog)
     db.add(survey)
@@ -1085,6 +1087,13 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert page.text.index("Добавить рекомендацию") < page.text.index(
         "Вопросы и ответы"
     )
+    assert 'value="new"' in page.text
+    assert "Создать новую" in page.text
+    assert 'id="new-recommendation-form" hidden' in page.text
+    assert 'id="new-recommendation-description"' in page.text
+    assert 'name="description"' in page.text
+    assert 'id="new-recommendation-text"' not in page.text
+    assert 'name="text"' not in page.text
     assert "представить собаку с этой карточки" in page.text
     assert "экспертное решение" in page.text
     assert "Важность" in page.text
@@ -1142,7 +1151,44 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     )
 
 
-def test_session_recommendations_sorted_by_id_desc_and_collapsed_without_mine(
+def test_session_new_recommendation_option_creates_and_assigns(
+    client: TestClient, db: Session
+) -> None:
+    session_row, _catalog, user = _session_with_recommendation_catalog(db)
+    _login_superuser(client)
+    missing = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations",
+        data={"recomendation_id": "new", "name": "", "description": ""},
+    )
+    assert missing.status_code == 400
+    assert "Название и описание обязательны" in missing.text
+    created = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations",
+        data={
+            "recomendation_id": "new",
+            "name": "Тихий вход",
+            "description": "Не встречайте у двери.",
+        },
+        follow_redirects=False,
+    )
+    assert created.status_code == 303
+    row = db.exec(
+        select(Recommendation).where(Recommendation.name == "Тихий вход")
+    ).one()
+    assert row.description == "Не встречайте у двери."
+    assert row.text == ""
+    assignment = db.exec(
+        select(SessionRecommendation).where(
+            SessionRecommendation.recomendation_id == row.id
+        )
+    ).one()
+    assert assignment.session_id == session_row.id
+    assert assignment.user_id == user.id
+
+
+def test_session_recommendations_sorted_by_added_at_desc(
     client: TestClient, db: Session
 ) -> None:
     session_row, first, _user = _session_with_recommendation_catalog(db)
@@ -1162,25 +1208,34 @@ def test_session_recommendations_sorted_by_id_desc_and_collapsed_without_mine(
             group=UserGroup.EXPERT,
         ),
     )
-    for rec_id, catalog in (
-        (uuid.UUID(int=1), first),
-        (uuid.UUID(int=2), second),
-    ):
-        db.add(
-            SessionRecommendation(
-                id=rec_id,
-                user_id=other.id,
-                session_id=session_row.id,
-                recomendation_id=catalog.id,
-                chart_number=0,
-                weight=1.0,
-            )
+    db.add(
+        SessionRecommendation(
+            id=uuid.UUID(int=2),
+            user_id=other.id,
+            session_id=session_row.id,
+            recomendation_id=first.id,
+            chart_number=0,
+            weight=1.0,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
         )
+    )
+    db.add(
+        SessionRecommendation(
+            id=uuid.UUID(int=1),
+            user_id=other.id,
+            session_id=session_row.id,
+            recomendation_id=second.id,
+            chart_number=0,
+            weight=1.0,
+            created_at=datetime(2026, 2, 1, tzinfo=UTC),
+        )
+    )
     db.commit()
     _login_superuser(client)
     page = client.get(f"/sessions/{session_row.id}")
     assert page.status_code == 200
-    assert page.text.index("Длинная прогулка:") < page.text.index("Короткая прогулка:")
+    assigned = page.text.split("Назначенные", 1)[1]
+    assert assigned.index("Длинная прогулка") < assigned.index("Короткая прогулка")
     assert "accordion-item" in page.text
     assert (
         " open"
@@ -1435,6 +1490,101 @@ def _login_expert(client: TestClient, db: Session) -> User:
     return user
 
 
+def _login_moderator(client: TestClient, db: Session) -> User:
+    password = f"Mod1-{random_lower_string()[:8]}"
+    user = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"moderator-{random_lower_string()}@example.com",
+            password=password,
+            group=UserGroup.MODERATOR,
+        ),
+    )
+    post(client, "/login", data={"email": user.email, "password": password})
+    return user
+
+
+def test_moderator_sessions_hide_evaluation_count(
+    client: TestClient, db: Session
+) -> None:
+    experts = [
+        crud.create_user(
+            session=db,
+            user_create=UserCreate(
+                email=f"rater-{random_lower_string()}@example.com",
+                password=f"Pass1-{random_lower_string()[:8]}",
+                group=UserGroup.EXPERT,
+            ),
+        )
+        for _ in range(2)
+    ]
+    admin = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"rater-admin-{random_lower_string()}@example.com",
+            password=f"Pass1-{random_lower_string()[:8]}",
+            group=UserGroup.ADMIN,
+        ),
+    )
+    session_owner = Owner(name="Владелец оценок")
+    dog = Dog(name="Rex Expert Counts")
+    survey = Survey(
+        name="C-BARQ Expert Counts",
+        slug=f"cbarq-expert-counts-{random_lower_string()}",
+    )
+    recommendation = Recommendation(
+        name="Оценка",
+        slug=f"expert-count-{random_lower_string()}",
+        text="Текст.",
+    )
+    db.add(session_owner)
+    db.add(dog)
+    db.add(survey)
+    db.add(recommendation)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(survey)
+    db.refresh(recommendation)
+    version = SurveyVersion(
+        survey_id=survey.id, version_num=1, description=survey.description
+    )
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    session_row = SurveySession(
+        owner_id=session_owner.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+    for user in (*experts, admin):
+        db.add(
+            SessionRecommendation(
+                user_id=user.id,
+                session_id=session_row.id,
+                recomendation_id=recommendation.id,
+                chart_number=0,
+                weight=1.0,
+            )
+        )
+    db.commit()
+
+    _login_moderator(client, db)
+    moderator_page = client.get("/sessions")
+    assert moderator_page.status_code == 200
+    assert "Rex Expert Counts" in moderator_page.text
+    assert "Оценили" not in moderator_page.text
+
+    _login_expert(client, db)
+    expert_page = client.get("/sessions")
+    assert expert_page.status_code == 200
+    assert "Rex Expert Counts" in expert_page.text
+    assert "Оценили" not in expert_page.text
+
+
 def test_expert_access_matrix(client: TestClient, db: Session) -> None:
     _login_expert(client, db)
     for path in ("/surveys", "/scales", "/sessions", "/recommendations"):
@@ -1583,6 +1733,7 @@ def test_expert_can_view_recommendations_but_cannot_edit(
         slug=f"closed-{random_lower_string()}",
         text="Text for experts",
         description="Short note",
+        status=RecommendationStatus.ACTIVE,
     )
     db.add(row)
     db.commit()
@@ -1591,18 +1742,25 @@ def test_expert_can_view_recommendations_but_cannot_edit(
     listing = client.get("/recommendations")
     assert listing.status_code == 200
     assert "Closed" in listing.text
-    assert "Text for experts" in listing.text
+    assert "Text for experts" not in listing.text
     assert "Short note" in listing.text
     assert "Название" in listing.text
     assert "Описание" in listing.text
-    assert "Текст" in listing.text
+    assert "<th>Текст</th>" not in listing.text
+    assert 'name="status"' not in listing.text
+    assert 'name="name"' not in listing.text
+    assert 'name="description"' not in listing.text
+    assert 'name="text"' not in listing.text
     assert ">Группа<" not in listing.text
     assert 'href="/recommendations/new"' not in listing.text
     assert row.slug not in listing.text
     detail = client.get(f"/recommendations/{row.id}")
     assert detail.status_code == 200
-    assert "Text for experts" in detail.text
+    assert "Closed" in detail.text
+    assert "Text for experts" not in detail.text
     assert "Short note" in detail.text
+    assert ">Текст<" not in detail.text
+    assert ">Группа<" not in detail.text
     assert "Сохранить" not in detail.text
     assert "Создать" not in detail.text
     assert row.slug not in detail.text
@@ -1621,6 +1779,178 @@ def test_expert_can_view_recommendations_but_cannot_edit(
     assert response.status_code == 403
     db.refresh(row)
     assert row.name == "Closed"
+
+
+def test_moderator_edits_recommendation_and_list_shows_status(
+    client: TestClient, db: Session
+) -> None:
+    draft = Recommendation(
+        name="Черновик модерации",
+        slug=f"draft-{random_lower_string()}",
+        text="Старый текст",
+        description="Заметка",
+        status=RecommendationStatus.DRAFT,
+    )
+    visible = Recommendation(
+        name="Уже видна",
+        slug=f"visible-{random_lower_string()}",
+        text="Общий текст",
+        status=RecommendationStatus.ACTIVE,
+    )
+    canceled = Recommendation(
+        name="Отклоненная карточка",
+        slug=f"canceled-{random_lower_string()}",
+        text="Скрытый текст",
+        status=RecommendationStatus.CANCELED,
+    )
+    db.add(draft)
+    db.add(visible)
+    db.add(canceled)
+    db.commit()
+    db.refresh(draft)
+
+    _login_moderator(client, db)
+    listing = client.get("/recommendations")
+    assert listing.status_code == 200
+    assert "Статус" in listing.text
+    assert "на модерацию" in listing.text
+    assert "видна всем" in listing.text
+    assert "Отклоненная карточка" in listing.text
+    assert "отклонена" in listing.text
+    assert 'name="status"' in listing.text
+    assert 'name="name"' not in listing.text
+    assert 'name="description"' not in listing.text
+    assert 'name="text"' not in listing.text
+    only_draft = client.get("/recommendations", params={"status": "draft"})
+    assert "Черновик модерации" in only_draft.text
+    assert "Уже видна" not in only_draft.text
+    assert 'value="draft" selected' in only_draft.text
+    only_active = client.get("/recommendations", params={"status": "active"})
+    assert "Уже видна" in only_active.text
+    assert "Черновик модерации" not in only_active.text
+    assert "Отклоненная карточка" not in only_active.text
+    only_canceled = client.get("/recommendations", params={"status": "canceled"})
+    assert "Отклоненная карточка" in only_canceled.text
+    assert "Черновик модерации" not in only_canceled.text
+    assert "Уже видна" not in only_canceled.text
+    assert 'value="canceled" selected' in only_canceled.text
+    assert 'href="/recommendations/new"' in listing.text
+    pending_rows = re.findall(
+        r'<tr class="recommendation-pending">.*?</tr>', listing.text, re.S
+    )
+    draft_row = next((row for row in pending_rows if "Черновик модерации" in row), None)
+    assert draft_row is not None
+    assert "на модерацию" in draft_row
+
+    page = client.get(f"/recommendations/{draft.id}")
+    assert page.status_code == 200
+    assert "Сохранить" in page.text
+    assert 'name="text"' not in page.text
+    assert ">Текст<" not in page.text
+    assert 'name="description"' in page.text
+    assert 'name="status"' in page.text
+    assert 'name="name"' not in page.text
+    assert 'name="slug"' not in page.text
+    assert 'name="group"' not in page.text
+    assert ">Код<" not in page.text
+    assert ">Группа<" not in page.text
+    assert draft.slug not in page.text
+    updated = post(
+        client,
+        f"/recommendations/{draft.id}",
+        data={
+            "name": "Подмена названия",
+            "slug": "forged-slug",
+            "text": "Новый текст модератора",
+            "description": "Новое описание",
+            "group": "other",
+            "status": "active",
+        },
+        follow_redirects=False,
+    )
+    assert updated.status_code == 303
+    db.refresh(draft)
+    assert draft.name == "Черновик модерации"
+    assert draft.slug != "forged-slug"
+    assert draft.description == "Новое описание"
+    assert draft.text == "Старый текст"
+    assert draft.status == RecommendationStatus.ACTIVE
+
+    hidden = client.get(f"/recommendations/{canceled.id}")
+    assert hidden.status_code == 200
+    restored = post(
+        client,
+        f"/recommendations/{canceled.id}",
+        data={"text": "Скрытый текст", "status": "canceled"},
+        follow_redirects=False,
+    )
+    assert restored.status_code == 303
+
+    _login_expert(client, db)
+    expert_list = client.get("/recommendations")
+    assert "Уже видна" in expert_list.text
+    assert "Отклоненная карточка" not in expert_list.text
+    fresh_draft = Recommendation(
+        name="Ещё на модерации",
+        slug=f"fresh-draft-{random_lower_string()}",
+        text="Не для каталога",
+        status=RecommendationStatus.DRAFT,
+    )
+    db.add(fresh_draft)
+    db.commit()
+    db.refresh(fresh_draft)
+    expert_list = client.get("/recommendations")
+    assert "Ещё на модерации" not in expert_list.text
+    assert (
+        client.get(
+            f"/recommendations/{fresh_draft.id}", follow_redirects=False
+        ).status_code
+        == 404
+    )
+
+
+def test_moderator_nav_badge_counts_new_recommendations(
+    client: TestClient, db: Session
+) -> None:
+    drafts = db.exec(
+        select(Recommendation).where(
+            Recommendation.status == RecommendationStatus.DRAFT
+        )
+    ).all()
+    for row in drafts:
+        row.status = RecommendationStatus.ACTIVE
+    db.commit()
+    _login_moderator(client, db)
+    empty = client.get("/")
+    assert empty.status_code == 200
+    assert "text-bg-danger" not in empty.text
+    assert 'href="/recommendations?status=active"' in empty.text
+    visible = client.get("/recommendations?status=active")
+    assert 'value="active" selected' in visible.text
+
+    db.add(
+        Recommendation(
+            name="Новая для бейджа",
+            slug=f"badge-{random_lower_string()}",
+            text="Ждёт модератора",
+            status=RecommendationStatus.DRAFT,
+        )
+    )
+    db.commit()
+    page = client.get("/sessions")
+    assert re.search(
+        r'href="/recommendations\?status=draft"\s*>\s*Рекомендации\s*'
+        r'<span class="badge text-bg-danger">1</span>',
+        page.text,
+    )
+    pending = client.get("/recommendations?status=draft")
+    assert 'value="draft" selected' in pending.text
+    assert "Новая для бейджа" in pending.text
+
+    _login_expert(client, db)
+    assert "text-bg-danger" not in client.get("/").text
+    _login_admin(client, db)
+    assert "text-bg-danger" not in client.get("/recommendations").text
 
 
 def test_scales_page_visible_to_logged_in_user(client: TestClient, db: Session) -> None:

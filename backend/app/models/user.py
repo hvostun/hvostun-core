@@ -12,6 +12,7 @@ from app.models.base import UUID_PK_KWARGS, TimestampMixin
 class UserGroup(StrEnum):
     ADMIN = "admin"
     EXPERT = "expert"
+    MODERATOR = "moderator"
 
 
 class UserBase(SQLModel):
@@ -52,7 +53,10 @@ class UpdatePassword(SQLModel):
 class User(UserBase, TimestampMixin, table=True):
     __tablename__ = "users"  # pyright: ignore[reportAssignmentType]
     __table_args__ = (
-        CheckConstraint("\"group\" IN ('admin', 'expert')", name="ck_users_group"),
+        CheckConstraint(
+            "\"group\" IN ('admin', 'expert', 'moderator')",
+            name="ck_users_group",
+        ),
     )
 
     id: uuid.UUID = Field(

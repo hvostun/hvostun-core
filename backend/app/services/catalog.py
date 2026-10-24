@@ -8,6 +8,7 @@ from app.models import (
     Question,
     Recommendation,
     RecommendationGroup,
+    RecommendationStatus,
     Scale,
     ScaleType,
     Survey,
@@ -166,6 +167,15 @@ def update_survey_question_layout(
     session.commit()
 
 
+def draft_recommendation_count(session: Session) -> int:
+    value = session.exec(
+        select(func.count())
+        .select_from(Recommendation)
+        .where(Recommendation.status == RecommendationStatus.DRAFT)
+    ).one()
+    return int(value)
+
+
 def get_recommendation(
     session: Session, recommendation_id: uuid.UUID
 ) -> Recommendation:
@@ -190,6 +200,7 @@ def create_recommendation(
         text=text,
         description=description,
         group=group,
+        status=RecommendationStatus.DRAFT,
     )
     session.add(row)
     try:
@@ -210,13 +221,18 @@ def update_recommendation(
     text: str,
     description: str | None,
     group: RecommendationGroup,
+    status: RecommendationStatus | None = None,
+    text_and_status_only: bool = False,
 ) -> Recommendation:
     row = get_recommendation(session, recommendation_id)
-    row.name = name
-    row.slug = slug
     row.text = text
     row.description = description
-    row.group = group
+    if status is not None:
+        row.status = status
+    if not text_and_status_only:
+        row.name = name
+        row.slug = slug
+        row.group = group
     try:
         session.commit()
     except IntegrityError as exc:

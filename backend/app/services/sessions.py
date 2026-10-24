@@ -17,6 +17,7 @@ from app.models import (
     Owner,
     Question,
     Recommendation,
+    RecommendationStatus,
     Scale,
     SessionRecommendation,
     Survey,
@@ -58,6 +59,26 @@ class SessionRecommendationPermissionError(PermissionError):
 
 def can_manage_all_session_recommendations(user: User) -> bool:
     return user.is_superuser or user.group == UserGroup.ADMIN
+
+
+def can_see_evaluation_counts(user: User) -> bool:
+    return user.is_superuser or user.group == UserGroup.ADMIN
+
+
+def expert_evaluation_count_subquery() -> Any:
+    """Distinct experts who left a recommendation, one row per session."""
+    return (
+        select(
+            col(SessionRecommendation.session_id).label("session_id"),
+            func.count(func.distinct(SessionRecommendation.user_id)).label(
+                "user_count"
+            ),
+        )
+        .join(User, col(User.id) == SessionRecommendation.user_id)
+        .where(User.group == UserGroup.EXPERT)
+        .group_by(col(SessionRecommendation.session_id))
+        .subquery()
+    )
 
 
 def parse_chart_number(raw: str) -> int:
@@ -400,22 +421,30 @@ def get_session_recommendations(
     if not can_manage_all_session_recommendations(current_user):
         statement = statement.where(SessionRecommendation.user_id == current_user.id)
     return list(
-        session.exec(statement.order_by(col(SessionRecommendation.id).desc())).all()
+        session.exec(
+            statement.order_by(
+                col(SessionRecommendation.created_at).desc(),
+                col(SessionRecommendation.id).desc(),
+            )
+        ).all()
     )
 
 
 def session_recommendation_user_counts(
-    session: Session, session_ids: list[uuid.UUID], current_user: User
+    session: Session, session_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, int]:
     counts = dict.fromkeys(session_ids, 0)
     if not session_ids:
         return counts
-    statement = select(
-        SessionRecommendation.session_id,
-        func.count(func.distinct(SessionRecommendation.user_id)),
-    ).where(col(SessionRecommendation.session_id).in_(session_ids))
-    if not can_manage_all_session_recommendations(current_user):
-        statement = statement.where(SessionRecommendation.user_id == current_user.id)
+    statement = (
+        select(
+            SessionRecommendation.session_id,
+            func.count(func.distinct(SessionRecommendation.user_id)),
+        )
+        .join(User, col(User.id) == SessionRecommendation.user_id)
+        .where(col(SessionRecommendation.session_id).in_(session_ids))
+        .where(User.group == UserGroup.EXPERT)
+    )
     rows = session.exec(statement.group_by(col(SessionRecommendation.session_id))).all()
     for session_id, user_count in rows:
         counts[session_id] = int(user_count)
@@ -510,7 +539,9 @@ def answer_rates(
 def list_catalog_recommendations(session: Session) -> list[Recommendation]:
     return list(
         session.exec(
-            select(Recommendation).order_by(
+            select(Recommendation)
+            .where(Recommendation.status == RecommendationStatus.ACTIVE)
+            .order_by(
                 col(Recommendation.name),
                 col(Recommendation.slug),
             )
@@ -536,6 +567,55 @@ def available_recommendations_for_user(
         for row in list_catalog_recommendations(session)
         if row.id not in assigned_ids
     ]
+
+
+def _recommendation_slug(name: str) -> str:
+    base = re.sub(r"[^\w]+", "-", name.strip().lower(), flags=re.UNICODE).strip("-_")
+    base = base[:60].strip("-_") or "recommendation"
+    return f"{base}-{uuid.uuid4().hex[:8]}"
+
+
+def create_session_recommendation(
+    session: Session,
+    *,
+    session_id: uuid.UUID,
+    current_user: User,
+    name: str,
+    description: str,
+) -> SessionRecommendation:
+    get_accessible_session(session, session_id, current_user)
+    title = name.strip()
+    body = description.strip()
+    if not title or not body:
+        raise SessionRecommendationError("Название и описание обязательны")
+    slug = _recommendation_slug(title)
+    for _ in range(4):
+        taken = session.exec(
+            select(Recommendation.id).where(Recommendation.slug == slug)
+        ).first()
+        if taken is None:
+            break
+        slug = _recommendation_slug(title)
+    else:
+        raise SessionRecommendationError("Не удалось сохранить рекомендацию")
+    catalog = Recommendation(name=title, slug=slug, text="", description=body)
+    session.add(catalog)
+    session.flush()
+    row = SessionRecommendation(
+        user_id=current_user.id,
+        session_id=session_id,
+        recomendation_id=catalog.id,
+        chart_number=MANUAL_CHART_NUMBER,
+        weight=MANUAL_WEIGHT,
+    )
+    session.add(row)
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise SessionRecommendationError("Не удалось сохранить рекомендацию") from exc
+    session.refresh(row)
+    return row
 
 
 def add_session_recommendation(
@@ -691,7 +771,7 @@ def group_recommendations(
             "id": item.id,
             "recommendation_name": catalog.name,
             "recommendation_slug": catalog.slug,
-            "recommendation_text": catalog.text,
+            "recommendation_description": catalog.description,
             "author_name": author.full_name or author.email,
             "user_id": item.user_id,
             "chart_number": item.chart_number,

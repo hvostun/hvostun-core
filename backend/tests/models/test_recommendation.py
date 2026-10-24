@@ -8,6 +8,7 @@ from app.models import (
     Dog,
     Owner,
     Recommendation,
+    RecommendationStatus,
     SessionRecommendation,
     Survey,
     SurveySession,
@@ -29,6 +30,7 @@ def test_recommendation_persists_guid_and_text(db: Session) -> None:
 
     assert row.id is not None
     assert row.slug == slug
+    assert row.status == RecommendationStatus.DRAFT
     assert row.created_at is not None
     assert row.updated_at is not None
 
