@@ -6,9 +6,25 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
-from app.admin.deps import AdminUser, CurrentUser, SessionDep, SuperUser, is_admin
+from app.admin.deps import (
+    AdminUser,
+    CurrentUser,
+    RecommendationEditor,
+    SessionDep,
+    SuperUser,
+    can_edit_recommendations,
+    is_admin,
+)
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
-from app.models import Owner, Recommendation, RecommendationGroup, User, UserGroup
+from app.models import (
+    Owner,
+    Recommendation,
+    RecommendationGroup,
+    RecommendationStatus,
+    User,
+    UserGroup,
+)
+from app.models.recommendation import RECOMMENDATION_STATUS_LABELS
 from app.pagination import execute_page, page_window
 from app.services import catalog
 from app.services import users as user_service
@@ -28,9 +44,10 @@ def _render_list(
     filters_sql: list[Any],
     columns: list[dict[str, str]],
     row_cells: Any,
-    filters: list[dict[str, str]],
+    filters: list[Any],
     filter_values: dict[str, str],
     row_href: Callable[[Any], str | None] | None = None,
+    row_class: Callable[[Any], str] | None = None,
     create_href: str | None = None,
     create_label: str | None = None,
 ) -> Any:
@@ -57,6 +74,7 @@ def _render_list(
             rows=[
                 {
                     "href": row_href(row) if row_href else None,
+                    "class": row_class(row) if row_class else "",
                     "cells": row_cells(row),
                 }
                 for row in rows
@@ -120,31 +138,32 @@ def owners_page(
     )
 
 
-def _preview_text(value: str | None, *, limit: int = 160) -> str:
-    text = "" if value is None else str(value).strip()
-    if len(text) <= limit:
-        return text
-    return text[: limit - 1].rstrip() + "…"
-
-
 @router.get("/recommendations")
 def recommendations_page(
     request: Request,
     session: SessionDep,
     user: CurrentUser,
     page: int = 1,
-    name: str = "",
-    description: str = "",
-    text: str = "",
+    status: str = "",
 ) -> Any:
     filters_sql: list[Any] = []
-    if name:
-        filters_sql.append(col(Recommendation.name).ilike(f"%{name}%"))
-    if description:
-        filters_sql.append(col(Recommendation.description).ilike(f"%{description}%"))
-    if text:
-        filters_sql.append(col(Recommendation.text).ilike(f"%{text}%"))
-    can_edit = is_admin(user)
+    can_edit = can_edit_recommendations(user)
+    visible_statuses = (
+        RecommendationStatus.DRAFT,
+        RecommendationStatus.ACTIVE,
+        RecommendationStatus.CANCELED,
+    )
+    chosen = status if status in {item.value for item in visible_statuses} else ""
+    if not can_edit:
+        filters_sql.append(Recommendation.status == RecommendationStatus.ACTIVE)
+    elif chosen:
+        filters_sql.append(Recommendation.status == RecommendationStatus(chosen))
+    columns: list[dict[str, str]] = [
+        {"key": "name", "label": "Название"},
+        {"key": "description", "label": "Описание"},
+    ]
+    if can_edit:
+        columns.append({"key": "status", "label": "Статус"})
     return _render_list(
         request=request,
         session=session,
@@ -156,22 +175,38 @@ def recommendations_page(
             col(Recommendation.name), col(Recommendation.created_at)
         ),
         filters_sql=filters_sql,
-        columns=[
-            {"key": "name", "label": "Название"},
-            {"key": "description", "label": "Описание"},
-            {"key": "text", "label": "Текст"},
-        ],
+        columns=columns,
         row_cells=lambda row: {
             "name": cell(row.name),
             "description": cell(row.description),
-            "text": cell(_preview_text(row.text)),
+            "status": cell(RECOMMENDATION_STATUS_LABELS[row.status]),
         },
-        filters=[
-            {"name": "name", "label": "Название", "value": name},
-            {"name": "description", "label": "Описание", "value": description},
-            {"name": "text", "label": "Текст", "value": text},
-        ],
-        filter_values={"name": name, "description": description, "text": text},
+        row_class=lambda row: (
+            "recommendation-pending" if row.status == RecommendationStatus.DRAFT else ""
+        ),
+        filters=(
+            [
+                {
+                    "name": "status",
+                    "type": "select",
+                    "label": "Статус",
+                    "value": chosen,
+                    "options": [
+                        {"value": "", "label": "Все"},
+                        *[
+                            {
+                                "value": item.value,
+                                "label": RECOMMENDATION_STATUS_LABELS[item],
+                            }
+                            for item in visible_statuses
+                        ],
+                    ],
+                }
+            ]
+            if can_edit
+            else []
+        ),
+        filter_values={"status": chosen},
         row_href=lambda row: f"/recommendations/{row.id}",
         create_href="/recommendations/new" if can_edit else None,
         create_label="Создать",
@@ -185,6 +220,7 @@ def _recommendation_form(
     text: str = "",
     description: str = "",
     group: str = RecommendationGroup.OTHER,
+    status: str = "",
 ) -> dict[str, str]:
     return {
         "name": name,
@@ -192,6 +228,7 @@ def _recommendation_form(
         "text": text,
         "description": description,
         "group": group,
+        "status": status,
     }
 
 
@@ -202,7 +239,18 @@ def _recommendation_form_from_row(row: Recommendation) -> dict[str, str]:
         text=row.text,
         description=row.description or "",
         group=row.group,
+        status=RecommendationStatus(row.status).value,
     )
+
+
+def _recommendation_edit_mode(user: User, target: Recommendation | None) -> str:
+    if target is None:
+        return "create"
+    if is_admin(user):
+        return "full"
+    if user.group == UserGroup.MODERATOR:
+        return "moderate"
+    return "view"
 
 
 def _recommendation_form_response(
@@ -223,16 +271,28 @@ def _recommendation_form_response(
             "target": target,
             "form": form,
             "groups": [item.value for item in RecommendationGroup],
+            "statuses": [
+                {"value": item.value, "label": RECOMMENDATION_STATUS_LABELS[item]}
+                for item in RecommendationStatus
+            ],
             "error": error,
             "is_create": target is None,
-            "can_edit": is_admin(user) if can_edit is None else can_edit,
+            "edit_mode": _recommendation_edit_mode(user, target),
+            "can_edit": (
+                can_edit_recommendations(user) if can_edit is None else can_edit
+            ),
         },
         status_code=status_code,
     )
 
 
 def _recommendation_fields(
-    name: str, slug: str, text: str, description: str, group: str
+    name: str,
+    slug: str,
+    text: str,
+    description: str,
+    group: str,
+    status: str = "",
 ) -> tuple[dict[str, str], str | None]:
     form = _recommendation_form(
         name=name,
@@ -240,14 +300,22 @@ def _recommendation_fields(
         text=text,
         description=description,
         group=group,
+        status=status,
     )
     if not name.strip() or not slug.strip() or not text.strip():
         return form, "Название, код и текст обязательны"
     return form, None
 
 
+def _parse_recommendation_status(raw: str) -> RecommendationStatus | None:
+    try:
+        return RecommendationStatus(raw)
+    except ValueError:
+        return None
+
+
 @router.get("/recommendations/new")
-def recommendation_new(request: Request, user: AdminUser) -> Any:
+def recommendation_new(request: Request, user: RecommendationEditor) -> Any:
     return _recommendation_form_response(request, user, form=_recommendation_form())
 
 
@@ -255,7 +323,7 @@ def recommendation_new(request: Request, user: AdminUser) -> Any:
 def recommendation_create(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: RecommendationEditor,
     name: str = Form(""),
     slug: str = Form(""),
     text: str = Form(""),
@@ -294,6 +362,10 @@ def recommendation_detail(
         target = catalog.get_recommendation(session, recommendation_id)
     except catalog.CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if target.status != RecommendationStatus.ACTIVE and not can_edit_recommendations(
+        user
+    ):
+        raise HTTPException(status_code=404, detail="Recommendation not found")
     return _recommendation_form_response(
         request, user, form=_recommendation_form_from_row(target), target=target
     )
@@ -303,32 +375,82 @@ def recommendation_detail(
 def recommendation_update(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: RecommendationEditor,
     recommendation_id: uuid.UUID,
     name: str = Form(""),
     slug: str = Form(""),
     text: str = Form(""),
     description: str = Form(""),
     group: str = Form(RecommendationGroup.OTHER),
+    status: str = Form(""),
 ) -> Any:
     try:
         target = catalog.get_recommendation(session, recommendation_id)
     except catalog.CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    form, error = _recommendation_fields(name, slug, text, description, group)
-    if error:
-        return _recommendation_form_response(
-            request, user, form=form, target=target, error=error, status_code=400
+    moderate = not is_admin(user)
+    if moderate:
+        form = _recommendation_form_from_row(target)
+        form["description"] = description
+        form["status"] = status
+        parsed_status = _parse_recommendation_status(status)
+        if parsed_status is None:
+            return _recommendation_form_response(
+                request,
+                user,
+                form=form,
+                target=target,
+                error="Неизвестный статус",
+                status_code=400,
+            )
+        saved_name = target.name
+        saved_slug = target.slug
+        saved_text = target.text
+        saved_description = description.strip() or None
+        saved_group = target.group
+    else:
+        form, error = _recommendation_fields(
+            name, slug, text, description, group, status
         )
+        if error:
+            return _recommendation_form_response(
+                request, user, form=form, target=target, error=error, status_code=400
+            )
+        parsed_status = (
+            RecommendationStatus(target.status)
+            if not status.strip()
+            else _parse_recommendation_status(status)
+        )
+        if parsed_status is None:
+            return _recommendation_form_response(
+                request,
+                user,
+                form=form,
+                target=target,
+                error="Неизвестный статус",
+                status_code=400,
+            )
+        saved_name = name.strip()
+        saved_slug = slug.strip()
+        saved_text = text.strip()
+        saved_description = description.strip() or None
+        try:
+            saved_group = RecommendationGroup(group)
+        except ValueError as exc:
+            return _recommendation_form_response(
+                request, user, form=form, target=target, error=str(exc), status_code=400
+            )
     try:
         catalog.update_recommendation(
             session,
             recommendation_id,
-            name=name.strip(),
-            slug=slug.strip(),
-            text=text.strip(),
-            description=description.strip() or None,
-            group=RecommendationGroup(group),
+            name=saved_name,
+            slug=saved_slug,
+            text=saved_text,
+            description=saved_description,
+            group=saved_group,
+            status=parsed_status,
+            text_and_status_only=moderate,
         )
     except (catalog.CatalogUpdateError, ValueError) as exc:
         session.rollback()

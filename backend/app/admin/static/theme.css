@@ -273,3 +273,9 @@ a.view-tab:hover {
     content: "| ";
   }
 }
+
+.table > tbody > tr.recommendation-pending > * {
+  --bs-table-bg-type: var(--sand);
+  --bs-table-bg: var(--sand);
+  background-color: var(--sand);
+}

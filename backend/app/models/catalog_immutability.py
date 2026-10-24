@@ -19,7 +19,11 @@ from app.models.questionnairy import (
     SurveySession,
     SurveyVersion,
 )
-from app.models.recommendation import Recommendation, RecommendationGroup
+from app.models.recommendation import (
+    Recommendation,
+    RecommendationGroup,
+    RecommendationStatus,
+)
 from app.models.user import User, UserGroup
 
 
@@ -74,6 +78,7 @@ def _validate_domain_values(session: SASession) -> None:
                 obj.group = UserGroup(obj.group)
             elif isinstance(obj, Recommendation):
                 obj.group = RecommendationGroup(obj.group)
+                obj.status = RecommendationStatus(obj.status)
         except ValueError as exc:
             raise DomainValueValidationError(str(exc)) from exc
 

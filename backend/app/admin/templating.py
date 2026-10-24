@@ -11,7 +11,12 @@ from app.pagination import DEFAULT_PAGE_SIZE, page_count
 
 
 def _template_context(request: Request) -> dict[str, Any]:
-    return {"csrf_token": getattr(request.state, "csrf_token", "")}
+    return {
+        "csrf_token": getattr(request.state, "csrf_token", ""),
+        "pending_recommendation_count": getattr(
+            request.state, "pending_recommendation_count", 0
+        ),
+    }
 
 
 templates = Jinja2Templates(

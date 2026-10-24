@@ -67,39 +67,27 @@ def sessions_page(
         filters.append(my_recommendation)
     elif mine == "no":
         filters.append(~my_recommendation)
-    recommendation_users: Any = select(
-        col(SessionRecommendation.session_id).label("session_id"),
-        func.count(func.distinct(SessionRecommendation.user_id)).label("user_count"),
-    )
-    if not session_service.can_manage_all_session_recommendations(user):
-        recommendation_users = recommendation_users.where(
-            SessionRecommendation.user_id == user.id
-        )
-    recommendation_users_subquery = recommendation_users.group_by(
-        col(SessionRecommendation.session_id)
-    ).subquery()
+    show_evaluation_counts = session_service.can_see_evaluation_counts(user)
+    recommendation_users_subquery = session_service.expert_evaluation_count_subquery()
     count_stmt = select(func.count()).select_from(SurveySession)
-    stmt = (
-        select(
-            SurveySession,
-            Dog,
-            my_recommendation,
-        )
-        .join(Dog, col(SurveySession.dog_id) == Dog.id)
-        .outerjoin(
+    stmt = select(
+        SurveySession,
+        Dog,
+        my_recommendation,
+    ).join(Dog, col(SurveySession.dog_id) == Dog.id)
+    if show_evaluation_counts:
+        stmt = stmt.outerjoin(
             recommendation_users_subquery,
             col(SurveySession.id) == recommendation_users_subquery.c.session_id,
         )
-    )
     if filters:
         count_stmt = count_stmt.where(*filters)
         stmt = stmt.where(*filters)
-    user_count = func.coalesce(recommendation_users_subquery.c.user_count, 0)
     ordering: tuple[Any, ...]
-    if users_sort == "asc":
-        ordering = (user_count.asc(), col(SurveySession.created_at).desc())
-    elif users_sort == "desc":
-        ordering = (user_count.desc(), col(SurveySession.created_at).desc())
+    if show_evaluation_counts and users_sort in {"asc", "desc"}:
+        user_count = func.coalesce(recommendation_users_subquery.c.user_count, 0)
+        direction = user_count.asc() if users_sort == "asc" else user_count.desc()
+        ordering = (direction, col(SurveySession.created_at).desc())
     else:
         ordering = (col(SurveySession.created_at).desc(),)
     rows, count = execute_page(
@@ -110,10 +98,43 @@ def sessions_page(
         limit=limit,
     )
     page_ids = [row.id for row, *_ in rows]
-    user_counts = session_service.session_recommendation_user_counts(
-        session, page_ids, user
-    )
+    user_counts = session_service.session_recommendation_user_counts(session, page_ids)
     rates = session_service.answer_rates(session, page_ids)
+    columns: list[dict[str, Any]] = [
+        {"key": "dog", "label": "Собака"},
+        {"key": "answer_rate", "label": "Ответов, %"},
+    ]
+    if show_evaluation_counts:
+        columns.append(
+            {
+                "key": "users",
+                "label": (
+                    "Оценили ↑"
+                    if users_sort == "asc"
+                    else ("Оценили ↓" if users_sort == "desc" else "Оценили")
+                ),
+                "sort_href": (
+                    "?"
+                    + filter_qs(
+                        {
+                            "status": status,
+                            "owner_id": owner_id,
+                            "dog_id": dog_id,
+                            "survey_version_id": survey_version_id,
+                            "mine": mine,
+                            "users_sort": ("asc" if users_sort == "desc" else "desc"),
+                        }
+                    )
+                ),
+            }
+        )
+    columns.append(
+        {
+            "key": "has_mine",
+            "label": "Моя оценка",
+            "type": "checkbox",
+        }
+    )
     return templates.TemplateResponse(
         request,
         "list.html",
@@ -121,38 +142,7 @@ def sessions_page(
             request=request,
             user=user,
             title="Ответы",
-            columns=[
-                {"key": "dog", "label": "Собака"},
-                {"key": "answer_rate", "label": "Ответов, %"},
-                {
-                    "key": "users",
-                    "label": (
-                        "Оценили ↑"
-                        if users_sort == "asc"
-                        else ("Оценили ↓" if users_sort == "desc" else "Оценили")
-                    ),
-                    "sort_href": (
-                        "?"
-                        + filter_qs(
-                            {
-                                "status": status,
-                                "owner_id": owner_id,
-                                "dog_id": dog_id,
-                                "survey_version_id": survey_version_id,
-                                "mine": mine,
-                                "users_sort": (
-                                    "asc" if users_sort == "desc" else "desc"
-                                ),
-                            }
-                        )
-                    ),
-                },
-                {
-                    "key": "has_mine",
-                    "label": "Моя оценка",
-                    "type": "checkbox",
-                },
-            ],
+            columns=columns,
             rows=[
                 {
                     "href": f"/sessions/{row.id}",
@@ -536,7 +526,30 @@ def add_session_recommendation(
     chart_number: str = Form(""),
     weight: str = Form(""),
     comment: str = Form(""),
+    name: str = Form(""),
+    description: str = Form(""),
 ) -> Any:
+    if recomendation_id == "new":
+        try:
+            session_service.create_session_recommendation(
+                session,
+                session_id=session_id,
+                current_user=user,
+                name=name,
+                description=description,
+            )
+        except session_service.SessionNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except session_service.SessionRecommendationError as exc:
+            return _session_detail_response(
+                request,
+                session,
+                user,
+                session_id,
+                error=str(exc),
+                status_code=400,
+            )
+        return RedirectResponse(f"/sessions/{session_id}", status_code=303)
     try:
         parsed_id = uuid.UUID(recomendation_id)
     except ValueError:
