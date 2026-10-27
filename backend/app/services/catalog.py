@@ -1,3 +1,4 @@
+import re
 import uuid
 from collections.abc import Sequence
 
@@ -185,6 +186,24 @@ def get_recommendation(
     return row
 
 
+def recommendation_slug(name: str) -> str:
+    base = re.sub(r"[^\w]+", "-", name.strip().lower(), flags=re.UNICODE).strip("-_")
+    base = base[:60].strip("-_") or "recommendation"
+    return f"{base}-{uuid.uuid4().hex[:8]}"
+
+
+def unique_recommendation_slug(session: Session, name: str) -> str:
+    slug = recommendation_slug(name)
+    for _ in range(4):
+        taken = session.exec(
+            select(Recommendation.id).where(Recommendation.slug == slug)
+        ).first()
+        if taken is None:
+            return slug
+        slug = recommendation_slug(name)
+    raise CatalogUpdateError("Не удалось сохранить рекомендацию")
+
+
 def create_recommendation(
     session: Session,
     *,
@@ -193,6 +212,7 @@ def create_recommendation(
     text: str,
     description: str | None,
     group: RecommendationGroup,
+    status: RecommendationStatus = RecommendationStatus.DRAFT,
 ) -> Recommendation:
     row = Recommendation(
         name=name,
@@ -200,7 +220,7 @@ def create_recommendation(
         text=text,
         description=description,
         group=group,
-        status=RecommendationStatus.DRAFT,
+        status=status,
     )
     session.add(row)
     try:

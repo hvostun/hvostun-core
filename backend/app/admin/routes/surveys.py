@@ -18,7 +18,7 @@ router = APIRouter()
 def surveys_page(
     request: Request,
     session: SessionDep,
-    user: CurrentUser,
+    user: AdminUser,
     page: int = 1,
     name: str = "",
     description: str = "",
@@ -198,7 +198,7 @@ def _parse_display_num(raw: str) -> int:
 def survey_detail(
     request: Request,
     session: SessionDep,
-    user: CurrentUser,
+    user: AdminUser,
     survey_id: uuid.UUID,
     sort: str = "",
 ) -> Any:

@@ -1587,10 +1587,12 @@ def test_moderator_sessions_hide_evaluation_count(
 
 def test_expert_access_matrix(client: TestClient, db: Session) -> None:
     _login_expert(client, db)
-    for path in ("/surveys", "/scales", "/sessions", "/recommendations"):
+    for path in ("/sessions", "/recommendations"):
         assert client.get(path).status_code == 200
     for path in (
         "/dogs",
+        "/surveys",
+        "/scales",
         "/users",
         "/dictionaries",
         "/answer-events",
@@ -1599,8 +1601,8 @@ def test_expert_access_matrix(client: TestClient, db: Session) -> None:
         assert client.get(path, follow_redirects=False).status_code == 403
 
     home = client.get("/")
-    assert 'href="/surveys"' in home.text
-    assert 'href="/scales"' in home.text
+    assert 'href="/surveys"' not in home.text
+    assert 'href="/scales"' not in home.text
     assert 'href="/sessions"' in home.text
     assert 'href="/recommendations"' in home.text
     assert 'href="/dogs"' not in home.text
@@ -1618,6 +1620,33 @@ def test_expert_access_matrix(client: TestClient, db: Session) -> None:
     assert "Баллы доменов — от 0 до 10" in home.text
     assert "черновик от GigaChat" in home.text
     assert 'href="https://hvostun.com"' in home.text
+
+
+def test_moderator_cannot_open_surveys_and_scales(
+    client: TestClient, db: Session
+) -> None:
+    survey = Survey(name="Скрытая анкета", slug=f"hidden-{random_lower_string()}")
+    scale = Scale(
+        name="Скрытая шкала", type="integer", config={"min_value": 0, "max_value": 4}
+    )
+    db.add(survey)
+    db.add(scale)
+    db.commit()
+    db.refresh(survey)
+    db.refresh(scale)
+    _login_moderator(client, db)
+    for path in (
+        "/surveys",
+        "/scales",
+        f"/surveys/{survey.id}",
+        f"/scales/{scale.id}",
+    ):
+        assert client.get(path, follow_redirects=False).status_code == 403
+    home = client.get("/")
+    assert 'href="/surveys"' not in home.text
+    assert 'href="/scales"' not in home.text
+    assert 'href="/sessions"' in home.text
+    assert "recommendations?status=" in home.text
 
 
 def test_admin_access_matrix(client: TestClient, db: Session) -> None:
@@ -1659,13 +1688,19 @@ def test_admin_can_create_and_edit_recommendation(
     form = client.get("/recommendations/new")
     assert form.status_code == 200
     assert "Новая рекомендация" in form.text
-    slug = f"rec-{random_lower_string()}"
+    assert 'name="name"' in form.text
+    assert 'name="description"' in form.text
+    assert 'name="slug"' not in form.text
+    assert 'name="text"' not in form.text
+    assert 'name="group"' not in form.text
+    assert 'name="status"' not in form.text
+    forged_slug = f"rec-{random_lower_string()}"
     created = post(
         client,
         "/recommendations/new",
         data={
             "name": "Прогулка",
-            "slug": slug,
+            "slug": forged_slug,
             "text": "Выходите дважды в день",
             "description": "Коротко",
             "group": "other",
@@ -1673,20 +1708,29 @@ def test_admin_can_create_and_edit_recommendation(
         follow_redirects=False,
     )
     assert created.status_code == 303
-    row = db.exec(select(Recommendation).where(Recommendation.slug == slug)).one()
+    row = db.get(
+        Recommendation, uuid.UUID(created.headers["location"].rsplit("/", 1)[-1])
+    )
+    assert row is not None
     assert created.headers["location"] == f"/recommendations/{row.id}"
     assert row.name == "Прогулка"
-    assert row.text == "Выходите дважды в день"
+    assert row.text == ""
     assert row.description == "Коротко"
+    assert row.slug != forged_slug
+    assert row.group == "other"
+    assert row.status == RecommendationStatus.DRAFT
     page = client.get(f"/recommendations/{row.id}")
     assert page.status_code == 200
     assert "Сохранить" in page.text
+    assert 'name="slug"' in page.text
+    assert 'name="text"' in page.text
+    assert 'name="group"' in page.text
     updated = post(
         client,
         f"/recommendations/{row.id}",
         data={
             "name": "Длинная прогулка",
-            "slug": slug,
+            "slug": row.slug,
             "text": "Выходите трижды в день",
             "description": "",
             "group": "other",
@@ -1697,32 +1741,14 @@ def test_admin_can_create_and_edit_recommendation(
     db.refresh(row)
     assert row.name == "Длинная прогулка"
     assert row.description is None
-    duplicate = post(
-        client,
-        "/recommendations/new",
-        data={
-            "name": "Другая",
-            "slug": slug,
-            "text": "Текст",
-            "description": "",
-            "group": "other",
-        },
-    )
-    assert duplicate.status_code == 400
-    assert "Такой код уже есть" in duplicate.text
+    assert row.text == "Выходите трижды в день"
     missing = post(
         client,
         "/recommendations/new",
-        data={
-            "name": "",
-            "slug": f"empty-{random_lower_string()}",
-            "text": "Текст",
-            "description": "",
-            "group": "other",
-        },
+        data={"name": "", "description": ""},
     )
     assert missing.status_code == 400
-    assert "обязательны" in missing.text
+    assert "Название и описание обязательны" in missing.text
 
 
 def test_expert_can_view_recommendations_but_cannot_edit(
@@ -1752,7 +1778,7 @@ def test_expert_can_view_recommendations_but_cannot_edit(
     assert 'name="description"' not in listing.text
     assert 'name="text"' not in listing.text
     assert ">Группа<" not in listing.text
-    assert 'href="/recommendations/new"' not in listing.text
+    assert 'href="/recommendations/new"' in listing.text
     assert row.slug not in listing.text
     detail = client.get(f"/recommendations/{row.id}")
     assert detail.status_code == 200
@@ -1763,8 +1789,50 @@ def test_expert_can_view_recommendations_but_cannot_edit(
     assert ">Группа<" not in detail.text
     assert "Сохранить" not in detail.text
     assert "Создать" not in detail.text
+    assert "видна всем" in detail.text
+    assert 'name="status"' not in detail.text
     assert row.slug not in detail.text
-    assert client.get("/recommendations/new", follow_redirects=False).status_code == 403
+    form = client.get("/recommendations/new")
+    assert form.status_code == 200
+    assert 'name="status"' not in form.text
+    assert 'name="slug"' not in form.text
+    assert 'name="text"' not in form.text
+    assert 'name="group"' not in form.text
+    assert 'name="name"' in form.text
+    assert 'name="description"' in form.text
+    slug = f"expert-rec-{random_lower_string()}"
+    created = post(
+        client,
+        "/recommendations/new",
+        data={
+            "name": "Предложение эксперта",
+            "slug": slug,
+            "text": "Текст предложения",
+            "description": "Коротко от эксперта",
+            "group": "Fear_Anxiety",
+            "status": "active",
+        },
+        follow_redirects=False,
+    )
+    assert created.status_code == 303
+    created_row = db.get(
+        Recommendation, uuid.UUID(created.headers["location"].rsplit("/", 1)[-1])
+    )
+    assert created_row is not None
+    assert created.headers["location"] == f"/recommendations/{created_row.id}"
+    assert created_row.status == RecommendationStatus.DRAFT
+    assert created_row.text == ""
+    assert created_row.slug != slug
+    assert created_row.group == "other"
+    created_detail = client.get(f"/recommendations/{created_row.id}")
+    assert created_detail.status_code == 200
+    assert "Предложение эксперта" in created_detail.text
+    assert "Коротко от эксперта" in created_detail.text
+    assert "на модерацию" in created_detail.text
+    assert 'name="status"' not in created_detail.text
+    assert "Сохранить" not in created_detail.text
+    hidden_list = client.get("/recommendations")
+    assert "Предложение эксперта" not in hidden_list.text
     response = post(
         client,
         f"/recommendations/{row.id}",
@@ -1779,6 +1847,22 @@ def test_expert_can_view_recommendations_but_cannot_edit(
     assert response.status_code == 403
     db.refresh(row)
     assert row.name == "Closed"
+    forged = post(
+        client,
+        f"/recommendations/{created_row.id}",
+        data={
+            "name": "Подмена",
+            "slug": slug,
+            "text": "Другой текст",
+            "description": "Другое описание",
+            "group": "other",
+            "status": "active",
+        },
+    )
+    assert forged.status_code == 403
+    db.refresh(created_row)
+    assert created_row.name == "Предложение эксперта"
+    assert created_row.status == RecommendationStatus.DRAFT
 
 
 def test_moderator_edits_recommendation_and_list_shows_status(
@@ -1835,6 +1919,47 @@ def test_moderator_edits_recommendation_and_list_shows_status(
     assert "Уже видна" not in only_canceled.text
     assert 'value="canceled" selected' in only_canceled.text
     assert 'href="/recommendations/new"' in listing.text
+    create_form = client.get("/recommendations/new")
+    assert create_form.status_code == 200
+    assert 'name="status"' in create_form.text
+    assert 'value="draft" selected' in create_form.text
+    assert 'name="slug"' not in create_form.text
+    assert 'name="text"' not in create_form.text
+    assert 'name="group"' not in create_form.text
+    moderator_created = post(
+        client,
+        "/recommendations/new",
+        data={
+            "name": "Сразу видна",
+            "description": "Модератор выбрал статус",
+            "status": "active",
+            "slug": "forged-on-create",
+            "text": "Не сохранять",
+            "group": "Fear_Anxiety",
+        },
+        follow_redirects=False,
+    )
+    assert moderator_created.status_code == 303
+    moderator_row = db.get(
+        Recommendation,
+        uuid.UUID(moderator_created.headers["location"].rsplit("/", 1)[-1]),
+    )
+    assert moderator_row is not None
+    assert moderator_row.status == RecommendationStatus.ACTIVE
+    assert moderator_row.text == ""
+    assert moderator_row.slug != "forged-on-create"
+    assert moderator_row.group == "other"
+    unknown_status = post(
+        client,
+        "/recommendations/new",
+        data={
+            "name": "Плохой статус",
+            "description": "Не сохранится",
+            "status": "nope",
+        },
+    )
+    assert unknown_status.status_code == 400
+    assert "Неизвестный статус" in unknown_status.text
     pending_rows = re.findall(
         r'<tr class="recommendation-pending">.*?</tr>', listing.text, re.S
     )
@@ -1901,9 +2026,14 @@ def test_moderator_edits_recommendation_and_list_shows_status(
     db.refresh(fresh_draft)
     expert_list = client.get("/recommendations")
     assert "Ещё на модерации" not in expert_list.text
+    draft_page = client.get(f"/recommendations/{fresh_draft.id}")
+    assert draft_page.status_code == 200
+    assert "на модерацию" in draft_page.text
+    assert 'name="status"' not in draft_page.text
+    assert "Сохранить" not in draft_page.text
     assert (
         client.get(
-            f"/recommendations/{fresh_draft.id}", follow_redirects=False
+            f"/recommendations/{canceled.id}", follow_redirects=False
         ).status_code
         == 404
     )
@@ -2350,10 +2480,8 @@ def test_expert_cannot_edit_survey_question_layout(
     db.add(link)
     db.commit()
     _login_expert(client, db)
-    page = client.get(f"/surveys/{survey.id}")
-    assert page.status_code == 200
-    assert "Сохранить" not in page.text
-    assert 'name="group"' not in page.text
+    page = client.get(f"/surveys/{survey.id}", follow_redirects=False)
+    assert page.status_code == 403
     response = post(
         client,
         f"/surveys/{survey.id}",
