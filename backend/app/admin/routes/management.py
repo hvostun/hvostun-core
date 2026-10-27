@@ -208,7 +208,7 @@ def recommendations_page(
         ),
         filter_values={"status": chosen},
         row_href=lambda row: f"/recommendations/{row.id}",
-        create_href="/recommendations/new" if can_edit else None,
+        create_href="/recommendations/new",
         create_label="Создать",
     )
 
@@ -314,35 +314,63 @@ def _parse_recommendation_status(raw: str) -> RecommendationStatus | None:
         return None
 
 
+def _create_status(user: User, raw: str) -> RecommendationStatus | None:
+    if user.group != UserGroup.MODERATOR:
+        return RecommendationStatus.DRAFT
+    if not raw.strip():
+        return RecommendationStatus.DRAFT
+    return _parse_recommendation_status(raw)
+
+
 @router.get("/recommendations/new")
-def recommendation_new(request: Request, user: RecommendationEditor) -> Any:
-    return _recommendation_form_response(request, user, form=_recommendation_form())
+def recommendation_new(request: Request, user: CurrentUser) -> Any:
+    return _recommendation_form_response(
+        request,
+        user,
+        form=_recommendation_form(status=RecommendationStatus.DRAFT.value),
+    )
 
 
 @router.post("/recommendations/new")
 def recommendation_create(
     request: Request,
     session: SessionDep,
-    user: RecommendationEditor,
+    user: CurrentUser,
     name: str = Form(""),
-    slug: str = Form(""),
-    text: str = Form(""),
     description: str = Form(""),
-    group: str = Form(RecommendationGroup.OTHER),
+    status: str = Form(""),
 ) -> Any:
-    form, error = _recommendation_fields(name, slug, text, description, group)
-    if error:
+    chosen = _create_status(user, status)
+    form = _recommendation_form(
+        name=name,
+        description=description,
+        status=(chosen or RecommendationStatus.DRAFT).value,
+    )
+    if chosen is None:
         return _recommendation_form_response(
-            request, user, form=form, error=error, status_code=400
+            request,
+            user,
+            form=form,
+            error="Неизвестный статус",
+            status_code=400,
+        )
+    if not name.strip() or not description.strip():
+        return _recommendation_form_response(
+            request,
+            user,
+            form=form,
+            error="Название и описание обязательны",
+            status_code=400,
         )
     try:
         created = catalog.create_recommendation(
             session,
             name=name.strip(),
-            slug=slug.strip(),
-            text=text.strip(),
-            description=description.strip() or None,
-            group=RecommendationGroup(group),
+            slug=catalog.unique_recommendation_slug(session, name),
+            text="",
+            description=description.strip(),
+            group=RecommendationGroup.OTHER,
+            status=chosen,
         )
     except (catalog.CatalogUpdateError, ValueError) as exc:
         return _recommendation_form_response(
@@ -362,8 +390,9 @@ def recommendation_detail(
         target = catalog.get_recommendation(session, recommendation_id)
     except catalog.CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    if target.status != RecommendationStatus.ACTIVE and not can_edit_recommendations(
-        user
+    if not can_edit_recommendations(user) and target.status not in (
+        RecommendationStatus.ACTIVE,
+        RecommendationStatus.DRAFT,
     ):
         raise HTTPException(status_code=404, detail="Recommendation not found")
     return _recommendation_form_response(

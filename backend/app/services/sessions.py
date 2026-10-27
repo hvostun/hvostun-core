@@ -630,7 +630,7 @@ def add_session_recommendation(
 ) -> SessionRecommendation:
     get_accessible_session(session, session_id, current_user)
     catalog = session.get(Recommendation, recomendation_id)
-    if catalog is None:
+    if catalog is None or catalog.status != RecommendationStatus.ACTIVE:
         raise SessionRecommendationError("Рекомендация не найдена")
     if chart_number < 0:
         raise SessionRecommendationError("Очередность не может быть отрицательной")

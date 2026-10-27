@@ -68,7 +68,7 @@ def _scale_detail_response(
 def scales_page(
     request: Request,
     session: SessionDep,
-    user: CurrentUser,
+    user: AdminUser,
     page: int = 1,
     name: str = "",
     type: str = "",
@@ -129,7 +129,7 @@ def scales_page(
 def scale_detail(
     request: Request,
     session: SessionDep,
-    user: CurrentUser,
+    user: AdminUser,
     scale_id: uuid.UUID,
 ) -> Any:
     try:
