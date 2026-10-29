@@ -463,7 +463,7 @@ def session_recommendation_user_counts(
 def _latest_answer_subquery() -> Any:
     return (
         select(
-            AnswerEvent.surveys_session_id.label("session_id"),
+            col(AnswerEvent.surveys_session_id).label("session_id"),
             AnswerEvent.question_id,
             AnswerEvent.value,
         )
