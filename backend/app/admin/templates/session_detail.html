@@ -60,7 +60,7 @@
 {% endif %}
 {% endmacro %}
 {% block content %}
-<p><a href="/sessions">← Ответы</a></p>
+<p><a href="/sessions?mine=no">← Ответы</a></p>
 
 <div class="accordion mb-3 mb-md-4" id="recommendations-accordion">
   <details class="accordion-item" {% if has_my_recommendations %} open{% endif %}>
@@ -85,6 +85,7 @@
       <h3 class="h6">Добавить рекомендацию</h3>
       <form method="post" action="/sessions/{{ session_row.id }}/recommendations" class="mb-4">
         {% include "csrf.html" %}
+        <input type="hidden" name="view" value="{{ view }}" />
         <label class="form-label visually-hidden" for="recomendation_id">Рекомендация</label>
         <select class="form-select mb-2" id="recomendation_id" name="recomendation_id" required>
           <option value="">Выберите рекомендацию</option>
@@ -114,6 +115,7 @@
       {% else %}
       <form method="post" action="/sessions/{{ session_row.id }}/recommendations/save">
         {% include "csrf.html" %}
+        <input type="hidden" name="view" value="{{ view }}" />
         {% for group in rec_groups %}
         {% for item in group.recommendations %}
         <div class="card mb-2">

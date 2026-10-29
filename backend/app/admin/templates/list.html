@@ -18,6 +18,17 @@
       <option value="{{ option.value }}" {% if option.value == field.value %}selected{% endif %}>{{ option.label }}</option>
       {% endfor %}
     </select>
+    {% elif field.type == "number" %}
+    <label class="form-label" for="{{ field.name }}">{{ field.label }}</label>
+    <input
+      class="form-control"
+      type="number"
+      id="{{ field.name }}"
+      name="{{ field.name }}"
+      min="0"
+      max="100"
+      value="{{ field.value }}"
+    />
     {% else %}
     <label class="form-label visually-hidden" for="{{ field.name }}">{{ field.label }}</label>
     <input

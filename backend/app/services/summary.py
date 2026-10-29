@@ -31,10 +31,15 @@ from app.services.sessions import (
 )
 
 PROMPT_VERSION = "2026-10-16.7"
+# Domain mean on the 10-point scale at or below this is a strength.
 STRENGTH_DOMAIN_MAX = 3.0
+# Domain mean at or above this is a concern. Below it, the calmest domain
+# can still be listed as a strength when nothing reaches STRENGTH_DOMAIN_MAX.
 CONCERN_DOMAIN_MIN = 5.0
+# A single answer at or above this is a concern item.
 CONCERN_ITEM_MIN = 7
-CONCERN_ITEM_LIMIT = 5
+# How many of those high answers to keep, highest score first.
+CONCERN_ITEM_LIMIT = 3
 # Domain key → expert points threshold for a red flag on a single item.
 RED_FLAGS: dict[str, int] = {
     SurveyQuestionGroup.AGGRESSION: EXPERT_SCALE_MAX,
@@ -252,7 +257,7 @@ def build_facts(
     strength_domains = [
         (label, score, domain)
         for label, score, domain in scored_domains
-        if score <= STRENGTH_DOMAIN_MAX
+        if score < STRENGTH_DOMAIN_MAX
     ]
     if not strength_domains and scored_domains:
         label, score, domain = min(scored_domains, key=lambda item: item[1])
