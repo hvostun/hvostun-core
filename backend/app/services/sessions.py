@@ -65,7 +65,9 @@ def can_see_evaluation_counts(user: User) -> bool:
     return user.is_superuser or user.group == UserGroup.ADMIN
 
 
-EXPERT_LIST_EVALUATION_CAP = 5
+# «Без моей рекомендации»: hide a session once this many distinct experts
+# have evaluated it. «Мои рекомендации» keeps every session of the user.
+EXPERT_LIST_EVALUATION_CAP = 3
 
 
 def uses_expert_session_queue(user: User) -> bool:

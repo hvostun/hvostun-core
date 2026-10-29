@@ -280,6 +280,7 @@ def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> N
     assert "Моя оценка" in sessions.text
     assert "Собака" in sessions.text
     assert "Оценили" in sessions.text
+    assert "<th>Кластер</th>" in sessions.text
     for removed in ("Статус", "Заполнил", "Анкета", "Рекомендации (кол-во)"):
         assert f"<th>{removed}</th>" not in sessions.text
     assert owner.name not in sessions.text
@@ -290,7 +291,7 @@ def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> N
     assert str(dog.id) not in sessions.text
     assert str(survey.id) not in sessions.text
     assert re.search(
-        r"Rex Sessions</a>\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*0\s*</td>",
+        r"Rex Sessions</a>\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*0\s*</td>",
         sessions.text,
     )
 
@@ -397,7 +398,7 @@ def test_sessions_page_shows_recommendation_counts(
     assert sessions.status_code == 200
     assert "Rex Rec Counts" in sessions.text
     assert re.search(
-        r"Rex Rec Counts</a>\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*2\s*</td>",
+        r"Rex Rec Counts</a>\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*2\s*</td>",
         sessions.text,
     )
     assert 'name="has_my_recommendation"' not in sessions.text
@@ -405,17 +406,15 @@ def test_sessions_page_shows_recommendation_counts(
     empty_row = re.search(r"Rex Without Recommendations.*?</tr>", sessions.text, re.S)
     assert mine_row is not None and "checked" in mine_row.group(0)
     assert empty_row is not None and "checked" not in empty_row.group(0)
-
-    ascending = client.get(
+    assert ">Оценили</a>" not in sessions.text
+    assert "users_sort" not in sessions.text
+    assert sessions.text.index("Rex Rec Counts") < sessions.text.index(
+        "Rex Without Recommendations"
+    )
+    ignored_sort = client.get(
         "/sessions", params={"users_sort": "asc", "mine": "", "filled": "0"}
     )
-    assert ascending.text.index("Rex Without Recommendations") < ascending.text.index(
-        "Rex Rec Counts"
-    )
-    descending = client.get(
-        "/sessions", params={"users_sort": "desc", "mine": "", "filled": "0"}
-    )
-    assert descending.text.index("Rex Rec Counts") < descending.text.index(
+    assert ignored_sort.text.index("Rex Rec Counts") < ignored_sort.text.index(
         "Rex Without Recommendations"
     )
     assert 'name="mine"' in sessions.text
@@ -1581,12 +1580,14 @@ def test_moderator_sessions_hide_evaluation_count(
     assert moderator_page.status_code == 200
     assert "Rex Expert Counts" in moderator_page.text
     assert "Оценили" not in moderator_page.text
+    assert "<th>Кластер</th>" not in moderator_page.text
 
     _login_expert(client, db)
     expert_page = client.get("/sessions", params={"filled": "0"})
     assert expert_page.status_code == 200
     assert "Rex Expert Counts" in expert_page.text
     assert "Оценили" not in expert_page.text
+    assert "<th>Кластер</th>" not in expert_page.text
 
 
 def test_expert_access_matrix(client: TestClient, db: Session) -> None:
@@ -1607,7 +1608,7 @@ def test_expert_access_matrix(client: TestClient, db: Session) -> None:
     home = client.get("/")
     assert 'href="/surveys"' not in home.text
     assert 'href="/scales"' not in home.text
-    assert 'href="/sessions"' in home.text
+    assert 'href="/sessions?mine=no"' in home.text
     assert 'href="/recommendations"' in home.text
     assert 'href="/dogs"' not in home.text
     assert 'href="/users"' not in home.text
@@ -1649,7 +1650,7 @@ def test_moderator_cannot_open_surveys_and_scales(
     home = client.get("/")
     assert 'href="/surveys"' not in home.text
     assert 'href="/scales"' not in home.text
-    assert 'href="/sessions"' in home.text
+    assert 'href="/sessions?mine=no"' in home.text
     assert "recommendations?status=" in home.text
 
 
@@ -1672,7 +1673,7 @@ def test_admin_access_matrix(client: TestClient, db: Session) -> None:
         "/dogs",
         "/surveys",
         "/scales",
-        "/sessions",
+        "/sessions?mine=no",
         "/recommendations",
         "/users",
     ):
@@ -2805,7 +2806,7 @@ def test_sessions_page_defaults_fill_threshold_to_90(
     assert "Заполнение, %" in default.text
     assert 'id="filled"' in default.text
     assert 'value="90"' in default.text
-    assert "filled=90" in default.text
+    assert "users_sort" not in default.text
     assert "Fill Full Dog" in default.text
     assert "Fill Half Dog" not in default.text
     assert "Fill Empty Dog" not in default.text
@@ -2884,12 +2885,15 @@ def test_expert_session_list_caps_evaluations_and_sorts_by_cluster(
     db.add(version)
     db.commit()
     db.refresh(version)
+    rater_password = f"Pass1-{random_lower_string()[:8]}"
     raters = [
         crud.create_user(
             session=db,
             user_create=UserCreate(
                 email=f"rater-{index}-{random_lower_string()}@example.com",
-                password=f"Pass1-{random_lower_string()[:8]}",
+                password=rater_password
+                if index == 0
+                else f"Pass1-{random_lower_string()[:8]}",
                 group=UserGroup.EXPERT,
             ),
         )
@@ -2919,34 +2923,65 @@ def test_expert_session_list_caps_evaluations_and_sorts_by_cluster(
     expert_page = client.get("/sessions", params={"filled": "0"})
     assert expert_page.status_code == 200
     assert "Оценили" not in expert_page.text
+    assert "<th>Кластер</th>" not in expert_page.text
     assert "Queue Too Many" not in expert_page.text
+    assert "Queue A Many" not in expert_page.text
+    assert "Queue Cap Five" not in expert_page.text
     expert_order = (
-        "Queue A Many",
         "Queue A None",
         "Queue B One",
-        "Queue Cap Five",
     )
     positions = [expert_page.text.index(name) for name in expert_order]
     assert positions == sorted(positions)
+    assert "mine=no" in str(expert_page.url)
+    assert 'value="no" selected' in expert_page.text
 
+    post(
+        client,
+        "/login",
+        data={"email": raters[0].email, "password": rater_password},
+    )
+    own = client.get("/sessions", params={"mine": "yes", "filled": "0"})
+    assert own.status_code == 200
+    assert 'value="yes" selected' in own.text
+    assert "Queue A Many" in own.text
+    assert "Queue Too Many" in own.text
+    assert "Queue Cap Five" in own.text
+    assert "Queue A None" not in own.text
+    hidden = client.get("/sessions", params={"mine": "no", "filled": "0"})
+    assert "Queue A Many" not in hidden.text
+    assert "Queue Too Many" not in hidden.text
+    assert "Queue A None" in hidden.text
+
+    shared_order = (
+        "Queue Too Many",
+        "Queue B One",
+        "Queue Cap Five",
+        "Queue A Many",
+        "Queue A None",
+    )
     _login_moderator(client, db)
     moderator_page = client.get("/sessions", params={"filled": "0"})
-    assert "Queue Too Many" in moderator_page.text
-    assert moderator_page.text.index("Queue Too Many") < moderator_page.text.index(
-        "Queue A Many"
-    )
+    assert "Оценили" not in moderator_page.text
+    assert "<th>Кластер</th>" not in moderator_page.text
+    moderator_positions = [moderator_page.text.index(name) for name in shared_order]
+    assert moderator_positions == sorted(moderator_positions)
 
     _login_admin(client, db)
     admin_page = client.get("/sessions", params={"filled": "0", "users_sort": "desc"})
-    assert "Оценили" in admin_page.text
-    admin_order = (
-        "Queue Too Many",
-        "Queue Cap Five",
-        "Queue A Many",
-        "Queue B One",
-        "Queue A None",
+    assert ">Оценили<" in admin_page.text
+    assert "<th>Кластер</th>" in admin_page.text
+    assert re.search(
+        r"Queue A Many</a>\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*a\s*</td>",
+        admin_page.text,
     )
-    admin_positions = [admin_page.text.index(name) for name in admin_order]
+    assert re.search(
+        r"Queue Cap Five</a>\s*</td>\s*<td>\s*—\s*</td>\s*<td>\s*—\s*</td>",
+        admin_page.text,
+    )
+    assert ">Оценили</a>" not in admin_page.text
+    assert "users_sort" not in admin_page.text
+    admin_positions = [admin_page.text.index(name) for name in shared_order]
     assert admin_positions == sorted(admin_positions)
 
 

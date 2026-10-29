@@ -33,7 +33,7 @@
             <a class="nav-link" href="/surveys">Анкеты</a>
             <a class="nav-link" href="/scales">Шкалы</a>
             {% endif %}
-            <a class="nav-link" href="/sessions">Ответы</a>
+            <a class="nav-link" href="/sessions?mine=no">Ответы</a>
             <a
               class="nav-link"
               href="/recommendations{% if user.group == 'moderator' %}?status={{ 'draft' if pending_recommendation_count > 0 else 'active' }}{% endif %}"

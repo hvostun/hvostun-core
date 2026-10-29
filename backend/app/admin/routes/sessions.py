@@ -1,13 +1,14 @@
 import logging
 import uuid
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
 from app.admin.deps import AdminUser, CurrentUser, SessionDep, SuperUser, is_admin
-from app.admin.templating import PAGE_SIZE, cell, filter_qs, list_context, templates
+from app.admin.templating import PAGE_SIZE, cell, list_context, templates
 from app.core.config import settings
 from app.models import AnswerEvent, Dog, SessionRecommendation, SurveySession
 from app.pagination import execute_page, page_window
@@ -58,10 +59,13 @@ def sessions_page(
     owner_id: str = "",
     dog_id: str = "",
     survey_version_id: str = "",
-    users_sort: str = "asc",
-    mine: str = "no",
+    mine: str | None = None,
     filled: str | None = None,
 ) -> Any:
+    if mine is None:
+        query = dict(request.query_params)
+        query["mine"] = "no"
+        return RedirectResponse(f"/sessions?{urlencode(query)}", status_code=303)
     offset, limit, page = page_window(page, PAGE_SIZE)
     filters: list[Any] = []
     if status:
@@ -108,30 +112,27 @@ def sessions_page(
         col(SurveySession.id) == fill_rates.c.session_id,
     )
     filters.append(func.coalesce(fill_rates.c.rate, 0) >= filled_min)
-    if show_evaluation_counts or expert_queue:
-        join_counts = (
-            recommendation_users_subquery,
-            col(SurveySession.id) == recommendation_users_subquery.c.session_id,
-        )
-        stmt = stmt.outerjoin(*join_counts)
-        count_stmt = count_stmt.outerjoin(*join_counts)
-    if expert_queue:
-        filters.append(user_count <= session_service.EXPERT_LIST_EVALUATION_CAP)
+    join_counts = (
+        recommendation_users_subquery,
+        col(SurveySession.id) == recommendation_users_subquery.c.session_id,
+    )
+    stmt = stmt.outerjoin(*join_counts)
+    count_stmt = count_stmt.outerjoin(*join_counts)
+    if expert_queue and mine == "no":
+        filters.append(user_count < session_service.EXPERT_LIST_EVALUATION_CAP)
     if filters:
         count_stmt = count_stmt.where(*filters)
         stmt = stmt.where(*filters)
-    ordering: tuple[Any, ...]
-    if expert_queue:
-        ordering = (
-            col(SurveySession.cluster).asc().nulls_last(),
-            user_count.desc(),
-            col(SurveySession.created_at).desc(),
-        )
-    elif show_evaluation_counts and users_sort in {"asc", "desc"}:
-        direction = user_count.asc() if users_sort == "asc" else user_count.desc()
-        ordering = (direction, col(SurveySession.created_at).desc())
-    else:
-        ordering = (col(SurveySession.created_at).desc(),)
+    # Rank inside a cluster by evaluation count, then interleave clusters.
+    cluster_rank = func.row_number().over(
+        partition_by=col(SurveySession.cluster),
+        order_by=(user_count.desc(), col(SurveySession.created_at).desc()),
+    )
+    ordering = (
+        cluster_rank.asc(),
+        col(SurveySession.cluster).asc().nulls_last(),
+        col(SurveySession.created_at).desc(),
+    )
     rows, count = execute_page(
         session,
         count_stmt,
@@ -147,30 +148,8 @@ def sessions_page(
         {"key": "answer_rate", "label": "Ответов, %"},
     ]
     if show_evaluation_counts:
-        columns.append(
-            {
-                "key": "users",
-                "label": (
-                    "Оценили ↑"
-                    if users_sort == "asc"
-                    else ("Оценили ↓" if users_sort == "desc" else "Оценили")
-                ),
-                "sort_href": (
-                    "?"
-                    + filter_qs(
-                        {
-                            "status": status,
-                            "owner_id": owner_id,
-                            "dog_id": dog_id,
-                            "survey_version_id": survey_version_id,
-                            "mine": mine,
-                            "filled": str(filled_min),
-                            "users_sort": ("asc" if users_sort == "desc" else "desc"),
-                        }
-                    )
-                ),
-            }
-        )
+        columns.append({"key": "cluster", "label": "Кластер"})
+        columns.append({"key": "users", "label": "Оценили"})
     columns.append(
         {
             "key": "has_mine",
@@ -194,6 +173,7 @@ def sessions_page(
                         "answer_rate": (
                             "—" if rates[row.id] is None else cell(rates[row.id]) + " %"
                         ),
+                        "cluster": cell(row.cluster) or "—",
                         "users": cell(user_counts[row.id]),
                         "has_mine": has_mine,
                     },
@@ -222,7 +202,6 @@ def sessions_page(
                 },
             ],
             filter_values={
-                "users_sort": users_sort,
                 "mine": mine,
                 "filled": str(filled_min),
             },
