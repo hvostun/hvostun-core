@@ -275,7 +275,7 @@ def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> N
             "password": settings.FIRST_SUPERUSER_PASSWORD,
         },
     )
-    sessions = client.get("/sessions")
+    sessions = client.get("/sessions", params={"filled": "0"})
     assert sessions.status_code == 200
     assert "Моя оценка" in sessions.text
     assert "Собака" in sessions.text
@@ -393,7 +393,7 @@ def test_sessions_page_shows_recommendation_counts(
             "password": settings.FIRST_SUPERUSER_PASSWORD,
         },
     )
-    sessions = client.get("/sessions", params={"mine": ""})
+    sessions = client.get("/sessions", params={"mine": "", "filled": "0"})
     assert sessions.status_code == 200
     assert "Rex Rec Counts" in sessions.text
     assert re.search(
@@ -406,22 +406,26 @@ def test_sessions_page_shows_recommendation_counts(
     assert mine_row is not None and "checked" in mine_row.group(0)
     assert empty_row is not None and "checked" not in empty_row.group(0)
 
-    ascending = client.get("/sessions", params={"users_sort": "asc", "mine": ""})
+    ascending = client.get(
+        "/sessions", params={"users_sort": "asc", "mine": "", "filled": "0"}
+    )
     assert ascending.text.index("Rex Without Recommendations") < ascending.text.index(
         "Rex Rec Counts"
     )
-    descending = client.get("/sessions", params={"users_sort": "desc", "mine": ""})
+    descending = client.get(
+        "/sessions", params={"users_sort": "desc", "mine": "", "filled": "0"}
+    )
     assert descending.text.index("Rex Rec Counts") < descending.text.index(
         "Rex Without Recommendations"
     )
     assert 'name="mine"' in sessions.text
     assert "Мои рекомендации" in sessions.text
     assert "Без моей рекомендации" in sessions.text
-    only_mine = client.get("/sessions", params={"mine": "yes"})
+    only_mine = client.get("/sessions", params={"mine": "yes", "filled": "0"})
     assert "Rex Rec Counts" in only_mine.text
     assert "Rex Without Recommendations" not in only_mine.text
     assert 'value="yes" selected' in only_mine.text
-    without_mine = client.get("/sessions", params={"mine": "no"})
+    without_mine = client.get("/sessions", params={"mine": "no", "filled": "0"})
     assert "Rex Without Recommendations" in without_mine.text
     assert "Rex Rec Counts" not in without_mine.text
     assert 'value="no" selected' in without_mine.text
@@ -1573,13 +1577,13 @@ def test_moderator_sessions_hide_evaluation_count(
     db.commit()
 
     _login_moderator(client, db)
-    moderator_page = client.get("/sessions")
+    moderator_page = client.get("/sessions", params={"filled": "0"})
     assert moderator_page.status_code == 200
     assert "Rex Expert Counts" in moderator_page.text
     assert "Оценили" not in moderator_page.text
 
     _login_expert(client, db)
-    expert_page = client.get("/sessions")
+    expert_page = client.get("/sessions", params={"filled": "0"})
     assert expert_page.status_code == 200
     assert "Rex Expert Counts" in expert_page.text
     assert "Оценили" not in expert_page.text
@@ -2725,11 +2729,306 @@ def test_sessions_page_shows_answer_percent(client: TestClient, db: Session) -> 
     )
     db.commit()
     _login_superuser(client)
-    page = client.get("/sessions")
+    page = client.get("/sessions", params={"filled": "0"})
     assert page.status_code == 200
     assert "Ответов, %" in page.text
     assert re.search(r"Listed Percent Dog</a>\s*</td>\s*<td>\s*50 %\s*</td>", page.text)
     assert re.search(r"Listed Empty Dog</a>\s*</td>\s*<td>\s*—\s*</td>", page.text)
+
+
+def test_sessions_page_defaults_fill_threshold_to_90(
+    client: TestClient, db: Session
+) -> None:
+    owner = _create_owner(db, "Владелец порога")
+    survey = Survey(name="Fill Filter", slug=f"fill-{random_lower_string()}")
+    scale = Scale(
+        name="Балл порога", type="integer", config={"min_value": 0, "max_value": 4}
+    )
+    db.add(survey)
+    db.add(scale)
+    db.commit()
+    db.refresh(survey)
+    db.refresh(scale)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    questions = []
+    for order, text in ((1, "Порог 1"), (2, "Порог 2")):
+        question = Question(text=text, scale_id=scale.id)
+        db.add(question)
+        db.commit()
+        db.refresh(question)
+        questions.append(question)
+        db.add(
+            SurveyQuestion(
+                survey_version_id=version.id,
+                question_id=question.id,
+                order_num=order,
+                display_num=order,
+            )
+        )
+    dogs = {
+        "Fill Full Dog": (0, 1),
+        "Fill Half Dog": (0,),
+        "Fill Empty Dog": (),
+    }
+    for name, answered in dogs.items():
+        dog = Dog(name=name)
+        db.add(dog)
+        db.commit()
+        db.refresh(dog)
+        row = SurveySession(
+            owner_id=owner.id,
+            dog_id=dog.id,
+            survey_version_id=version.id,
+            status="draft",
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        for index in answered:
+            db.add(
+                AnswerEvent(
+                    surveys_session_id=row.id,
+                    survey_version_id=version.id,
+                    question_id=questions[index].id,
+                    value={"value": 1},
+                    created_at=datetime(2026, 3, 1, tzinfo=UTC),
+                )
+            )
+    db.commit()
+    _login_superuser(client)
+
+    default = client.get("/sessions")
+    assert default.status_code == 200
+    assert "Заполнение, %" in default.text
+    assert 'id="filled"' in default.text
+    assert 'value="90"' in default.text
+    assert "filled=90" in default.text
+    assert "Fill Full Dog" in default.text
+    assert "Fill Half Dog" not in default.text
+    assert "Fill Empty Dog" not in default.text
+
+    half = client.get("/sessions", params={"filled": "50"})
+    assert "Fill Full Dog" in half.text
+    assert "Fill Half Dog" in half.text
+    assert "Fill Empty Dog" not in half.text
+
+    everything = client.get("/sessions", params={"filled": "0"})
+    assert "Fill Empty Dog" in everything.text
+    cleared = client.get("/sessions", params={"filled": ""})
+    assert "Fill Empty Dog" in cleared.text
+    invalid = client.get("/sessions", params={"filled": "nope"})
+    assert "Fill Full Dog" in invalid.text
+    assert "Fill Half Dog" not in invalid.text
+
+
+def _queue_session(
+    db: Session,
+    *,
+    owner: Owner,
+    version: SurveyVersion,
+    recommendation: Recommendation,
+    raters: list[User],
+    name: str,
+    cluster: str | None,
+    created_at: datetime,
+    evaluations: int,
+) -> None:
+    dog = Dog(name=name)
+    db.add(dog)
+    db.commit()
+    db.refresh(dog)
+    row = SurveySession(
+        owner_id=owner.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+        cluster=cluster,
+        created_at=created_at,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    for rater in raters[:evaluations]:
+        db.add(
+            SessionRecommendation(
+                user_id=rater.id,
+                session_id=row.id,
+                recomendation_id=recommendation.id,
+                chart_number=0,
+                weight=1.0,
+            )
+        )
+    db.commit()
+
+
+def test_expert_session_list_caps_evaluations_and_sorts_by_cluster(
+    client: TestClient, db: Session
+) -> None:
+    owner = _create_owner(db, "Владелец очереди")
+    survey = Survey(name="Queue Survey", slug=f"queue-{random_lower_string()}")
+    recommendation = Recommendation(
+        name="Оценка очереди",
+        slug=f"queue-rec-{random_lower_string()}",
+        text="Текст.",
+        status=RecommendationStatus.ACTIVE,
+    )
+    db.add(survey)
+    db.add(recommendation)
+    db.commit()
+    db.refresh(survey)
+    db.refresh(recommendation)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    raters = [
+        crud.create_user(
+            session=db,
+            user_create=UserCreate(
+                email=f"rater-{index}-{random_lower_string()}@example.com",
+                password=f"Pass1-{random_lower_string()[:8]}",
+                group=UserGroup.EXPERT,
+            ),
+        )
+        for index in range(6)
+    ]
+    specs = (
+        ("Queue A Many", "a", datetime(2026, 1, 1, tzinfo=UTC), 3),
+        ("Queue A None", "a", datetime(2026, 1, 4, tzinfo=UTC), 0),
+        ("Queue B One", "b", datetime(2026, 1, 2, tzinfo=UTC), 1),
+        ("Queue Cap Five", None, datetime(2026, 1, 3, tzinfo=UTC), 5),
+        ("Queue Too Many", "a", datetime(2026, 1, 6, tzinfo=UTC), 6),
+    )
+    for name, cluster, created_at, evaluations in specs:
+        _queue_session(
+            db,
+            owner=owner,
+            version=version,
+            recommendation=recommendation,
+            raters=raters,
+            name=name,
+            cluster=cluster,
+            created_at=created_at,
+            evaluations=evaluations,
+        )
+
+    _login_expert(client, db)
+    expert_page = client.get("/sessions", params={"filled": "0"})
+    assert expert_page.status_code == 200
+    assert "Оценили" not in expert_page.text
+    assert "Queue Too Many" not in expert_page.text
+    expert_order = (
+        "Queue A Many",
+        "Queue A None",
+        "Queue B One",
+        "Queue Cap Five",
+    )
+    positions = [expert_page.text.index(name) for name in expert_order]
+    assert positions == sorted(positions)
+
+    _login_moderator(client, db)
+    moderator_page = client.get("/sessions", params={"filled": "0"})
+    assert "Queue Too Many" in moderator_page.text
+    assert moderator_page.text.index("Queue Too Many") < moderator_page.text.index(
+        "Queue A Many"
+    )
+
+    _login_admin(client, db)
+    admin_page = client.get("/sessions", params={"filled": "0", "users_sort": "desc"})
+    assert "Оценили" in admin_page.text
+    admin_order = (
+        "Queue Too Many",
+        "Queue Cap Five",
+        "Queue A Many",
+        "Queue B One",
+        "Queue A None",
+    )
+    admin_positions = [admin_page.text.index(name) for name in admin_order]
+    assert admin_positions == sorted(admin_positions)
+
+
+def test_recommendation_submit_keeps_the_open_view(
+    client: TestClient, db: Session
+) -> None:
+    session_row, recommendation, _user = _session_with_recommendation_catalog(db)
+    _login_superuser(client)
+    summary = client.get(f"/sessions/{session_row.id}", params={"view": "summary"})
+    assert summary.status_code == 200
+    assert 'name="view" value="summary"' in summary.text
+    assert 'class="view-tab view-tab-active">Сводка' in summary.text
+
+    added = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations",
+        data={
+            "recomendation_id": str(recommendation.id),
+            "chart_number": "1",
+            "weight": "0.5",
+            "comment": "на сводке",
+            "view": "summary",
+        },
+        follow_redirects=False,
+    )
+    assert added.status_code == 303
+    assert added.headers["location"] == f"/sessions/{session_row.id}?view=summary"
+
+    duplicate = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations",
+        data={"recomendation_id": str(recommendation.id), "view": "summary"},
+    )
+    assert duplicate.status_code == 400
+    assert "уже добавлена" in duplicate.text
+    assert 'name="view" value="summary"' in duplicate.text
+    assert 'class="view-tab view-tab-active">Сводка' in duplicate.text
+
+    saved_row = db.exec(
+        select(SessionRecommendation).where(
+            SessionRecommendation.session_id == session_row.id
+        )
+    ).first()
+    assert saved_row is not None
+    saved = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations/save",
+        data={
+            "recommendation_id": str(saved_row.id),
+            "chart_number": "2",
+            "weight": "0.4",
+            "comment": "уточнение",
+            "view": "flat",
+        },
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    assert saved.headers["location"] == f"/sessions/{session_row.id}?view=flat"
+
+    deleted = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations/{saved_row.id}/delete",
+        data={"view": "summary"},
+        follow_redirects=False,
+    )
+    assert deleted.status_code == 303
+    assert deleted.headers["location"] == f"/sessions/{session_row.id}?view=summary"
+
+    unknown = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations",
+        data={
+            "recomendation_id": str(recommendation.id),
+            "chart_number": "0",
+            "weight": "1",
+            "comment": "",
+            "view": "sideways",
+        },
+        follow_redirects=False,
+    )
+    assert unknown.status_code == 303
+    assert unknown.headers["location"] == f"/sessions/{session_row.id}"
 
 
 def test_health_check(client: TestClient) -> None:

@@ -65,6 +65,13 @@ def can_see_evaluation_counts(user: User) -> bool:
     return user.is_superuser or user.group == UserGroup.ADMIN
 
 
+EXPERT_LIST_EVALUATION_CAP = 5
+
+
+def uses_expert_session_queue(user: User) -> bool:
+    return user.group == UserGroup.EXPERT and not user.is_superuser
+
+
 def expert_evaluation_count_subquery() -> Any:
     """Distinct experts who left a recommendation, one row per session."""
     return (
@@ -451,14 +458,89 @@ def session_recommendation_user_counts(
     return counts
 
 
+def _latest_answer_subquery() -> Any:
+    return (
+        select(
+            AnswerEvent.surveys_session_id.label("session_id"),
+            AnswerEvent.question_id,
+            AnswerEvent.value,
+        )
+        .distinct(
+            col(AnswerEvent.surveys_session_id),
+            col(AnswerEvent.question_id),
+        )
+        .order_by(
+            col(AnswerEvent.surveys_session_id),
+            col(AnswerEvent.question_id),
+            col(AnswerEvent.created_at).desc(),
+            col(AnswerEvent.id).desc(),
+        )
+        .subquery()
+    )
+
+
+def _answered_question_count(latest: Any) -> Any:
+    value_json = cast(latest.c.value, JSONB)
+    value_type = func.jsonb_typeof(value_json)
+    # Stored answers are a bare JSON number. Wrapped {"value": ...} is also accepted.
+    scalar_text = case(
+        (value_type == "number", cast(value_json, Text)),
+        (value_type == "string", value_json.op("#>>")(literal_column("'{}'::text[]"))),
+        (value_type == "object", value_json["value"].astext),
+    )
+    return (
+        select(
+            latest.c.session_id.label("session_id"),
+            func.count().label("answered"),
+        )
+        .where(scalar_text.is_not(None))
+        .where(scalar_text != str(MISSING_ANSWER))
+        .group_by(latest.c.session_id)
+        .subquery()
+    )
+
+
+def answer_rate_subquery() -> Any:
+    """One row per session: rounded fill percent, or 0 when there are no questions."""
+    latest = _latest_answer_subquery()
+    answered = _answered_question_count(latest)
+    totals = (
+        select(
+            SurveyQuestion.survey_version_id,
+            func.count().label("total"),
+        )
+        .group_by(col(SurveyQuestion.survey_version_id))
+        .subquery()
+    )
+    total = func.coalesce(totals.c.total, 0)
+    rate = case(
+        (
+            total > 0,
+            func.round(func.coalesce(answered.c.answered, 0) * 100.0 / total),
+        ),
+        else_=0,
+    )
+    return (
+        select(
+            col(SurveySession.id).label("session_id"),
+            rate.label("rate"),
+        )
+        .outerjoin(
+            totals,
+            col(SurveySession.survey_version_id) == totals.c.survey_version_id,
+        )
+        .outerjoin(answered, col(SurveySession.id) == answered.c.session_id)
+        .subquery()
+    )
+
+
 def answer_rates(
     session: Session, session_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, int | None]:
     """Share of latest answers that are not the missing-answer marker.
 
-    Computed only for the given sessions (one list page). Sorting the
-    session list by this percent is deferred: it would aggregate
-    answer_events before LIMIT.
+    Computed only for the given sessions (one list page). The list filter
+    uses answer_rate_subquery so the threshold applies before LIMIT.
     """
     rates: dict[uuid.UUID, int | None] = dict.fromkeys(session_ids)
     if not session_ids:

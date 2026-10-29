@@ -20,6 +20,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _filled_threshold(raw: str | None) -> int:
+    if raw is None:
+        return 90
+    text = raw.strip()
+    if not text:
+        return 0
+    try:
+        value = int(text)
+    except ValueError:
+        return 90
+    return min(100, max(0, value))
+
+
+def _session_location(session_id: uuid.UUID, view: str) -> str:
+    if view in {"domains", "flat", "summary"}:
+        return f"/sessions/{session_id}?view={view}"
+    return f"/sessions/{session_id}"
+
+
 def _optional_uuid(value: str) -> uuid.UUID | None:
     if not value:
         return None
@@ -41,6 +60,7 @@ def sessions_page(
     survey_version_id: str = "",
     users_sort: str = "asc",
     mine: str = "no",
+    filled: str | None = None,
 ) -> Any:
     offset, limit, page = page_window(page, PAGE_SIZE)
     filters: list[Any] = []
@@ -67,25 +87,47 @@ def sessions_page(
         filters.append(my_recommendation)
     elif mine == "no":
         filters.append(~my_recommendation)
+    filled_min = _filled_threshold(filled)
     show_evaluation_counts = session_service.can_see_evaluation_counts(user)
+    expert_queue = session_service.uses_expert_session_queue(user)
     recommendation_users_subquery = session_service.expert_evaluation_count_subquery()
+    fill_rates = session_service.answer_rate_subquery()
+    user_count = func.coalesce(recommendation_users_subquery.c.user_count, 0)
     count_stmt = select(func.count()).select_from(SurveySession)
     stmt = select(
         SurveySession,
         Dog,
         my_recommendation,
     ).join(Dog, col(SurveySession.dog_id) == Dog.id)
-    if show_evaluation_counts:
-        stmt = stmt.outerjoin(
+    count_stmt = count_stmt.outerjoin(
+        fill_rates,
+        col(SurveySession.id) == fill_rates.c.session_id,
+    )
+    stmt = stmt.outerjoin(
+        fill_rates,
+        col(SurveySession.id) == fill_rates.c.session_id,
+    )
+    filters.append(func.coalesce(fill_rates.c.rate, 0) >= filled_min)
+    if show_evaluation_counts or expert_queue:
+        join_counts = (
             recommendation_users_subquery,
             col(SurveySession.id) == recommendation_users_subquery.c.session_id,
         )
+        stmt = stmt.outerjoin(*join_counts)
+        count_stmt = count_stmt.outerjoin(*join_counts)
+    if expert_queue:
+        filters.append(user_count <= session_service.EXPERT_LIST_EVALUATION_CAP)
     if filters:
         count_stmt = count_stmt.where(*filters)
         stmt = stmt.where(*filters)
     ordering: tuple[Any, ...]
-    if show_evaluation_counts and users_sort in {"asc", "desc"}:
-        user_count = func.coalesce(recommendation_users_subquery.c.user_count, 0)
+    if expert_queue:
+        ordering = (
+            col(SurveySession.cluster).asc().nulls_last(),
+            user_count.desc(),
+            col(SurveySession.created_at).desc(),
+        )
+    elif show_evaluation_counts and users_sort in {"asc", "desc"}:
         direction = user_count.asc() if users_sort == "asc" else user_count.desc()
         ordering = (direction, col(SurveySession.created_at).desc())
     else:
@@ -122,6 +164,7 @@ def sessions_page(
                             "dog_id": dog_id,
                             "survey_version_id": survey_version_id,
                             "mine": mine,
+                            "filled": str(filled_min),
                             "users_sort": ("asc" if users_sort == "desc" else "desc"),
                         }
                     )
@@ -171,10 +214,17 @@ def sessions_page(
                         {"value": "", "label": "Все"},
                     ],
                 },
+                {
+                    "name": "filled",
+                    "type": "number",
+                    "label": "Заполнение, %",
+                    "value": str(filled_min),
+                },
             ],
             filter_values={
                 "users_sort": users_sort,
                 "mine": mine,
+                "filled": str(filled_min),
             },
         ),
     )
@@ -528,6 +578,7 @@ def add_session_recommendation(
     comment: str = Form(""),
     name: str = Form(""),
     description: str = Form(""),
+    view: str = Form(""),
 ) -> Any:
     if recomendation_id == "new":
         try:
@@ -546,10 +597,11 @@ def add_session_recommendation(
                 session,
                 user,
                 session_id,
+                view=view,
                 error=str(exc),
                 status_code=400,
             )
-        return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+        return RedirectResponse(_session_location(session_id, view), status_code=303)
     try:
         parsed_id = uuid.UUID(recomendation_id)
     except ValueError:
@@ -558,6 +610,7 @@ def add_session_recommendation(
             session,
             user,
             session_id,
+            view=view,
             error="Выберите рекомендацию",
             status_code=400,
         )
@@ -579,10 +632,11 @@ def add_session_recommendation(
             session,
             user,
             session_id,
+            view=view,
             error=str(exc),
             status_code=400,
         )
-    return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+    return RedirectResponse(_session_location(session_id, view), status_code=303)
 
 
 @router.post("/sessions/{session_id}/recommendations/{recommendation_id}/delete")
@@ -591,6 +645,7 @@ def delete_session_recommendation(
     user: CurrentUser,
     session_id: uuid.UUID,
     recommendation_id: uuid.UUID,
+    view: str = Form(""),
 ) -> RedirectResponse:
     try:
         session_service.delete_session_recommendation(
@@ -603,7 +658,7 @@ def delete_session_recommendation(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except session_service.SessionRecommendationPermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+    return RedirectResponse(_session_location(session_id, view), status_code=303)
 
 
 @router.post("/sessions/{session_id}/recommendations/save")
@@ -616,6 +671,7 @@ def save_session_recommendations(
     chart_number: list[str] = Form(default=[]),
     weight: list[str] = Form(default=[]),
     comment: list[str] = Form(default=[]),
+    view: str = Form(""),
 ) -> Any:
     if not (len(recommendation_id) == len(chart_number) == len(weight) == len(comment)):
         return _session_detail_response(
@@ -623,6 +679,7 @@ def save_session_recommendations(
             session,
             user,
             session_id,
+            view=view,
             error="Некорректные данные рекомендаций",
             status_code=400,
         )
@@ -656,6 +713,7 @@ def save_session_recommendations(
             session,
             user,
             session_id,
+            view=view,
             error=str(exc),
             status_code=400,
         )
@@ -667,7 +725,8 @@ def save_session_recommendations(
             session,
             user,
             session_id,
+            view=view,
             error="Некорректные данные рекомендаций",
             status_code=400,
         )
-    return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+    return RedirectResponse(_session_location(session_id, view), status_code=303)
