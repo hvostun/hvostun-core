@@ -16,7 +16,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlmodel import Session
 
-from app.models import Dog, Owner, SurveyQuestionGroup
+from app.models import Owner, SurveyQuestionGroup
 from app.services import gigachat as gigachat_service
 from app.services import scoring as scoring_service
 from app.services import sessions as session_service
@@ -72,7 +72,7 @@ class SummaryFacts:
     allowed_numbers: frozenset[str]
 
 
-def anonymize_history(text: str | None, owner: Owner, dog: Dog) -> str:
+def anonymize_history(text: str | None, owner: Owner) -> str:
     if not text:
         return ""
     result = text
@@ -81,7 +81,6 @@ def anonymize_history(text: str | None, owner: Owner, dog: Dog) -> str:
         (owner.phone, "[телефон]"),
         (owner.contact, "[контакт]"),
         (owner.name, "[владелец]"),
-        (dog.name, "собака"),
     ):
         if value:
             result = re.sub(re.escape(value), replacement, result, flags=re.IGNORECASE)
@@ -139,6 +138,9 @@ def _is_male_sex(sex: str) -> bool:
 
 def _dog_lines(dog_facts: dict[str, Any]) -> tuple[str, ...]:
     lines: list[str] = []
+    name = str(dog_facts.get("name") or "").strip()
+    if name:
+        lines.append(f"Кличка: {name}")
     sex = str(dog_facts.get("sex") or "").strip()
     if sex:
         lines.append(f"Пол: {sex}")
@@ -497,7 +499,6 @@ def generate_and_store_summary(
     anonymized = anonymize_history(
         dog_facts.get("history") if isinstance(dog_facts.get("history"), str) else None,
         context.owner,
-        context.dog,
     )
     fingerprint = facts_fingerprint(
         facts,

@@ -19,7 +19,6 @@ from app.admin.templating import PAGE_SIZE, cell, list_context, templates
 from app.models import (
     Owner,
     Recommendation,
-    RecommendationGroup,
     RecommendationStatus,
     User,
     UserGroup,
@@ -27,6 +26,7 @@ from app.models import (
 from app.models.recommendation import RECOMMENDATION_STATUS_LABELS
 from app.pagination import execute_page, page_window
 from app.services import catalog
+from app.services import dictionaries as dictionary_service
 from app.services import users as user_service
 
 router = APIRouter()
@@ -219,7 +219,7 @@ def _recommendation_form(
     slug: str = "",
     text: str = "",
     description: str = "",
-    group: str = RecommendationGroup.OTHER,
+    group: str = "",
     status: str = "",
 ) -> dict[str, str]:
     return {
@@ -255,6 +255,7 @@ def _recommendation_edit_mode(user: User, target: Recommendation | None) -> str:
 
 def _recommendation_form_response(
     request: Request,
+    session: SessionDep,
     user: User,
     *,
     form: dict[str, str],
@@ -270,7 +271,10 @@ def _recommendation_form_response(
             "user": user,
             "target": target,
             "form": form,
-            "groups": [item.value for item in RecommendationGroup],
+            "groups": dictionary_service.recommendation_category_options(
+                session,
+                current=None if target is None else target.group,
+            ),
             "statuses": [
                 {"value": item.value, "label": RECOMMENDATION_STATUS_LABELS[item]}
                 for item in RecommendationStatus
@@ -314,6 +318,22 @@ def _parse_recommendation_status(raw: str) -> RecommendationStatus | None:
         return None
 
 
+def _accepted_category(
+    session: SessionDep, raw: str, *, current: str | None = None
+) -> str | None:
+    text = raw.strip()
+    if not text:
+        stored = "" if current is None else current.strip()
+        return stored or None
+    allowed = {
+        item["value"]
+        for item in dictionary_service.recommendation_category_options(session)
+    }
+    if current and current.strip():
+        allowed.add(current.strip())
+    return text if text in allowed else None
+
+
 def _create_status(user: User, raw: str) -> RecommendationStatus | None:
     if user.group != UserGroup.MODERATOR:
         return RecommendationStatus.DRAFT
@@ -323,11 +343,18 @@ def _create_status(user: User, raw: str) -> RecommendationStatus | None:
 
 
 @router.get("/recommendations/new")
-def recommendation_new(request: Request, user: CurrentUser) -> Any:
+def recommendation_new(
+    request: Request, session: SessionDep, user: CurrentUser
+) -> Any:
+    options = dictionary_service.recommendation_category_options(session)
     return _recommendation_form_response(
         request,
+        session,
         user,
-        form=_recommendation_form(status=RecommendationStatus.DRAFT.value),
+        form=_recommendation_form(
+            group=options[0]["value"] if options else "",
+            status=RecommendationStatus.DRAFT.value,
+        ),
     )
 
 
@@ -338,17 +365,20 @@ def recommendation_create(
     user: CurrentUser,
     name: str = Form(""),
     description: str = Form(""),
+    group: str = Form(""),
     status: str = Form(""),
 ) -> Any:
     chosen = _create_status(user, status)
     form = _recommendation_form(
         name=name,
         description=description,
+        group=group.strip(),
         status=(chosen or RecommendationStatus.DRAFT).value,
     )
     if chosen is None:
         return _recommendation_form_response(
             request,
+            session,
             user,
             form=form,
             error="Неизвестный статус",
@@ -357,9 +387,20 @@ def recommendation_create(
     if not name.strip() or not description.strip():
         return _recommendation_form_response(
             request,
+            session,
             user,
             form=form,
             error="Название и описание обязательны",
+            status_code=400,
+        )
+    chosen_group = _accepted_category(session, group)
+    if chosen_group is None:
+        return _recommendation_form_response(
+            request,
+            session,
+            user,
+            form=form,
+            error="Неизвестная категория",
             status_code=400,
         )
     try:
@@ -369,12 +410,12 @@ def recommendation_create(
             slug=catalog.unique_recommendation_slug(session, name),
             text="",
             description=description.strip(),
-            group=RecommendationGroup.OTHER,
+            group=chosen_group,
             status=chosen,
         )
     except (catalog.CatalogUpdateError, ValueError) as exc:
         return _recommendation_form_response(
-            request, user, form=form, error=str(exc), status_code=400
+            request, session, user, form=form, error=str(exc), status_code=400
         )
     return RedirectResponse(f"/recommendations/{created.id}", status_code=303)
 
@@ -396,7 +437,11 @@ def recommendation_detail(
     ):
         raise HTTPException(status_code=404, detail="Recommendation not found")
     return _recommendation_form_response(
-        request, user, form=_recommendation_form_from_row(target), target=target
+        request,
+        session,
+        user,
+        form=_recommendation_form_from_row(target),
+        target=target,
     )
 
 
@@ -410,7 +455,7 @@ def recommendation_update(
     slug: str = Form(""),
     text: str = Form(""),
     description: str = Form(""),
-    group: str = Form(RecommendationGroup.OTHER),
+    group: str = Form(""),
     status: str = Form(""),
 ) -> Any:
     try:
@@ -421,11 +466,13 @@ def recommendation_update(
     if moderate:
         form = _recommendation_form_from_row(target)
         form["description"] = description
+        form["group"] = group
         form["status"] = status
         parsed_status = _parse_recommendation_status(status)
         if parsed_status is None:
             return _recommendation_form_response(
                 request,
+                session,
                 user,
                 form=form,
                 target=target,
@@ -436,14 +483,31 @@ def recommendation_update(
         saved_slug = target.slug
         saved_text = target.text
         saved_description = description.strip() or None
-        saved_group = target.group
+        chosen_group = _accepted_category(session, group, current=target.group)
+        if chosen_group is None:
+            return _recommendation_form_response(
+                request,
+                session,
+                user,
+                form=form,
+                target=target,
+                error="Неизвестная категория",
+                status_code=400,
+            )
+        saved_group = chosen_group
     else:
         form, error = _recommendation_fields(
             name, slug, text, description, group, status
         )
         if error:
             return _recommendation_form_response(
-                request, user, form=form, target=target, error=error, status_code=400
+                request,
+                session,
+                user,
+                form=form,
+                target=target,
+                error=error,
+                status_code=400,
             )
         parsed_status = (
             RecommendationStatus(target.status)
@@ -453,6 +517,7 @@ def recommendation_update(
         if parsed_status is None:
             return _recommendation_form_response(
                 request,
+                session,
                 user,
                 form=form,
                 target=target,
@@ -463,11 +528,16 @@ def recommendation_update(
         saved_slug = slug.strip()
         saved_text = text.strip()
         saved_description = description.strip() or None
-        try:
-            saved_group = RecommendationGroup(group)
-        except ValueError as exc:
+        saved_group = _accepted_category(session, group, current=target.group)
+        if saved_group is None:
             return _recommendation_form_response(
-                request, user, form=form, target=target, error=str(exc), status_code=400
+                request,
+                session,
+                user,
+                form=form,
+                target=target,
+                error="Неизвестная категория",
+                status_code=400,
             )
     try:
         catalog.update_recommendation(
@@ -485,6 +555,7 @@ def recommendation_update(
         session.rollback()
         return _recommendation_form_response(
             request,
+            session,
             user,
             form=form,
             target=target,

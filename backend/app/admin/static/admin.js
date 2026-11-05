@@ -24,8 +24,12 @@ document.addEventListener("change", (event) => {
   }
   const creating = target.value === "new";
   form.hidden = !creating;
-  for (const field of form.querySelectorAll("input, textarea")) {
-    if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+  for (const field of form.querySelectorAll("input, textarea, select")) {
+    if (
+      field instanceof HTMLInputElement ||
+      field instanceof HTMLTextAreaElement ||
+      field instanceof HTMLSelectElement
+    ) {
       field.required = creating;
     }
   }

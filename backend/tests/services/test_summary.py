@@ -2,7 +2,7 @@ import uuid
 
 from sqlmodel import Session
 
-from app.models import Dog, Owner, Question, SurveyQuestion
+from app.models import Owner, Question, SurveyQuestion
 from app.services.scoring import ScoringConsts, score_domains
 from app.services.sessions import SessionAnswer
 from app.services.summary import (
@@ -67,6 +67,7 @@ def test_build_facts_strengths_concerns_and_red_flag(db: Session) -> None:
         scoring,
         answers,
         {
+            "name": "Джесси",
             "sex": "самка",
             "status": "дом",
             "days_since_status": 14,
@@ -89,6 +90,7 @@ def test_build_facts_strengths_concerns_and_red_flag(db: Session) -> None:
     )
     assert len(facts.red_flags) == 1
     assert facts.red_flags[0].refs == (10,)
+    assert "Кличка: Джесси" in facts.dog
     assert "Пол: самка" in facts.dog
     assert "Статус: дом, 14 дн." in facts.dog
     assert "Стерилизована: да" in facts.dog
@@ -167,19 +169,17 @@ def test_anonymize_history_masks_pii() -> None:
         phone="+7 900 111-22-33",
         contact="@ivan_tg",
     )
-    dog = Dog(name="Рекс")
     text = (
         "Рекс живёт у Иван Петров, пишите ivan@example.com или +7 900 111-22-33, "
         "телега @ivan_tg, сайт https://example.com/dog"
     )
-    cleaned = anonymize_history(text, owner, dog)
-    assert "Рекс" not in cleaned
+    cleaned = anonymize_history(text, owner)
+    assert "Рекс" in cleaned
     assert "Иван" not in cleaned
     assert "ivan@example.com" not in cleaned
     assert "+7 900 111-22-33" not in cleaned
     assert "@ivan_tg" not in cleaned
     assert "https://example.com/dog" not in cleaned
-    assert "собака" in cleaned
     assert "[владелец]" in cleaned
     assert "[контакт]" in cleaned
     assert "[телефон]" in cleaned

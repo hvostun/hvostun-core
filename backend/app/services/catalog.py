@@ -8,7 +8,6 @@ from sqlmodel import Session, col, func, select
 from app.models import (
     Question,
     Recommendation,
-    RecommendationGroup,
     RecommendationStatus,
     Scale,
     ScaleType,
@@ -211,7 +210,7 @@ def create_recommendation(
     slug: str,
     text: str,
     description: str | None,
-    group: RecommendationGroup,
+    group: str,
     status: RecommendationStatus = RecommendationStatus.DRAFT,
 ) -> Recommendation:
     row = Recommendation(
@@ -240,7 +239,7 @@ def update_recommendation(
     slug: str,
     text: str,
     description: str | None,
-    group: RecommendationGroup,
+    group: str,
     status: RecommendationStatus | None = None,
     text_and_status_only: bool = False,
 ) -> Recommendation:
@@ -249,10 +248,10 @@ def update_recommendation(
     row.description = description
     if status is not None:
         row.status = status
+    row.group = group
     if not text_and_status_only:
         row.name = name
         row.slug = slug
-        row.group = group
     try:
         session.commit()
     except IntegrityError as exc:
