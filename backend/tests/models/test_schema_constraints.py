@@ -57,7 +57,7 @@ def test_catalog_group_check_constraints_exist(db: Session) -> None:
         for constraint in inspector.get_check_constraints("recommendations")
     }
     assert "ck_surveys_questions_group" not in surveys_questions
-    assert "ck_recommendations_group" in recommendations
+    assert "ck_recommendations_group" not in recommendations
     question_columns = {
         column["name"] for column in inspector.get_columns("surveys_questions")
     }

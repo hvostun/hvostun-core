@@ -303,7 +303,7 @@ def test_scale_config_validation(
         (Scale, "type", "invalid"),
         (PlacementEvent, "code", "unknown"),
         (User, "group", "invalid"),
-        (Recommendation, "group", "nope"),
+        (Recommendation, "status", "nope"),
     ],
 )
 def test_domain_values_reject_invalid_assignments(
@@ -345,6 +345,19 @@ def test_domain_values_reject_invalid_assignments(
     with pytest.raises(DomainValueValidationError):
         db.commit()
     db.rollback()
+
+
+def test_recommendation_accepts_any_group(db: Session) -> None:
+    row = Recommendation(
+        name="Custom category",
+        slug=f"custom-category-{uuid.uuid4()}",
+        text="text",
+        group="aggression",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    assert row.group == "aggression"
 
 
 def test_survey_question_accepts_any_group(db: Session) -> None:

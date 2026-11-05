@@ -12,6 +12,7 @@ _KEY_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,254}$")
 DOGS_SEX_KEY = "dogs::sex"
 DOGS_STATUS_KEY = "dogs::status"
 SURVEYS_QUESTIONS_GROUP_KEY = "surveys_questions::group"
+RECOMMENDATIONS_CATEGORIES_KEY = "recommendations::categories"
 SURVEYS_QUESTIONS_CONSTS_KEY = "surveys_questions::consts"
 # Ordered list[str] of model ids, or dict[str, label] (keys = ids, order preserved).
 GIGACHAT_MODELS_KEY = "gigachat::models"
@@ -51,6 +52,34 @@ def list_gigachat_models(session: Session) -> list[str]:
     if default and default not in models:
         models = [default, *models]
     return models
+
+
+def recommendation_category_options(
+    session: Session, *, current: str | None = None
+) -> list[dict[str, str]]:
+    """Categories for the recommendation form.
+
+    ``recommendations::categories`` is ``{"code": "Подпись"}``.
+    Options are ordered by the label. ``current`` is included when the stored
+    category is absent from the dictionary, so an existing recommendation can
+    be saved without rewriting its category.
+    """
+    value = get_value(session, RECOMMENDATIONS_CATEGORIES_KEY)
+    options: list[dict[str, str]] = []
+    seen: set[str] = set()
+    if isinstance(value, dict):
+        for code, label in value.items():
+            key = str(code).strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            text = "" if label is None else str(label).strip()
+            options.append({"value": key, "label": text or key})
+    current_text = "" if current is None else str(current).strip()
+    if current_text and current_text not in seen:
+        options.append({"value": current_text, "label": current_text})
+    options.sort(key=lambda item: (item["label"].casefold(), item["value"].casefold()))
+    return options
 
 
 def gigachat_model_label(session: Session, model_id: str) -> str:

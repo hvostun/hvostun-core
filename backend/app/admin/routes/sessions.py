@@ -311,7 +311,6 @@ def _summary_context(
     anonymized = summary_service.anonymize_history(
         dog_facts.get("history") if isinstance(dog_facts.get("history"), str) else None,
         context.owner,
-        context.dog,
     )
     stored = summary_service.parse_stored_summary(context.row.summary)
     if stored is not None:
@@ -382,7 +381,7 @@ def _session_detail_response(
     rec_groups = session_service.group_recommendations(
         session_service.get_session_recommendations(session, session_id, user)
     )
-    available = session_service.available_recommendations_for_user(
+    available = session_service.available_recommendation_choices(
         session,
         session_id=session_id,
         user_id=user.id,
@@ -449,6 +448,9 @@ def _session_detail_response(
                 session_service.can_manage_all_session_recommendations(user)
             ),
             "available_recommendations": available,
+            "recommendation_categories": (
+                dictionary_service.recommendation_category_options(session)
+            ),
             "error": error,
             **summary_ctx,
         },
@@ -557,6 +559,7 @@ def add_session_recommendation(
     comment: str = Form(""),
     name: str = Form(""),
     description: str = Form(""),
+    group: str = Form(""),
     view: str = Form(""),
 ) -> Any:
     if recomendation_id == "new":
@@ -567,6 +570,7 @@ def add_session_recommendation(
                 current_user=user,
                 name=name,
                 description=description,
+                group=group,
             )
         except session_service.SessionNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

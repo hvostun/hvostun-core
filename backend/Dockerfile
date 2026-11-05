@@ -28,11 +28,13 @@ if bundled.exists():
     shutil.rmtree(bundled)
 PY
 
-# CVE-2026-103111 is fixed in libpcre2-8-0 10.46-1~deb13u3.
-# libpq5 uses that library. The image does not install psycopg-binary:
-# its wheel vendors libpcre2 10.32 from EL8.
+# The pinned amd64 base still has apt 3.0.3 (CVE-2026-109518) and
+# libpcre2 10.46-1~deb13u2 (CVE-2026-103111). libpq5 needs libpcre2.
+# Upgrade every installed Debian package so later security updates are
+# picked up the next time this layer is rebuilt.
+# The image does not install psycopg-binary: its wheel vendors libpcre2 10.32.
 RUN apt-get update \
- && apt-get upgrade -y --no-install-recommends libpcre2-8-0 \
+ && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends libpq5 \
  && rm -rf /var/lib/apt/lists/*
 

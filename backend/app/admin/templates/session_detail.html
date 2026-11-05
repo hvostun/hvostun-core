@@ -90,10 +90,7 @@
         <select class="form-select mb-2" id="recomendation_id" name="recomendation_id" required>
           <option value="">Выберите рекомендацию</option>
           {% for rec in available_recommendations %}
-          <option value="{{ rec.id }}">
-            {{ rec.name }}{% if rec.description and rec.description.strip() and rec.description.strip() !=
-            rec.name.strip() %} — {{ rec.description.strip() }}{% endif %}
-          </option>
+          <option value="{{ rec.id }}">{{ rec.label }}</option>
           {% endfor %}
           <option value="new">Создать новую</option>
         </select>
@@ -105,6 +102,14 @@
           <div class="mb-2">
             <label class="form-label" for="new-recommendation-description">Описание</label>
             <textarea class="form-control" id="new-recommendation-description" name="description" rows="3"></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="new-recommendation-group">Категория</label>
+            <select class="form-select" id="new-recommendation-group" name="group">
+              {% for item in recommendation_categories %}
+              <option value="{{ item.value }}">{{ item.label }}</option>
+              {% endfor %}
+            </select>
           </div>
         </div>
         <button class="btn btn-outline-primary w-100 w-sm-auto" type="submit">Добавить</button>
@@ -121,7 +126,8 @@
         <div class="card mb-2">
           <div class="card-body p-3">
             <input type="hidden" name="recommendation_id" value="{{ item.id }}" />
-            <h3 class="h6 mb-3">{{ item.recommendation_name }}{% if item.recommendation_description %} — {{ item.recommendation_description }}{% endif %}</h3>
+            <p class="mb-3"><strong>{{ item.recommendation_name }}</strong>{% if item.recommendation_description %}. {{
+              item.recommendation_description }}{% endif %}</p>
             <div class="row g-3">
               <div class="col-12 col-md-4">
                 <label class="form-label" for="chart_number-{{ item.id }}">Важность</label>
@@ -169,12 +175,13 @@
 <div class="row g-3 mb-3">
   <div class="col-12 col-lg-5">
     <div class="card text-dark bg-light h-100">
-      <div class="card-header">{{ dog.sex or "—" }}</div>
+      <div class="card-header">{{ dog.name or "—" }}</div>
       <div class="card-body">
         <h5 class="card-title">{{ dog.status or "—" }} {% if dog.days_since_status is not none
           %}{{ dog.days_since_status }}{% else %}—{% endif %} дней</h5>
         <p class="card-text mb-0">Возраст: {{ dog.age or "—" }}
           <br>Порода: {{ dog.breed or "—" }} {{ "(Метис)" if dog.mixed}}
+          <br>Пол: {{ dog.sex or "—" }}
           <br>Стерилизован: {{ "Да" if dog.neutered else "Нет" }}
           <br>Вес: {% if dog.weight is not none %}{{ dog.weight }}{% else %}—{% endif %}
         </p>

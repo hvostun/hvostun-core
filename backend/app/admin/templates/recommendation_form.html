@@ -17,6 +17,14 @@
     <label class="form-label" for="description">Описание</label>
     <textarea class="form-control" id="description" name="description" rows="3" required>{{ form.description }}</textarea>
   </div>
+  <div class="mb-3">
+    <label class="form-label" for="group">Категория</label>
+    <select class="form-select" id="group" name="group" required>
+      {% for item in groups %}
+      <option value="{{ item.value }}" {% if form.group==item.value %}selected{% endif %}>{{ item.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
   {% if user.group == "moderator" %}
   <div class="mb-3">
     <label class="form-label" for="status">Статус</label>
@@ -49,10 +57,10 @@
     <textarea class="form-control" id="description" name="description" rows="3">{{ form.description }}</textarea>
   </div>
   <div class="mb-3">
-    <label class="form-label" for="group">Группа</label>
+    <label class="form-label" for="group">Категория</label>
     <select class="form-select" id="group" name="group" required>
       {% for item in groups %}
-      <option value="{{ item }}" {% if form.group==item %}selected{% endif %}>{{ item }}</option>
+      <option value="{{ item.value }}" {% if form.group==item.value %}selected{% endif %}>{{ item.label }}</option>
       {% endfor %}
     </select>
   </div>
@@ -76,6 +84,14 @@
   <div class="mb-3">
     <label class="form-label" for="description">Описание</label>
     <textarea class="form-control" id="description" name="description" rows="3">{{ form.description }}</textarea>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="group">Категория</label>
+    <select class="form-select" id="group" name="group" required>
+      {% for item in groups %}
+      <option value="{{ item.value }}" {% if form.group==item.value %}selected{% endif %}>{{ item.label }}</option>
+      {% endfor %}
+    </select>
   </div>
   <div class="mb-3">
     <label class="form-label" for="status">Статус</label>

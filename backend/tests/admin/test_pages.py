@@ -30,6 +30,7 @@ from app.models import (
     UserGroup,
 )
 from app.services.dictionaries import (
+    RECOMMENDATIONS_CATEGORIES_KEY,
     SURVEYS_QUESTIONS_CONSTS_KEY,
     SURVEYS_QUESTIONS_GROUP_KEY,
 )
@@ -760,7 +761,9 @@ def test_session_detail_shows_dog_facts(client: TestClient, db: Session) -> None
     )
     page = client.get(f"/sessions/{session_row.id}")
     assert page.status_code == 200
-    assert "сука" in page.text
+    assert 'card-header">Facts Dog' in page.text
+    assert page.text.index("Порода:") < page.text.index("Пол:")
+    assert page.text.index("Пол:") < page.text.index("сука")
     assert "female" not in page.text
     assert "метис" in page.text
     assert "дома" in page.text
@@ -1079,9 +1082,18 @@ def _session_with_recommendation_catalog(
 
 
 def test_session_detail_can_add_recommendation(client: TestClient, db: Session) -> None:
+    _set_recommendation_categories(db)
     session_row, recommendation, user = _session_with_recommendation_catalog(db)
     recommendation.description = "Коротко прогуливаться"
+    later = Recommendation(
+        name="Яблоко",
+        slug=f"apple-{random_lower_string()}",
+        text="",
+        group="Fear_Anxiety",
+        status=RecommendationStatus.ACTIVE,
+    )
     db.add(recommendation)
+    db.add(later)
     db.commit()
     _login_superuser(client)
     page = client.get(f"/sessions/{session_row.id}")
@@ -1095,6 +1107,8 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert 'id="new-recommendation-form" hidden' in page.text
     assert 'id="new-recommendation-description"' in page.text
     assert 'name="description"' in page.text
+    assert 'id="new-recommendation-group"' in page.text
+    assert 'name="group"' in page.text
     assert 'id="new-recommendation-text"' not in page.text
     assert 'name="text"' not in page.text
     assert "представить собаку с этой карточки" in page.text
@@ -1102,8 +1116,11 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert "Важность" in page.text
     assert "Критичность" in page.text
     assert "Другое" in page.text
-    assert recommendation.name in page.text
-    assert recommendation.description in page.text
+    assert "Другое - Короткая прогулка" in page.text
+    assert page.text.index("Другое - Короткая прогулка") < page.text.index(
+        "Страх и тревожность - Яблоко"
+    )
+    assert recommendation.description not in page.text
     assert recommendation.slug not in page.text
     assert 'id="recommendations-accordion"' in page.text
     assert "accordion-item" in page.text
@@ -1157,6 +1174,7 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
 def test_session_new_recommendation_option_creates_and_assigns(
     client: TestClient, db: Session
 ) -> None:
+    _set_recommendation_categories(db)
     session_row, _catalog, user = _session_with_recommendation_catalog(db)
     _login_superuser(client)
     missing = post(
@@ -1173,6 +1191,7 @@ def test_session_new_recommendation_option_creates_and_assigns(
             "recomendation_id": "new",
             "name": "Тихий вход",
             "description": "Не встречайте у двери.",
+            "group": "Fear_Anxiety",
         },
         follow_redirects=False,
     )
@@ -1182,6 +1201,19 @@ def test_session_new_recommendation_option_creates_and_assigns(
     ).one()
     assert row.description == "Не встречайте у двери."
     assert row.text == ""
+    assert row.group == "Fear_Anxiety"
+    unknown_group = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations",
+        data={
+            "recomendation_id": "new",
+            "name": "Без категории",
+            "description": "Текст",
+            "group": "nope",
+        },
+    )
+    assert unknown_group.status_code == 400
+    assert "Неизвестная категория" in unknown_group.text
     assignment = db.exec(
         select(SessionRecommendation).where(
             SessionRecommendation.recomendation_id == row.id
@@ -1683,9 +1715,109 @@ def test_admin_access_matrix(client: TestClient, db: Session) -> None:
     assert 'href="/owners"' not in home.text
 
 
+def test_html_pages_respond_ok(client: TestClient, db: Session) -> None:
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).one()
+    owner = Owner(name="Владелец страниц")
+    dog = Dog(name="Страницы", history="Собака жила у владельца.")
+    survey = Survey(name="Анкета страниц", slug=f"pages-{random_lower_string()}")
+    scale = Scale(
+        name="Шкала страниц",
+        type="integer",
+        config={"min_value": 0, "max_value": 4},
+    )
+    recommendation = Recommendation(
+        name="Рекомендация страниц",
+        slug=f"pages-rec-{random_lower_string()}",
+        text="",
+        status=RecommendationStatus.ACTIVE,
+    )
+    dictionary = Dictionary(
+        key=f"pages-{random_lower_string()}",
+        value={"a": "А"},
+        created_by=user.id,
+        updated_by=user.id,
+    )
+    db.add(owner)
+    db.add(dog)
+    db.add(survey)
+    db.add(scale)
+    db.add(recommendation)
+    db.add(dictionary)
+    db.commit()
+    db.refresh(owner)
+    db.refresh(dog)
+    db.refresh(survey)
+    db.refresh(scale)
+    db.refresh(recommendation)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    session_row = SurveySession(
+        owner_id=owner.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="finished",
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+
+    _login_superuser(client)
+    pages = [
+        "/login",
+        "/",
+        "/dogs",
+        f"/dogs/{dog.id}",
+        "/surveys",
+        f"/surveys/{survey.id}",
+        "/scales",
+        f"/scales/{scale.id}",
+        "/sessions",
+        f"/sessions/{session_row.id}",
+        f"/sessions/{session_row.id}?view=domains",
+        f"/sessions/{session_row.id}?view=flat",
+        f"/sessions/{session_row.id}?view=summary",
+        "/recommendations",
+        "/recommendations/new",
+        f"/recommendations/{recommendation.id}",
+        "/users",
+        "/users/new",
+        f"/users/{user.id}",
+        "/dictionaries",
+        "/dictionaries/new",
+        f"/dictionaries/{dictionary.key}",
+        "/answer-events",
+        "/owners",
+    ]
+    for path in pages:
+        response = client.get(path)
+        assert response.status_code in {200, 201}, path
+
+
+def _set_recommendation_categories(db: Session) -> None:
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).one()
+    categories = {"Fear_Anxiety": "Страх и тревожность", "other": "Другое"}
+    row = db.get(Dictionary, RECOMMENDATIONS_CATEGORIES_KEY)
+    if row is None:
+        db.add(
+            Dictionary(
+                key=RECOMMENDATIONS_CATEGORIES_KEY,
+                value=categories,
+                created_by=user.id,
+                updated_by=user.id,
+            )
+        )
+    else:
+        row.value = categories
+        db.add(row)
+    db.commit()
+
+
 def test_admin_can_create_and_edit_recommendation(
     client: TestClient, db: Session
 ) -> None:
+    _set_recommendation_categories(db)
     _login_admin(client, db)
     listing = client.get("/recommendations")
     assert listing.status_code == 200
@@ -1697,7 +1829,10 @@ def test_admin_can_create_and_edit_recommendation(
     assert 'name="description"' in form.text
     assert 'name="slug"' not in form.text
     assert 'name="text"' not in form.text
-    assert 'name="group"' not in form.text
+    assert 'name="group"' in form.text
+    assert ">Категория<" in form.text
+    assert "Страх и тревожность" in form.text
+    assert 'value="Excitability"' not in form.text
     assert 'name="status"' not in form.text
     forged_slug = f"rec-{random_lower_string()}"
     created = post(
@@ -1708,7 +1843,7 @@ def test_admin_can_create_and_edit_recommendation(
             "slug": forged_slug,
             "text": "Выходите дважды в день",
             "description": "Коротко",
-            "group": "other",
+            "group": "Fear_Anxiety",
         },
         follow_redirects=False,
     )
@@ -1722,7 +1857,7 @@ def test_admin_can_create_and_edit_recommendation(
     assert row.text == ""
     assert row.description == "Коротко"
     assert row.slug != forged_slug
-    assert row.group == "other"
+    assert row.group == "Fear_Anxiety"
     assert row.status == RecommendationStatus.DRAFT
     page = client.get(f"/recommendations/{row.id}")
     assert page.status_code == 200
@@ -1730,6 +1865,7 @@ def test_admin_can_create_and_edit_recommendation(
     assert 'name="slug"' in page.text
     assert 'name="text"' in page.text
     assert 'name="group"' in page.text
+    assert ">Категория<" in page.text
     updated = post(
         client,
         f"/recommendations/{row.id}",
@@ -1747,6 +1883,7 @@ def test_admin_can_create_and_edit_recommendation(
     assert row.name == "Длинная прогулка"
     assert row.description is None
     assert row.text == "Выходите трижды в день"
+    assert row.group == "other"
     missing = post(
         client,
         "/recommendations/new",
@@ -1754,11 +1891,23 @@ def test_admin_can_create_and_edit_recommendation(
     )
     assert missing.status_code == 400
     assert "Название и описание обязательны" in missing.text
+    unknown_group = post(
+        client,
+        "/recommendations/new",
+        data={
+            "name": "Без категории",
+            "description": "Текст",
+            "group": "nope",
+        },
+    )
+    assert unknown_group.status_code == 400
+    assert "Неизвестная категория" in unknown_group.text
 
 
 def test_expert_can_view_recommendations_but_cannot_edit(
     client: TestClient, db: Session
 ) -> None:
+    _set_recommendation_categories(db)
     row = Recommendation(
         name="Closed",
         slug=f"closed-{random_lower_string()}",
@@ -1802,7 +1951,9 @@ def test_expert_can_view_recommendations_but_cannot_edit(
     assert 'name="status"' not in form.text
     assert 'name="slug"' not in form.text
     assert 'name="text"' not in form.text
-    assert 'name="group"' not in form.text
+    assert 'name="group"' in form.text
+    assert ">Категория<" in form.text
+    assert "Страх и тревожность" in form.text
     assert 'name="name"' in form.text
     assert 'name="description"' in form.text
     slug = f"expert-rec-{random_lower_string()}"
@@ -1828,7 +1979,7 @@ def test_expert_can_view_recommendations_but_cannot_edit(
     assert created_row.status == RecommendationStatus.DRAFT
     assert created_row.text == ""
     assert created_row.slug != slug
-    assert created_row.group == "other"
+    assert created_row.group == "Fear_Anxiety"
     created_detail = client.get(f"/recommendations/{created_row.id}")
     assert created_detail.status_code == 200
     assert "Предложение эксперта" in created_detail.text
@@ -1873,6 +2024,7 @@ def test_expert_can_view_recommendations_but_cannot_edit(
 def test_moderator_edits_recommendation_and_list_shows_status(
     client: TestClient, db: Session
 ) -> None:
+    _set_recommendation_categories(db)
     draft = Recommendation(
         name="Черновик модерации",
         slug=f"draft-{random_lower_string()}",
@@ -1930,7 +2082,9 @@ def test_moderator_edits_recommendation_and_list_shows_status(
     assert 'value="draft" selected' in create_form.text
     assert 'name="slug"' not in create_form.text
     assert 'name="text"' not in create_form.text
-    assert 'name="group"' not in create_form.text
+    assert 'name="group"' in create_form.text
+    assert ">Категория<" in create_form.text
+    assert "Страх и тревожность" in create_form.text
     moderator_created = post(
         client,
         "/recommendations/new",
@@ -1953,7 +2107,7 @@ def test_moderator_edits_recommendation_and_list_shows_status(
     assert moderator_row.status == RecommendationStatus.ACTIVE
     assert moderator_row.text == ""
     assert moderator_row.slug != "forged-on-create"
-    assert moderator_row.group == "other"
+    assert moderator_row.group == "Fear_Anxiety"
     unknown_status = post(
         client,
         "/recommendations/new",
@@ -1981,7 +2135,8 @@ def test_moderator_edits_recommendation_and_list_shows_status(
     assert 'name="status"' in page.text
     assert 'name="name"' not in page.text
     assert 'name="slug"' not in page.text
-    assert 'name="group"' not in page.text
+    assert 'name="group"' in page.text
+    assert ">Категория<" in page.text
     assert ">Код<" not in page.text
     assert ">Группа<" not in page.text
     assert draft.slug not in page.text
@@ -1993,7 +2148,7 @@ def test_moderator_edits_recommendation_and_list_shows_status(
             "slug": "forged-slug",
             "text": "Новый текст модератора",
             "description": "Новое описание",
-            "group": "other",
+            "group": "Fear_Anxiety",
             "status": "active",
         },
         follow_redirects=False,
@@ -2004,6 +2159,7 @@ def test_moderator_edits_recommendation_and_list_shows_status(
     assert draft.slug != "forged-slug"
     assert draft.description == "Новое описание"
     assert draft.text == "Старый текст"
+    assert draft.group == "Fear_Anxiety"
     assert draft.status == RecommendationStatus.ACTIVE
 
     hidden = client.get(f"/recommendations/{canceled.id}")

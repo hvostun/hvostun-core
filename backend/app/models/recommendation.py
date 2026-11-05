@@ -8,18 +8,6 @@ from sqlmodel import Field, SQLModel
 from app.models.base import UUID_PK_KWARGS, TimestampMixin
 
 
-class RecommendationGroup(StrEnum):
-    EXCITABILITY = "Excitability"
-    AGGRESSION = "Aggression"
-    FEAR_ANXIETY = "Fear_Anxiety"
-    SEPARATION = "Separation"
-    ATTACHMENT = "Attachment"
-    TRAINING = "Training"
-    MISCELLANEOUS = "Miscellaneous"
-    UNKNOWN = "Unknown"
-    OTHER = "other"
-
-
 class RecommendationStatus(StrEnum):
     DRAFT = "draft"
     ACTIVE = "active"
@@ -37,13 +25,6 @@ class Recommendation(TimestampMixin, SQLModel, table=True):
     __tablename__ = "recommendations"  # pyright: ignore[reportAssignmentType]
     __table_args__ = (
         CheckConstraint(
-            '"group" IN ('
-            "'Excitability', 'Aggression', 'Fear_Anxiety', 'Separation', "
-            "'Attachment', 'Training', 'Miscellaneous', 'Unknown', 'other'"
-            ")",
-            name="ck_recommendations_group",
-        ),
-        CheckConstraint(
             "status IN ('draft', 'active', 'canceled')",
             name="ck_recommendations_status",
         ),
@@ -58,8 +39,8 @@ class Recommendation(TimestampMixin, SQLModel, table=True):
     slug: str = Field(unique=True, index=True, sa_type=Text)
     text: str = Field(sa_type=Text)
     description: str | None = Field(default=None, sa_type=Text)
-    group: RecommendationGroup = Field(
-        default=RecommendationGroup.OTHER,
+    group: str = Field(
+        default="other",
         sa_column=Column(
             "group",
             Text,
@@ -84,7 +65,7 @@ class RecommendationPublic(SQLModel):
     slug: str
     text: str
     description: str | None = None
-    group: RecommendationGroup
+    group: str
     status: RecommendationStatus
     created_at: datetime
     updated_at: datetime

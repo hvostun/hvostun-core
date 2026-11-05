@@ -8,6 +8,7 @@ from app.services.dictionaries import (
     DOGS_SEX_KEY,
     DOGS_STATUS_KEY,
     GIGACHAT_MODELS_KEY,
+    RECOMMENDATIONS_CATEGORIES_KEY,
     SURVEYS_QUESTIONS_GROUP_KEY,
     DictionaryConflictError,
     DictionaryNotFoundError,
@@ -19,6 +20,7 @@ from app.services.dictionaries import (
     label_for,
     list_gigachat_models,
     normalize_key,
+    recommendation_category_options,
     update_dictionary,
 )
 from tests.utils.utils import random_lower_string
@@ -75,6 +77,36 @@ def test_group_entry_reads_name_and_color(db: Session) -> None:
     assert group_color(db, "Missing") == DEFAULT_GROUP_COLOR
     assert group_name(db, None) == ""
     assert group_color(db, None) == DEFAULT_GROUP_COLOR
+
+
+def test_recommendation_categories_read_code_and_label(db: Session) -> None:
+    user = db.exec(select(User).where(User.email == settings.FIRST_SUPERUSER)).first()
+    assert user
+    categories = {"b": " Бета", "a": "Альфа"}
+    row = db.get(Dictionary, RECOMMENDATIONS_CATEGORIES_KEY)
+    if row is None:
+        db.add(
+            Dictionary(
+                key=RECOMMENDATIONS_CATEGORIES_KEY,
+                value=categories,
+                created_by=user.id,
+                updated_by=user.id,
+            )
+        )
+    else:
+        row.value = categories
+        db.add(row)
+    db.commit()
+    assert RECOMMENDATIONS_CATEGORIES_KEY == "recommendations::categories"
+    assert recommendation_category_options(db) == [
+        {"value": "a", "label": "Альфа"},
+        {"value": "b", "label": "Бета"},
+    ]
+    assert recommendation_category_options(db, current="ягода") == [
+        {"value": "a", "label": "Альфа"},
+        {"value": "b", "label": "Бета"},
+        {"value": "ягода", "label": "ягода"},
+    ]
 
 
 def test_label_for_missing_key_is_empty(db: Session) -> None:

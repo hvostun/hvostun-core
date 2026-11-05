@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, TypedDict
 
 from sqlalchemy import Text, case, cast, literal_column
 from sqlalchemy.dialects.postgresql import JSONB
@@ -653,6 +653,34 @@ def available_recommendations_for_user(
     ]
 
 
+class RecommendationChoice(TypedDict):
+    id: uuid.UUID
+    label: str
+
+
+def available_recommendation_choices(
+    session: Session,
+    *,
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> list[RecommendationChoice]:
+    labels = {
+        item["value"]: item["label"]
+        for item in dictionary_service.recommendation_category_options(session)
+    }
+    choices: list[RecommendationChoice] = [
+        {
+            "id": row.id,
+            "label": f"{labels.get(row.group, row.group)} - {row.name}",
+        }
+        for row in available_recommendations_for_user(
+            session, session_id=session_id, user_id=user_id
+        )
+    ]
+    choices.sort(key=lambda item: item["label"].casefold())
+    return choices
+
+
 def _recommendation_slug(name: str) -> str:
     base = re.sub(r"[^\w]+", "-", name.strip().lower(), flags=re.UNICODE).strip("-_")
     base = base[:60].strip("-_") or "recommendation"
@@ -666,12 +694,20 @@ def create_session_recommendation(
     current_user: User,
     name: str,
     description: str,
+    group: str,
 ) -> SessionRecommendation:
     get_accessible_session(session, session_id, current_user)
     title = name.strip()
     body = description.strip()
     if not title or not body:
         raise SessionRecommendationError("Название и описание обязательны")
+    chosen_group = group.strip()
+    allowed = {
+        item["value"]
+        for item in dictionary_service.recommendation_category_options(session)
+    }
+    if chosen_group not in allowed:
+        raise SessionRecommendationError("Неизвестная категория")
     slug = _recommendation_slug(title)
     for _ in range(4):
         taken = session.exec(
@@ -682,7 +718,9 @@ def create_session_recommendation(
         slug = _recommendation_slug(title)
     else:
         raise SessionRecommendationError("Не удалось сохранить рекомендацию")
-    catalog = Recommendation(name=title, slug=slug, text="", description=body)
+    catalog = Recommendation(
+        name=title, slug=slug, text="", description=body, group=chosen_group
+    )
     session.add(catalog)
     session.flush()
     row = SessionRecommendation(
