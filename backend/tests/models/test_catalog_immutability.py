@@ -352,12 +352,12 @@ def test_recommendation_accepts_any_group(db: Session) -> None:
         name="Custom category",
         slug=f"custom-category-{uuid.uuid4()}",
         text="text",
-        group="agression",
+        group="aggression",
     )
     db.add(row)
     db.commit()
     db.refresh(row)
-    assert row.group == "agression"
+    assert row.group == "aggression"
 
 
 def test_survey_question_accepts_any_group(db: Session) -> None:

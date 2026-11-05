@@ -343,9 +343,7 @@ def _create_status(user: User, raw: str) -> RecommendationStatus | None:
 
 
 @router.get("/recommendations/new")
-def recommendation_new(
-    request: Request, session: SessionDep, user: CurrentUser
-) -> Any:
+def recommendation_new(request: Request, session: SessionDep, user: CurrentUser) -> Any:
     options = dictionary_service.recommendation_category_options(session)
     return _recommendation_form_response(
         request,
@@ -528,8 +526,8 @@ def recommendation_update(
         saved_slug = slug.strip()
         saved_text = text.strip()
         saved_description = description.strip() or None
-        saved_group = _accepted_category(session, group, current=target.group)
-        if saved_group is None:
+        chosen_group = _accepted_category(session, group, current=target.group)
+        if chosen_group is None:
             return _recommendation_form_response(
                 request,
                 session,
@@ -539,6 +537,7 @@ def recommendation_update(
                 error="Неизвестная категория",
                 status_code=400,
             )
+        saved_group = chosen_group
     try:
         catalog.update_recommendation(
             session,

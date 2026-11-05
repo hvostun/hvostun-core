@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, TypedDict
 
 from sqlalchemy import Text, case, cast, literal_column
 from sqlalchemy.dialects.postgresql import JSONB
@@ -653,17 +653,22 @@ def available_recommendations_for_user(
     ]
 
 
+class RecommendationChoice(TypedDict):
+    id: uuid.UUID
+    label: str
+
+
 def available_recommendation_choices(
     session: Session,
     *,
     session_id: uuid.UUID,
     user_id: uuid.UUID,
-) -> list[dict[str, uuid.UUID | str]]:
+) -> list[RecommendationChoice]:
     labels = {
         item["value"]: item["label"]
         for item in dictionary_service.recommendation_category_options(session)
     }
-    choices = [
+    choices: list[RecommendationChoice] = [
         {
             "id": row.id,
             "label": f"{labels.get(row.group, row.group)} - {row.name}",
@@ -672,7 +677,7 @@ def available_recommendation_choices(
             session, session_id=session_id, user_id=user_id
         )
     ]
-    choices.sort(key=lambda item: str(item["label"]).casefold())
+    choices.sort(key=lambda item: item["label"].casefold())
     return choices
 
 
