@@ -47,6 +47,7 @@ def list_context(
     filter_values: dict[str, str],
     create_href: str | None = None,
     create_label: str | None = None,
+    link_key: str | None = None,
 ) -> dict[str, Any]:
     return {
         "request": request,
@@ -61,4 +62,5 @@ def list_context(
         "filter_qs": filter_qs(filter_values),
         "create_href": create_href,
         "create_label": create_label,
+        "link_key": link_key,
     }

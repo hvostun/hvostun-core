@@ -50,6 +50,7 @@ def _render_list(
     row_class: Callable[[Any], str] | None = None,
     create_href: str | None = None,
     create_label: str | None = None,
+    link_key: str | None = None,
 ) -> Any:
     offset, limit, page = page_window(page, PAGE_SIZE)
     count_stmt = select(func.count()).select_from(model)
@@ -85,6 +86,7 @@ def _render_list(
             filter_values=filter_values,
             create_href=create_href,
             create_label=create_label,
+            link_key=link_key,
         ),
     )
 
@@ -145,6 +147,7 @@ def recommendations_page(
     user: CurrentUser,
     page: int = 1,
     status: str = "",
+    group: str = "",
 ) -> Any:
     filters_sql: list[Any] = []
     can_edit = can_edit_recommendations(user)
@@ -154,16 +157,45 @@ def recommendations_page(
         RecommendationStatus.CANCELED,
     )
     chosen = status if status in {item.value for item in visible_statuses} else ""
+    categories = dictionary_service.recommendation_category_options(session)
+    category_labels = {item["value"]: item["label"] for item in categories}
+    chosen_group = group if group in category_labels else ""
     if not can_edit:
         filters_sql.append(Recommendation.status == RecommendationStatus.ACTIVE)
     elif chosen:
         filters_sql.append(Recommendation.status == RecommendationStatus(chosen))
+    if chosen_group:
+        filters_sql.append(Recommendation.group == chosen_group)
     columns: list[dict[str, str]] = [
+        {"key": "group", "label": "Категория"},
         {"key": "name", "label": "Название"},
         {"key": "description", "label": "Описание"},
     ]
     if can_edit:
         columns.append({"key": "status", "label": "Статус"})
+    category_filter: dict[str, Any] = {
+        "name": "group",
+        "type": "select",
+        "label": "Категория",
+        "value": chosen_group,
+        "options": [{"value": "", "label": "Все"}, *categories],
+    }
+    status_filter: dict[str, Any] = {
+        "name": "status",
+        "type": "select",
+        "label": "Статус",
+        "value": chosen,
+        "options": [
+            {"value": "", "label": "Все"},
+            *[
+                {
+                    "value": item.value,
+                    "label": RECOMMENDATION_STATUS_LABELS[item],
+                }
+                for item in visible_statuses
+            ],
+        ],
+    }
     return _render_list(
         request=request,
         session=session,
@@ -177,6 +209,7 @@ def recommendations_page(
         filters_sql=filters_sql,
         columns=columns,
         row_cells=lambda row: {
+            "group": cell(category_labels.get(row.group, row.group)),
             "name": cell(row.name),
             "description": cell(row.description),
             "status": cell(RECOMMENDATION_STATUS_LABELS[row.status]),
@@ -184,32 +217,12 @@ def recommendations_page(
         row_class=lambda row: (
             "recommendation-pending" if row.status == RecommendationStatus.DRAFT else ""
         ),
-        filters=(
-            [
-                {
-                    "name": "status",
-                    "type": "select",
-                    "label": "Статус",
-                    "value": chosen,
-                    "options": [
-                        {"value": "", "label": "Все"},
-                        *[
-                            {
-                                "value": item.value,
-                                "label": RECOMMENDATION_STATUS_LABELS[item],
-                            }
-                            for item in visible_statuses
-                        ],
-                    ],
-                }
-            ]
-            if can_edit
-            else []
-        ),
-        filter_values={"status": chosen},
+        filters=[category_filter, *([status_filter] if can_edit else [])],
+        filter_values={"group": chosen_group, "status": chosen},
         row_href=lambda row: f"/recommendations/{row.id}",
         create_href="/recommendations/new",
         create_label="Создать",
+        link_key="name",
     )
 
 
