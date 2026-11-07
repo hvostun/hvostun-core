@@ -1924,10 +1924,15 @@ def test_expert_can_view_recommendations_but_cannot_edit(
     assert "Closed" in listing.text
     assert "Text for experts" not in listing.text
     assert "Short note" in listing.text
-    assert "Название" in listing.text
+    assert "Другое" in listing.text
+    assert listing.text.index("<th>Категория</th>") < listing.text.index(
+        "<th>Название</th>"
+    )
     assert "Описание" in listing.text
     assert "<th>Текст</th>" not in listing.text
+    assert 'name="group"' in listing.text
     assert 'name="status"' not in listing.text
+    assert f'<a href="/recommendations/{row.id}">Closed</a>' in listing.text
     assert 'name="name"' not in listing.text
     assert 'name="description"' not in listing.text
     assert 'name="text"' not in listing.text
@@ -2019,6 +2024,44 @@ def test_expert_can_view_recommendations_but_cannot_edit(
     db.refresh(created_row)
     assert created_row.name == "Предложение эксперта"
     assert created_row.status == RecommendationStatus.DRAFT
+
+
+def test_recommendations_list_filters_by_category(
+    client: TestClient, db: Session
+) -> None:
+    _set_recommendation_categories(db)
+    fear = Recommendation(
+        name=f"Яблоко {random_lower_string()}",
+        slug=f"fear-{random_lower_string()}",
+        text="Длинный текст страха",
+        description="Коротко про страх",
+        group="Fear_Anxiety",
+        status=RecommendationStatus.ACTIVE,
+    )
+    other = Recommendation(
+        name=f"Прогулка {random_lower_string()}",
+        slug=f"other-{random_lower_string()}",
+        text="Длинный текст прогулки",
+        description="Коротко про прогулку",
+        group="other",
+        status=RecommendationStatus.ACTIVE,
+    )
+    db.add(fear)
+    db.add(other)
+    db.commit()
+    _login_expert(client, db)
+    fear_only = client.get("/recommendations", params={"group": "Fear_Anxiety"})
+    assert fear_only.status_code == 200
+    assert fear.name in fear_only.text
+    assert "Страх и тревожность" in fear_only.text
+    assert other.name not in fear_only.text
+    assert "Длинный текст страха" not in fear_only.text
+    assert 'value="Fear_Anxiety" selected' in fear_only.text
+    assert "<th>Текст</th>" not in fear_only.text
+    unknown = client.get("/recommendations", params={"group": "nope"})
+    assert fear.name in unknown.text
+    assert other.name in unknown.text
+    assert 'value="Fear_Anxiety" selected' not in unknown.text
 
 
 def test_moderator_edits_recommendation_and_list_shows_status(
