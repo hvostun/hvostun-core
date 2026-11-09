@@ -1,37 +1,21 @@
+Created pdf_rag_server.py. It imports build_rag/WORKING_DIR from lmstudio_pdf_rag.py, holds one RAGAnything for the process lifetime, and exposes:
 
-now in python env from req.txt
+- `GET` /health — status + whether ./rag_storage_pdf exists
+- `POST` /build {"pdf_path": "..."} — parse + index a PDF
+- `POST` /query {"query": "...", "mode": "hybrid", "system_prompt": "...", "temperature": 0.3, "max_tokens": 500, "top_k": 10, "chunk_top_k": 5, "only_need_context": false, "response_type": "Bullet Points", "conversation_history": [...], "user_prompt": "..."}
 
+Run:
 ```python
-# source `rag` 
-python lmstudio_ex.py 
+pip install fastapi uvicorn
+python rag_server.py            # http://127.0.0.1:8000
 ```
 
-TL/DR:
+How the extra params map (this is the important part): 
+- LightRAG has no per-query generation params — aquery kwargs go to QueryParam, which has no temperature/max_tokens. 
+- So system_prompt is passed straight to aquery, while temperature/max_tokens are applied by rebuilding LightRAG's query role via update_llm_role_config("query", model_kwargs=...) (pdf_rag_server.py:77), only when they change. top_k/chunk_top_k are retrieval breadth, not sampling.
 
-15/10/2026
 
-```bash
-🔌 Testing LM Studio connection at: http://localhost:1234/v1
-✅ Connected successfully! Found 5 models
-📊 Available models:
-🎯 1. qwen/qwen3.5-9b
-   2. text-embedding-nomic-embed-text-v1.5
-   3. liquid/lfm2.5-1.2b
-   4. deepseek/deepseek-r1-0528-qwen3-8b
-   5. qwen/qwen2.5-coder-14b
+`/build` does not call finalize_storages() (that shuts down the LLM queues/storages and would break later queries); it's only called at shutdown.
 
-💬 Testing chat with model: qwen/qwen3.5-9b
-✅ Chat test successful!
-✅ RAG-Anything initialized successfully!
-🔢 Testing embedding model: text-embedding-nomic-embed-text-v1.5
-✅ Sample content added to knowledge base
+Skipped: no streaming, auth, or per-request model/role switching (LightRAG rebuilds that wrapper, so it's not free). Couldn't run it — fastapi/uvicorn aren't installed in this env, and I couldn't exercise a live LM Studio; run it in your project venv to verify.
 
-INFO: Text query completed
-✅ Query result: ### LM Studio Integration Key Benefits
-
-The integration of LM Studio with RAG-Anything offers several significant advantages for local AI system deployments. One primary benefit is **Privacy**, which ensures that all processing occurs entirely within the local system without exposing any data to ext...
-
-======================================================================
-Integration example completed successfully!
-======================================================================
-```
