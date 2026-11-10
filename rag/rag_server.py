@@ -82,6 +82,7 @@ EMBED_DIM = int(os.environ["EMBED_DIM"])
 WORKING_DIR = os.environ["WORKING_DIR"] 
 OUTPUT_DIR = os.environ["OUTPUT_DIR"] 
 
+
 async def embedding_func(texts: List[str]):
     client = OpenAI(
         api_key=EMBED_KEY,
@@ -110,7 +111,57 @@ async def llm_model_func(
     GLOBAL_COUNTER += 1
     if GLOBAL_COUNTER == 10:
         auth()
-    """Top-level LLM function for LightRAG (pickle-safe)."""
+
+    # ✅ Удаляем оба параметра, которые заставляют GigaChat ломаться
+    kwargs.pop("response_format", None)
+    kwargs.pop("keyword_extraction", None)
+    # fuckin madness......
+    
+    # kwargs.pop("response_format", None)
+    # 1. Достаём response_format из kwargs (если он есть)
+    # response_format = kwargs.get("response_format")
+    # # 2. Если это Pydantic-класс — заменяем на явную JSON-схему для GigaChat
+    # if isinstance(response_format, type):
+    #     kwargs["response_format"] = {
+    #         "type": "json_schema",
+    #         "schema": {
+    #             "type": "object",
+    #             "properties": {
+    #                 "high_level_keywords": {
+    #                     "type": "array",
+    #                     "items": {"type": "string"}
+    #                 },
+    #                 "low_level_keywords": {
+    #                     "type": "array",
+    #                     "items": {"type": "string"}
+    #                 }
+    #             },
+    #             "required": ["high_level_keywords", "low_level_keywords"],
+    #             "additionalProperties": False
+    #         }
+    #     }
+    # # 3. Если пришла строка "json_object" — GigaChat её не понимает,
+    # #    заменяем на ту же явную схему
+    # elif response_format == "json_object":
+    #     kwargs["response_format"] = {
+    #         "type": "json_schema",
+    #         "schema": {
+    #             "type": "object",
+    #             "properties": {
+    #                 "high_level_keywords": {
+    #                     "type": "array",
+    #                     "items": {"type": "string"}
+    #                 },
+    #                 "low_level_keywords": {
+    #                     "type": "array",
+    #                     "items": {"type": "string"}
+    #                 }
+    #             },
+    #             "required": ["high_level_keywords", "low_level_keywords"],
+    #             "additionalProperties": False
+    #         }
+    #     }
+
     return await openai_complete_if_cache(
         model=CHAT_MODEL,
         prompt=prompt,
@@ -157,7 +208,6 @@ class QueryRequest(BaseModel):
 
 def _apply_generation_kwargs(rag, temperature, max_tokens):
     """Bake per-request temperature/max_tokens into LightRAG's query role.
-
     LightRAG has no per-query generation params: the query role's kwargs are
     fixed when the LLM wrapper is built. update_llm_role_config rebuilds that
     wrapper, so we only do it when the values actually change.
@@ -169,13 +219,14 @@ def _apply_generation_kwargs(rag, temperature, max_tokens):
         gen["max_tokens"] = max_tokens
     if gen == state["gen_kwargs"]:
         return
-    merged = dict(
-        rag.lightrag.role_llm_kwargs.get("query")
-        or rag.lightrag.llm_model_kwargs
-        or {}
-    )
+    # ✅ Прямое использование атрибута query_llm_model_kwargs llm_model_kwargs
+    # ✅ Use the generic `llm_model_kwargs` attribute
+    merged = dict(rag.lightrag.llm_model_kwargs or {})
+    # rag.lightrag.role_llm_kwargs.get("query")
+    # merged = dict(rag.lightrag._get_effective_role_llm_kwargs("query") or rag.lightrag.llm_model_kwargs or {})
     merged.update(gen)
-    rag.lightrag.update_llm_role_config("query", model_kwargs=merged)
+    rag.lightrag.aupdate_llm_role_config("query", provider_options={"temperature": temperature, "max_tokens": max_tokens})
+    # rag.lightrag.update_llm_role_config("query", model_kwargs=merged)
     state["gen_kwargs"] = gen
 
 
@@ -236,7 +287,7 @@ async def query(req: QueryRequest):
         auth()
 
     rag = state["rag"]
-    _apply_generation_kwargs(rag, req.temperature, req.max_tokens)
+    # await _apply_generation_kwargs(rag, req.temperature, req.max_tokens)
     params = {
         "mode": req.mode,
         "system_prompt": req.system_prompt,
