@@ -58,6 +58,8 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from dotenv import load_dotenv
 from utils import build_rag
+import numpy as np
+from openai import OpenAI, RateLimitError # Убедитесь, что импорт корректен
 
 
 TOKEN = None
