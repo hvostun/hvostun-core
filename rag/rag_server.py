@@ -77,7 +77,8 @@ EMBED_KEY = os.environ["EMBED_TOKEN"]
 EMBED_MODEL = os.environ["EMBED_MODEL"]
 EMBED_DIM = int(os.environ["EMBED_DIM"])
 
-
+WORKING_DIR = os.environ["WORKING_DIR"] 
+OUTPUT_DIR = os.environ["OUTPUT_DIR"] 
 
 async def embedding_func(texts: List[str]):
     client = OpenAI(
@@ -135,11 +136,7 @@ async def lifespan(app: FastAPI):
         await rag.finalize_storages()
 
 
-app = FastAPI(title="LM Studio PDF RAG") #, lifespan=lifespan)
-
-
-class BuildRequest(BaseModel):
-    pdf_path: str = Field(description="Path to a PDF on the server machine")
+app = FastAPI(title="LM Studio PDF RAG", lifespan=lifespan)
 
 
 class QueryRequest(BaseModel):
