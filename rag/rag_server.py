@@ -41,7 +41,7 @@ from raganything import RAGAnything, RAGAnythingConfig
 from lightrag.utils import EmbeddingFunc
 from lightrag.llm.openai import openai_complete_if_cache, openai_embed
 
-from rag_builder import build_rag
+
 import uvicorn
 
 import requests
@@ -50,42 +50,89 @@ import shutil
 import uuid
 from pathlib import Path
 
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from openai import RateLimitError # Убедитесь, что импорт корректен
+
+
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from dotenv import load_dotenv
+from utils import build_rag
 
 
-TOKEN = None 
+TOKEN = None
+GLOBAL_COUNTER = 0
 
 load_dotenv('env.local')
 
-CHAT_URL = os.environ["CHAT_URL"] 
 AUTH_URL = os.environ["AUTH_URL"]
-EMBED_URL = os.environ["EMBED_URL"]
-
+CHAT_URL = os.environ["CHAT_URL"] 
 RqUID = os.environ["RqUID"]
 ATOKEN = os.environ["ATOKEN"]
-EMBED_TOKEN = os.environ["EMBED_TOKEN"]
+CHAT_MODEL = os.environ["CHAT_MODEL"] 
+
+
+EMBED_URL = os.environ["EMBED_URL"]
+EMBED_KEY = os.environ["EMBED_TOKEN"]
+EMBED_MODEL = os.environ["EMBED_MODEL"]
+EMBED_DIM = int(os.environ["EMBED_DIM"])
+
+
+
+async def embedding_func(texts: List[str]):
+    client = OpenAI(
+        api_key=EMBED_KEY,
+        base_url=EMBED_URL
+    )
+    response = client.embeddings.create(
+        model=EMBED_MODEL,
+        input=texts
+    )
+    return np.array([d.embedding for d in response.data])
+
+
+@retry(
+    retry=retry_if_exception_type(RateLimitError),
+    stop=stop_after_attempt(5),  # Максимум 5 попыток
+    wait=wait_exponential(multiplier=1, min=4, max=15), # Экспоненциальная задержка
+    reraise=True
+)
+async def llm_model_func(
+    prompt: str,
+    system_prompt: Optional[str] = None,
+    history_messages: List[Dict] = None,
+    **kwargs,
+) -> str:
+    global GLOBAL_COUNTER
+    GLOBAL_COUNTER += 1
+    if GLOBAL_COUNTER == 10:
+        auth()
+    """Top-level LLM function for LightRAG (pickle-safe)."""
+    return await openai_complete_if_cache(
+        model=CHAT_MODEL,
+        prompt=prompt,
+        system_prompt=system_prompt,
+        history_messages=history_messages or [],
+        base_url=CHAT_URL,
+        api_key=TOKEN,
+        **kwargs,
+    )
 
 
 state: Dict[str, Any] = {"rag": None, "gen_kwargs": {}}
 
 
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     rag = build_rag()
-#     await rag._ensure_lightrag_initialized()
-#     state["rag"] = rag
-#     print(f"✅ RAG ready (working_dir={WORKING_DIR})")
-#     try:
-#         yield
-#     finally:
-#         await rag.finalize_storages()
-
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
-MAX_SIZE = 15 * 1024 * 1024  # 10 MB
-ALLOWED_TYPES = {"application/docx", "application/txt", "application/pdf"}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # rag = build_rag()
+    rag = build_rag(WORKING_DIR, llm_model_func, embedding_func, EMBED_DIM)
+    await rag._ensure_lightrag_initialized()
+    state["rag"] = rag
+    print(f"✅ RAG ready (working_dir={WORKING_DIR})")
+    try:
+        yield
+    finally:
+        await rag.finalize_storages()
 
 
 app = FastAPI(title="LM Studio PDF RAG") #, lifespan=lifespan)
@@ -135,12 +182,35 @@ def _apply_generation_kwargs(rag, temperature, max_tokens):
 
 @app.get("/health")
 async def health():
-    return {"ok": True}
-    # return {
-    #     "ok": state["rag"] is not None,
-    #     "working_dir": WORKING_DIR,
-    #     "storage_exists": os.path.isdir(WORKING_DIR),
-    # }
+    return {
+        "ok": state["rag"] is not None,
+        "working_dir": WORKING_DIR,
+        "storage_exists": os.path.isdir(WORKING_DIR),
+        "llm_model": CHAT_MODEL,
+        "embedding_model": EMBED_MODEL,
+        "embedding_dim": EMBED_DIM,
+        "CHAT_URL": CHAT_URL,
+        "EMBED_URL": EMBED_URL, 
+    }
+
+
+def auth():
+    global TOKEN
+    global GLOBAL_COUNTER
+    GLOBAL_COUNTER = 0
+    payload={'scope': 'GIGACHAT_API_PERS'}
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+        'RqUID': RqUID,
+        'Authorization': f'Basic {ATOKEN}'
+    }
+    response = requests.request("POST", AUTH_URL, headers=headers, data=payload)
+    payload = json.loads(response.text)
+    print(payload['expires_at'])
+    TOKEN = payload['access_token']
+    headers = {'Accept': 'application/json', 'Authorization': f"Bearer {TOKEN}"}
+    response = requests.request("GET", CHAT_URL + '/models', headers=headers, data={})
 
 
 @app.get("/auth")
@@ -159,76 +229,35 @@ async def auth():
     return {"ok": True, "lifetime": payload["expires_at"]}
 
 
-@app.get("/chat_models")
-async def chat_models():
-    headers = {'Accept': 'application/json', 'Authorization': f"Bearer {TOKEN}"}
-    response = requests.request("GET", CHAT_URL + '/models', headers=headers, data={})
-    return {"ok": True, "responce": json.loads(response.text)}
+@app.post("/query")
+async def query(req: QueryRequest):
+    global GLOBAL_COUNTER
+    GLOBAL_COUNTER += 1
+    if GLOBAL_COUNTER == 10:
+        auth()
+
+    rag = state["rag"]
+    _apply_generation_kwargs(rag, req.temperature, req.max_tokens)
+    params = {
+        "mode": req.mode,
+        "system_prompt": req.system_prompt,
+        "only_need_context": req.only_need_context,
+        "top_k": req.top_k,
+        "chunk_top_k": req.chunk_top_k,
+        "response_type": req.response_type,
+        "conversation_history": req.conversation_history,
+        "user_prompt": req.user_prompt,
+    }
+    params = {k: v for k, v in params.items() if v is not None}
+    try:
+        answer = await rag.aquery(req.query, **params)
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    return {"query": req.query, "mode": req.mode, "answer": answer}
 
 
-# @app.get("/embed_models")
-# async def embed_models():
-#     headers = {'Accept': 'application/json', 'Authorization': }
-#     response = requests.request("GET", url + '/models', headers=headers, data={})
-#     return {"ok": True, "responce": json.loads(response.text)}
-
-
-@app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    # maybe maybe 
-    # Проверка MIME-типа
-    if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Недопустимый тип файла: {file.content_type}",
-        )
-    # Читаем содержимое и проверяем размер
-    contents = await file.read()
-    if len(contents) > MAX_SIZE:
-        raise HTTPException(status_code=413, detail="Файл слишком большой")
-    # Генерируем безопасное имя
-    suffix = Path(file.filename).suffix
-    safe_name = f"{uuid.uuid4().hex}{suffix}"
-    dest = UPLOAD_DIR / safe_name
-    # Сохраняем
-    with dest.open("wb") as buffer:
-        buffer.write(contents)
-    return {"filename": safe_name, "size": len(contents)}
-
-# @app.post("/build")
-# async def build(req: BuildRequest):
-#     if not os.path.isfile(req.pdf_path):
-#         raise HTTPException(404, f"File not found: {req.pdf_path}")
-#     rag = state["rag"]
-#     await rag.process_document_complete(
-#         file_path=req.pdf_path,
-#         output_dir=OUTPUT_DIR,
-#         parse_method="auto",
-#         display_stats=True,
-#     )
-#     return {"ok": True, "file": req.pdf_path}
-
-
-# @app.post("/query")
-# async def query(req: QueryRequest):
-#     rag = state["rag"]
-#     _apply_generation_kwargs(rag, req.temperature, req.max_tokens)
-#     params = {
-#         "mode": req.mode,
-#         "system_prompt": req.system_prompt,
-#         "only_need_context": req.only_need_context,
-#         "top_k": req.top_k,
-#         "chunk_top_k": req.chunk_top_k,
-#         "response_type": req.response_type,
-#         "conversation_history": req.conversation_history,
-#         "user_prompt": req.user_prompt,
-#     }
-#     params = {k: v for k, v in params.items() if v is not None}
-#     try:
-#         answer = await rag.aquery(req.query, **params)
-#     except Exception as e:
-#         raise HTTPException(500, str(e))
-#     return {"query": req.query, "mode": req.mode, "answer": answer}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
