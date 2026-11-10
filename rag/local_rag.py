@@ -4,10 +4,10 @@ LM Studio + RAG-Anything PDF example.
 Two phases, run separately so the knowledge base persists on disk:
 
     # 1. Build the RAG storage from a PDF (parses + indexes into ./rag_storage_pdf)
-    python lmstudio_pdf_rag.py build path/to/document.pdf
+    python local_rag.py build path/to/document.pdf
 
     # 2. Ask questions against the storage built above
-    python lmstudio_pdf_rag.py query "What is the document about?" [mode]
+    python local_rag.py query "What is the document about?" [mode]
 
 `mode` is a LightRAG query mode (hybrid, local, global, mix, naive); default hybrid.
 
@@ -166,13 +166,13 @@ def main() -> None:
     command = args[0]
     if command == "build" or command == "b":
         if len(args) < 2:
-            print("Usage: python pdf_rag.py build <pdf_path>")
+            print("Usage: python local_rag.py build <pdf_path>")
             sys.exit(1)
         asyncio.run(build(args[1]))
 
     elif command == "query" or command == "q":
         if len(args) < 2:
-            print("Usage: python pdf_rag.py query \"<question>\" [mode]")
+            print("Usage: python local_rag.py query \"<question>\" [mode]")
             sys.exit(1)
         asyncio.run(query(args[1], args[2] if len(args) > 2 else "hybrid"))
     else:
