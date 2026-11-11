@@ -89,3 +89,27 @@ services:
 networks:
   local:
     name: hvostun_local
+  # RAG/LLM, локально. Ключи берутся из rag/env.local (в образ не попадают:
+  # файл исключён rag/.dockerignore). Наружу не публикуется — backend ходит
+  # по имени сервиса: http://rag:8000.
+  rag:
+    build:
+      context: ./rag
+      dockerfile: Dockerfile
+    image: rag-server:latest
+    env_file:
+      - ./rag/env.local
+    volumes:
+      - ./rag/rag_storage:/app/rag_storage
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
