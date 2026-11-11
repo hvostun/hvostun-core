@@ -10,7 +10,6 @@ services:
       # Enable Docker in Traefik, so that it reads labels from Docker services
       - --providers.docker
       - --providers.docker.endpoint=tcp://socket-proxy:2375
-      - --providers.docker.network=hvostun_public
       # Do not expose all Docker services, only the ones explicitly exposed
       - --providers.docker.exposedbydefault=false
       # Create an entrypoint "http" listening on port 80
@@ -29,25 +28,29 @@ services:
   db:
     ports:
       - "5432:5432"
+    networks:
+      - db
+      - local
 
+  # Adminer is localhost:8080 only. Proxy must not join the db network.
   db-ui:
     image: adminer:6.0.1
     depends_on:
       - db
+    networks:
+      - db
+      - local
     ports:
       - "8080:8080"
     environment:
       - ADMINER_DESIGN=pepa-linha-dark
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.db-ui-http.rule=Host(`db-ui.${DOMAIN:-localhost}`)
-      - traefik.http.routers.db-ui-http.entrypoints=http
-      - traefik.http.services.db-ui.loadbalancer.server.port=8080
 
   # Admin-contour (service name stays backend).
   backend:
     ports:
       - "8000:8000"
+    networks:
+      - local
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -77,6 +80,12 @@ services:
 
   mailpit:
     image: axllent/mailpit:v1.27@sha256:e22dce5b36f93c77082e204a3942fb6b283b7896e057458400a4c88344c3df68
+    networks:
+      - egress
     ports:
       - "8025:8025"
       - "1025:1025"
+
+networks:
+  local:
+    name: hvostun_local

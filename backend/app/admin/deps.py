@@ -13,8 +13,13 @@ from app.core.deps import SessionDep as SessionDep
 from app.models import User, UserGroup
 from app.services import catalog
 
-COOKIE_NAME = "admin_access_token"
-CSRF_COOKIE_NAME = "admin_csrf"
+
+def _cookie_name(base: str, *, deployed: bool) -> str:
+    return f"__Host-{base}" if deployed else base
+
+
+COOKIE_NAME = _cookie_name("admin_access_token", deployed=settings.is_deployed)
+CSRF_COOKIE_NAME = _cookie_name("admin_csrf", deployed=settings.is_deployed)
 
 
 def _user_from_token(session: SessionDep, token: str) -> User | None:

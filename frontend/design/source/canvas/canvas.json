@@ -1,0 +1,1615 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "D-S1-S2.dc.html": {
+      "h": 964,
+      "page": "desk",
+      "title": "S1–S2 · Приветствие и вход",
+      "w": 2704,
+      "x": 0,
+      "y": 0
+    },
+    "D-S3-dop.dc.html": {
+      "h": 964,
+      "page": "desk",
+      "title": "S3 · Подсказка E9 и окно S11",
+      "w": 2704,
+      "x": 0,
+      "y": 2728
+    },
+    "D-S3.dc.html": {
+      "h": 964,
+      "page": "desk",
+      "title": "S3 · Главная, состояния A–D",
+      "w": 5360,
+      "x": 0,
+      "y": 1364
+    },
+    "D-S4.dc.html": {
+      "h": 1284,
+      "page": "desk",
+      "title": "S4 · Форма; S4b · Профиль",
+      "w": 2704,
+      "x": 2784,
+      "y": 2728
+    },
+    "D-S5-S7.dc.html": {
+      "h": 964,
+      "page": "desk",
+      "title": "S5–S7 · Анкета",
+      "w": 4032,
+      "x": 0,
+      "y": 4332
+    },
+    "D-S8-S9.dc.html": {
+      "h": 964,
+      "page": "desk",
+      "title": "S8–S9 · Итог анкеты и план",
+      "w": 2704,
+      "x": 4112,
+      "y": 4332
+    },
+    "D-chat.dc.html": {
+      "h": 964,
+      "page": "desk",
+      "title": "S10 · Чат C1, C4, C7",
+      "w": 4032,
+      "x": 0,
+      "y": 5696
+    },
+    "D-katalog.dc.html": {
+      "h": 5000,
+      "page": "desk",
+      "title": "Каталог ошибок и состояний чата · десктоп",
+      "w": 1168,
+      "x": 0,
+      "y": 7060
+    },
+    "Dz-Chat.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "Чат · C4 ответ",
+      "w": 390,
+      "x": 1880,
+      "y": 0
+    },
+    "Dz-Glavnaya.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "Главная · S3, состояние B",
+      "w": 390,
+      "x": 470,
+      "y": 0
+    },
+    "Dz-Opros.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "Анкета · S6 опрос уверенности",
+      "w": 390,
+      "x": 1410,
+      "y": 0
+    },
+    "Dz-Profil.dc.html": {
+      "h": 1120,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "Профиль собаки · S4",
+      "w": 390,
+      "x": 940,
+      "y": 0
+    },
+    "Dz-Vhod.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "Вход · S2",
+      "w": 390,
+      "x": 0,
+      "y": 0
+    },
+    "DzA-Chat.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "А · Чат",
+      "w": 390,
+      "x": 1880,
+      "y": 1520
+    },
+    "DzA-Glavnaya.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "А · Главная",
+      "w": 390,
+      "x": 470,
+      "y": 1520
+    },
+    "DzA-Opros.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "А · Опрос уверенности",
+      "w": 390,
+      "x": 1410,
+      "y": 1520
+    },
+    "DzA-Profil.dc.html": {
+      "h": 1180,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "А · Профиль собаки",
+      "w": 390,
+      "x": 940,
+      "y": 1520
+    },
+    "DzA-Vhod.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "А · Вход",
+      "w": 390,
+      "x": 0,
+      "y": 1520
+    },
+    "DzB-Chat.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "Б · Чат",
+      "w": 390,
+      "x": 1880,
+      "y": 3100
+    },
+    "DzB-Glavnaya.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "Б · Главная",
+      "w": 390,
+      "x": 470,
+      "y": 3100
+    },
+    "DzB-Opros.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "Б · Опрос уверенности",
+      "w": 390,
+      "x": 1410,
+      "y": 3100
+    },
+    "DzB-Profil.dc.html": {
+      "h": 1180,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "Б · Профиль собаки",
+      "w": 390,
+      "x": 940,
+      "y": 3100
+    },
+    "DzB-Vhod.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "Б · Вход",
+      "w": 390,
+      "x": 0,
+      "y": 3100
+    },
+    "DzC-Chat.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "В · Чат",
+      "w": 390,
+      "x": 1880,
+      "y": 4680
+    },
+    "DzC-Glavnaya.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "В · Главная",
+      "w": 390,
+      "x": 470,
+      "y": 4680
+    },
+    "DzC-Opros.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "В · Опрос уверенности",
+      "w": 390,
+      "x": 1410,
+      "y": 4680
+    },
+    "DzC-Profil.dc.html": {
+      "h": 1180,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "В · Профиль собаки",
+      "w": 390,
+      "x": 940,
+      "y": 4680
+    },
+    "DzC-Vhod.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "title": "В · Вход",
+      "w": 390,
+      "x": 0,
+      "y": 4680
+    },
+    "DzD-Chat.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Г · Чат",
+      "w": 390,
+      "x": 1880,
+      "y": 6260
+    },
+    "DzD-Glavnaya.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Г · Главная",
+      "w": 390,
+      "x": 470,
+      "y": 6260
+    },
+    "DzD-Opros.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Г · Опрос уверенности",
+      "w": 390,
+      "x": 1410,
+      "y": 6260
+    },
+    "DzD-Profil.dc.html": {
+      "h": 1180,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Г · Профиль собаки",
+      "w": 390,
+      "x": 940,
+      "y": 6260
+    },
+    "DzD-Vhod.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Г · Вход",
+      "w": 390,
+      "x": 0,
+      "y": 6260
+    },
+    "DzE-Chat.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Д · Чат",
+      "w": 390,
+      "x": 1880,
+      "y": 7840
+    },
+    "DzE-Glavnaya.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Д · Главная",
+      "w": 390,
+      "x": 470,
+      "y": 7840
+    },
+    "DzE-Opros.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Д · Опрос уверенности",
+      "w": 390,
+      "x": 1410,
+      "y": 7840
+    },
+    "DzE-Profil.dc.html": {
+      "h": 1240,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Д · Профиль собаки",
+      "w": 390,
+      "x": 940,
+      "y": 7840
+    },
+    "DzE-Vhod.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Д · Вход",
+      "w": 390,
+      "x": 0,
+      "y": 7840
+    },
+    "DzF-Chat.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Е · Чат",
+      "w": 390,
+      "x": 1880,
+      "y": 9480
+    },
+    "DzF-Glavnaya.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Е · Главная",
+      "w": 390,
+      "x": 470,
+      "y": 9480
+    },
+    "DzF-Opros.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Е · Опрос уверенности",
+      "w": 390,
+      "x": 1410,
+      "y": 9480
+    },
+    "DzF-Profil.dc.html": {
+      "h": 1200,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Е · Профиль собаки",
+      "w": 390,
+      "x": 940,
+      "y": 9480
+    },
+    "DzF-Vhod.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Е · Вход",
+      "w": 390,
+      "x": 0,
+      "y": 9480
+    },
+    "DzG-Chat.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Ж · Чат",
+      "w": 390,
+      "x": 1880,
+      "y": 11080
+    },
+    "DzG-Glavnaya.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Ж · Главная",
+      "w": 390,
+      "x": 470,
+      "y": 11080
+    },
+    "DzG-Opros.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Ж · Опрос уверенности",
+      "w": 390,
+      "x": 1410,
+      "y": 11080
+    },
+    "DzG-Profil.dc.html": {
+      "h": 1200,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Ж · Профиль собаки",
+      "w": 390,
+      "x": 940,
+      "y": 11080
+    },
+    "DzG-Vhod.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "page": "dz",
+      "radius": 48,
+      "title": "Ж · Вход",
+      "w": 390,
+      "x": 0,
+      "y": 11080
+    },
+    "DzK-Chat.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "К · Чат",
+      "w": 390,
+      "x": 1880,
+      "y": 15940
+    },
+    "DzK-Glavnaya.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "К · Главная",
+      "w": 390,
+      "x": 470,
+      "y": 15940
+    },
+    "DzK-Opros.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "К · Опрос уверенности",
+      "w": 390,
+      "x": 1410,
+      "y": 15940
+    },
+    "DzK-Profil.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "К · Профиль собаки",
+      "w": 390,
+      "x": 940,
+      "y": 15940
+    },
+    "DzK-Vhod.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "К · Вход",
+      "w": 390,
+      "x": 0,
+      "y": 15940
+    },
+    "DzM-Chat.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "М · Чат",
+      "w": 390,
+      "x": 1880,
+      "y": 18428
+    },
+    "DzM-Glavnaya.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "М · Главная",
+      "w": 390,
+      "x": 470,
+      "y": 18428
+    },
+    "DzM-Opros.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "М · Опрос уверенности",
+      "w": 390,
+      "x": 1410,
+      "y": 18428
+    },
+    "DzM-Profil.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "М · Профиль собаки",
+      "w": 390,
+      "x": 940,
+      "y": 18428
+    },
+    "DzM-Vhod.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "М · Вход",
+      "w": 390,
+      "x": 0,
+      "y": 18428
+    },
+    "DzN-Chat.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "Н · Чат",
+      "w": 390,
+      "x": 1880,
+      "y": 19672
+    },
+    "DzN-Glavnaya.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "Н · Главная",
+      "w": 390,
+      "x": 470,
+      "y": 19672
+    },
+    "DzN-Opros.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "Н · Опрос уверенности",
+      "w": 390,
+      "x": 1410,
+      "y": 19672
+    },
+    "DzN-Profil.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "Н · Профиль собаки",
+      "w": 390,
+      "x": 940,
+      "y": 19672
+    },
+    "DzN-Vhod.dc.html": {
+      "h": 844,
+      "page": "dz",
+      "radius": 48,
+      "title": "Н · Вход",
+      "w": 390,
+      "x": 0,
+      "y": 19672
+    },
+    "F-D-S1-S2.dc.html": {
+      "h": 964,
+      "page": "fin",
+      "title": "S1–S2 · Приветствие и вход",
+      "w": 2704,
+      "x": 0,
+      "y": 15740
+    },
+    "F-D-S3-dop.dc.html": {
+      "h": 964,
+      "page": "fin",
+      "title": "S3 · Подсказка E9 и окно S11",
+      "w": 2704,
+      "x": 0,
+      "y": 18468
+    },
+    "F-D-S3.dc.html": {
+      "h": 964,
+      "page": "fin",
+      "title": "S3 · Главная, состояния A–D",
+      "w": 5360,
+      "x": 0,
+      "y": 17104
+    },
+    "F-D-S4.dc.html": {
+      "h": 1284,
+      "page": "fin",
+      "title": "S4 · Форма; S4b · Профиль",
+      "w": 2704,
+      "x": 2784,
+      "y": 18468
+    },
+    "F-D-S5-S7.dc.html": {
+      "h": 964,
+      "page": "fin",
+      "title": "S5–S7 · Анкета",
+      "w": 4032,
+      "x": 0,
+      "y": 20072
+    },
+    "F-D-S8-S9.dc.html": {
+      "h": 964,
+      "page": "fin",
+      "title": "S8–S9 · Итог анкеты и план",
+      "w": 2704,
+      "x": 4112,
+      "y": 20072
+    },
+    "F-D-chat.dc.html": {
+      "h": 964,
+      "page": "fin",
+      "title": "S10 · Чат C1, C4, C7",
+      "w": 4032,
+      "x": 0,
+      "y": 21436
+    },
+    "F-D-katalog.dc.html": {
+      "h": 5000,
+      "page": "fin",
+      "title": "Каталог ошибок и состояний чата · десктоп",
+      "w": 1168,
+      "x": 0,
+      "y": 22800
+    },
+    "F-DS.dc.html": {
+      "h": 5700,
+      "page": "fin",
+      "title": "Дизайн-система · стиль Н",
+      "w": 1280,
+      "x": 0,
+      "y": 0
+    },
+    "F-M-C1-C3.dc.html": {
+      "h": 1008,
+      "page": "fin",
+      "title": "S10 · Чат C1–C3",
+      "w": 1362,
+      "x": 0,
+      "y": 12424
+    },
+    "F-M-C4-C7.dc.html": {
+      "h": 1008,
+      "page": "fin",
+      "title": "S10 · Чат C4–C7",
+      "w": 2238,
+      "x": 1442,
+      "y": 12424
+    },
+    "F-M-C8-C12.dc.html": {
+      "h": 1008,
+      "page": "fin",
+      "title": "S10 · Чат C8, C9, C11, C12",
+      "w": 1800,
+      "x": 3760,
+      "y": 12424
+    },
+    "F-M-S2-oshibki.dc.html": {
+      "h": 1008,
+      "page": "fin",
+      "title": "S2 · Ошибка входа",
+      "w": 486,
+      "x": 1880,
+      "y": 6600
+    },
+    "F-M-S3.dc.html": {
+      "h": 1044,
+      "page": "fin",
+      "title": "S3 · Главная, состояния A–D",
+      "w": 1800,
+      "x": 0,
+      "y": 8008
+    },
+    "F-M-S4-dop.dc.html": {
+      "h": 1008,
+      "page": "fin",
+      "title": "S4 · Сохранение и выход; S4b",
+      "w": 1362,
+      "x": 1880,
+      "y": 9452
+    },
+    "F-M-S4.dc.html": {
+      "h": 1284,
+      "page": "fin",
+      "title": "S4 · Профиль собаки: форма",
+      "w": 1800,
+      "x": 0,
+      "y": 9452
+    },
+    "F-M-S5-S9.dc.html": {
+      "h": 1008,
+      "page": "fin",
+      "title": "S5, S8, S9 · Вход в анкету и итог",
+      "w": 1362,
+      "x": 0,
+      "y": 11016
+    },
+    "F-M-S6-S7.dc.html": {
+      "h": 1008,
+      "page": "fin",
+      "title": "S6–S7 · Опрос уверенности и шаблон вопросов",
+      "w": 2238,
+      "x": 1442,
+      "y": 11016
+    },
+    "F-M-anketa-oshibki.dc.html": {
+      "h": 1008,
+      "page": "fin",
+      "title": "S5–S7 · Ошибки анкеты",
+      "w": 1800,
+      "x": 3760,
+      "y": 11016
+    },
+    "F-M-global.dc.html": {
+      "h": 1008,
+      "page": "fin",
+      "title": "Глобальные ошибки и Telegram",
+      "w": 2238,
+      "x": 0,
+      "y": 13832
+    },
+    "F-Main.dc.html": {
+      "h": 1008,
+      "page": "fin",
+      "title": "S1–S2 · Приветствие и вход",
+      "w": 1800,
+      "x": 0,
+      "y": 6600
+    },
+    "M-C1-C3.dc.html": {
+      "h": 1008,
+      "page": "mob",
+      "title": "S10 · Чат C1–C3",
+      "w": 1362,
+      "x": 0,
+      "y": 5824
+    },
+    "M-C4-C7.dc.html": {
+      "h": 1008,
+      "page": "mob",
+      "title": "S10 · Чат C4–C7",
+      "w": 2238,
+      "x": 1442,
+      "y": 5824
+    },
+    "M-C8-C12.dc.html": {
+      "h": 1008,
+      "page": "mob",
+      "title": "S10 · Чат C8, C9, C11, C12",
+      "w": 1800,
+      "x": 3760,
+      "y": 5824
+    },
+    "M-S2-oshibki.dc.html": {
+      "h": 1008,
+      "page": "mob",
+      "title": "S2 · Ошибка входа",
+      "w": 486,
+      "x": 1880,
+      "y": 0
+    },
+    "M-S3-dop.dc.html": {
+      "h": 1008,
+      "page": "mob",
+      "title": "S3 · Подсказка E9 и окно S11",
+      "w": 924,
+      "x": 1880,
+      "y": 1408
+    },
+    "M-S3.dc.html": {
+      "h": 1044,
+      "page": "mob",
+      "title": "S3 · Главная, состояния A–D",
+      "w": 1800,
+      "x": 0,
+      "y": 1408
+    },
+    "M-S4-dop.dc.html": {
+      "h": 1008,
+      "page": "mob",
+      "title": "S4 · Сохранение и выход; S4b",
+      "w": 1362,
+      "x": 1880,
+      "y": 2852
+    },
+    "M-S4.dc.html": {
+      "h": 1284,
+      "page": "mob",
+      "title": "S4 · Профиль собаки: форма",
+      "w": 1800,
+      "x": 0,
+      "y": 2852
+    },
+    "M-S5-S9.dc.html": {
+      "h": 1008,
+      "page": "mob",
+      "title": "S5, S8, S9 · Вход в анкету и итог",
+      "w": 1362,
+      "x": 0,
+      "y": 4416
+    },
+    "M-S6-S7.dc.html": {
+      "h": 1008,
+      "page": "mob",
+      "title": "S6–S7 · Опрос уверенности и шаблон вопросов",
+      "w": 2238,
+      "x": 1442,
+      "y": 4416
+    },
+    "M-anketa-oshibki.dc.html": {
+      "h": 1008,
+      "page": "mob",
+      "title": "S5–S7 · Ошибки анкеты",
+      "w": 1800,
+      "x": 3760,
+      "y": 4416
+    },
+    "M-global.dc.html": {
+      "h": 1008,
+      "page": "mob",
+      "title": "Глобальные ошибки и Telegram",
+      "w": 2238,
+      "x": 0,
+      "y": 7232
+    },
+    "Main.dc.html": {
+      "h": 1008,
+      "page": "mob",
+      "title": "S1–S2 · Приветствие и вход",
+      "w": 1800,
+      "x": 0,
+      "y": 0
+    },
+    "N-DS.dc.html": {
+      "h": 8880,
+      "page": "ds2",
+      "title": "Дизайн-система 2 · новые цвета",
+      "w": 1280,
+      "x": 0,
+      "y": 0
+    },
+    "N-Icons.dc.html": {
+      "h": 3240,
+      "page": "ds2",
+      "title": "Иконки · рисованные варианты",
+      "w": 1280,
+      "x": -1654,
+      "y": 0
+    },
+    "V-M-C1-C3.dc.html": {
+      "h": 1008,
+      "page": "ds2",
+      "title": "S10 · Чат C1–C3",
+      "w": 1362,
+      "x": 2115,
+      "y": 5824
+    },
+    "V-M-C4-C7.dc.html": {
+      "h": 1008,
+      "page": "ds2",
+      "title": "S10 · Чат C4–C7",
+      "w": 2238,
+      "x": 3557,
+      "y": 5824
+    },
+    "V-M-C8-C12.dc.html": {
+      "h": 1008,
+      "page": "ds2",
+      "title": "S10 · Чат C8, C9",
+      "w": 924,
+      "x": 5875,
+      "y": 5824
+    },
+    "V-M-S2-oshibki.dc.html": {
+      "h": 1008,
+      "page": "ds2",
+      "title": "S2 · Ошибка входа",
+      "w": 486,
+      "x": 3995,
+      "y": 0
+    },
+    "V-M-S3.dc.html": {
+      "h": 1008,
+      "page": "ds2",
+      "title": "S3 · Главная, состояния A, A2, B, C, D",
+      "w": 2238,
+      "x": 2115,
+      "y": 1408
+    },
+    "V-M-S4-dop.dc.html": {
+      "h": 1008,
+      "page": "ds2",
+      "title": "S4b · Вкладка «Профиль»",
+      "w": 924,
+      "x": 7455,
+      "y": 2852
+    },
+    "V-M-S4-pustye.dc.html": {
+      "h": 1284,
+      "page": "ds2",
+      "title": "S4 · Незаполненные поля",
+      "w": 2676,
+      "x": 4566,
+      "y": 2852
+    },
+    "V-M-S4.dc.html": {
+      "h": 1284,
+      "page": "ds2",
+      "title": "S4 · Профиль: форма",
+      "w": 2238,
+      "x": 2115,
+      "y": 2852
+    },
+    "V-M-S5-S9.dc.html": {
+      "h": 1008,
+      "page": "ds2",
+      "title": "S5, S9 · Вход в анкету и заглушка плана",
+      "w": 924,
+      "x": 2115,
+      "y": 4416
+    },
+    "V-M-S6-S7.dc.html": {
+      "h": 1008,
+      "page": "ds2",
+      "title": "S6 · Опрос уверенности",
+      "w": 924,
+      "x": 3557,
+      "y": 4416
+    },
+    "V-M-global.dc.html": {
+      "h": 1008,
+      "page": "ds2",
+      "title": "E6 · Сервис недоступен",
+      "w": 486,
+      "x": 2115,
+      "y": 7232
+    },
+    "V-Main.dc.html": {
+      "h": 1008,
+      "page": "ds2",
+      "title": "S1–S2 · Приветствие и вход",
+      "w": 1800,
+      "x": 2115,
+      "y": 0
+    },
+    "V-Forma.dc.html": {
+      "h": 1330,
+      "page": "ds2",
+      "title": "Форма кнопок · сейчас и три варианта",
+      "w": 1800,
+      "x": 2115,
+      "y": 8640
+    },
+    "V-Zamok.dc.html": {
+      "h": 1008,
+      "page": "ds2",
+      "title": "Закрытые карточки · сейчас и четыре варианта",
+      "w": 2238,
+      "x": 2115,
+      "y": 10370
+    },
+    "V-Polya.dc.html": {
+      "h": 1284,
+      "page": "ds2",
+      "title": "Поля формы · сейчас и три варианта",
+      "w": 1800,
+      "x": 2115,
+      "y": 11778
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-10-26T12:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "page": "mob",
+    "view": "canvas"
+  },
+  "noteOrder": [
+    "d1",
+    "d2",
+    "d3",
+    "d4",
+    "d5",
+    "d6",
+    "f0",
+    "fd1",
+    "fd2",
+    "fd3",
+    "fd4",
+    "fd5",
+    "fd6",
+    "fm1",
+    "fm2",
+    "fm3",
+    "fm4",
+    "fm5",
+    "fm6",
+    "m1",
+    "m2",
+    "m3",
+    "m4",
+    "m5",
+    "m6",
+    "n0",
+    "n1",
+    "z1",
+    "zA",
+    "zB",
+    "zC",
+    "zD",
+    "zE",
+    "zF",
+    "zG",
+    "zK",
+    "zM",
+    "zN",
+    "v2",
+    "v3",
+    "v4",
+    "v5",
+    "v6",
+    "n2",
+    "v7",
+    "v8",
+    "v9"
+  ],
+  "notes": {
+    "d1": {
+      "kind": "title1",
+      "maxW": 2704,
+      "page": "desk",
+      "text": "Вход: S1–S2",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "d2": {
+      "kind": "title1",
+      "maxW": 5360,
+      "page": "desk",
+      "text": "Главная: S3",
+      "w": 240,
+      "x": 0,
+      "y": 1104
+    },
+    "d3": {
+      "kind": "title1",
+      "maxW": 5488,
+      "page": "desk",
+      "text": "Главная: окна · Профиль: S4, S4b",
+      "w": 240,
+      "x": 0,
+      "y": 2468
+    },
+    "d4": {
+      "kind": "title1",
+      "maxW": 6816,
+      "page": "desk",
+      "text": "Анкета и план: S5–S9",
+      "w": 240,
+      "x": 0,
+      "y": 4072
+    },
+    "d5": {
+      "kind": "title1",
+      "maxW": 4032,
+      "page": "desk",
+      "text": "Чат: S10",
+      "w": 240,
+      "x": 0,
+      "y": 5436
+    },
+    "d6": {
+      "kind": "title1",
+      "maxW": 1168,
+      "page": "desk",
+      "text": "Каталог ошибок",
+      "w": 240,
+      "x": 0,
+      "y": 6800
+    },
+    "f0": {
+      "kind": "title1",
+      "maxW": 1280,
+      "page": "fin",
+      "text": "Дизайн-система",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "fd1": {
+      "kind": "title1",
+      "maxW": 2704,
+      "page": "fin",
+      "text": "Десктоп · Вход: S1–S2",
+      "w": 240,
+      "x": 0,
+      "y": 15480
+    },
+    "fd2": {
+      "kind": "title1",
+      "maxW": 5360,
+      "page": "fin",
+      "text": "Десктоп · Главная: S3",
+      "w": 240,
+      "x": 0,
+      "y": 16844
+    },
+    "fd3": {
+      "kind": "title1",
+      "maxW": 5488,
+      "page": "fin",
+      "text": "Десктоп · Главная: окна · Профиль: S4, S4b",
+      "w": 240,
+      "x": 0,
+      "y": 18208
+    },
+    "fd4": {
+      "kind": "title1",
+      "maxW": 6816,
+      "page": "fin",
+      "text": "Десктоп · Анкета и план: S5–S9",
+      "w": 240,
+      "x": 0,
+      "y": 19812
+    },
+    "fd5": {
+      "kind": "title1",
+      "maxW": 4032,
+      "page": "fin",
+      "text": "Десктоп · Чат: S10",
+      "w": 240,
+      "x": 0,
+      "y": 21176
+    },
+    "fd6": {
+      "kind": "title1",
+      "maxW": 1168,
+      "page": "fin",
+      "text": "Десктоп · Каталог ошибок",
+      "w": 240,
+      "x": 0,
+      "y": 22540
+    },
+    "fm1": {
+      "kind": "title1",
+      "maxW": 2366,
+      "page": "fin",
+      "text": "Мобильная · Вход: S1–S2",
+      "w": 240,
+      "x": 0,
+      "y": 6340
+    },
+    "fm2": {
+      "kind": "title1",
+      "maxW": 3242,
+      "page": "fin",
+      "text": "Мобильная · Главная: S3",
+      "w": 240,
+      "x": 0,
+      "y": 7748
+    },
+    "fm3": {
+      "kind": "title1",
+      "maxW": 3242,
+      "page": "fin",
+      "text": "Мобильная · Профиль: S4, S4b",
+      "w": 240,
+      "x": 0,
+      "y": 9192
+    },
+    "fm4": {
+      "kind": "title1",
+      "maxW": 5560,
+      "page": "fin",
+      "text": "Мобильная · Анкета и план: S5–S9",
+      "w": 240,
+      "x": 0,
+      "y": 10756
+    },
+    "fm5": {
+      "kind": "title1",
+      "maxW": 5560,
+      "page": "fin",
+      "text": "Мобильная · Чат: S10",
+      "w": 240,
+      "x": 0,
+      "y": 12164
+    },
+    "fm6": {
+      "kind": "title1",
+      "maxW": 2238,
+      "page": "fin",
+      "text": "Мобильная · Глобальные ошибки и внешние переходы",
+      "w": 240,
+      "x": 0,
+      "y": 13572
+    },
+    "m1": {
+      "kind": "title1",
+      "maxW": 2366,
+      "page": "mob",
+      "text": "Вход: S1–S2",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "m2": {
+      "kind": "title1",
+      "maxW": 3242,
+      "page": "mob",
+      "text": "Главная: S3",
+      "w": 240,
+      "x": 0,
+      "y": 1148
+    },
+    "m3": {
+      "kind": "title1",
+      "maxW": 3242,
+      "page": "mob",
+      "text": "Профиль: S4, S4b",
+      "w": 240,
+      "x": 0,
+      "y": 2592
+    },
+    "m4": {
+      "kind": "title1",
+      "maxW": 5560,
+      "page": "mob",
+      "text": "Анкета и план: S5–S9",
+      "w": 240,
+      "x": 0,
+      "y": 4156
+    },
+    "m5": {
+      "kind": "title1",
+      "maxW": 5560,
+      "page": "mob",
+      "text": "Чат: S10",
+      "w": 240,
+      "x": 0,
+      "y": 5564
+    },
+    "m6": {
+      "kind": "title1",
+      "maxW": 2238,
+      "page": "mob",
+      "text": "Глобальные ошибки и внешние переходы",
+      "w": 240,
+      "x": 0,
+      "y": 6972
+    },
+    "n0": {
+      "kind": "title1",
+      "maxW": 1280,
+      "page": "ds2",
+      "text": "Дизайн-система 2 · новые цвета",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "n1": {
+      "kind": "title1",
+      "maxW": 1800,
+      "page": "ds2",
+      "text": "Мобильная · 390",
+      "w": 240,
+      "x": 2115,
+      "y": -260
+    },
+    "n2": {
+      "kind": "title1",
+      "maxW": 1280,
+      "page": "ds2",
+      "text": "Иконки · варианты",
+      "w": 240,
+      "x": -1654,
+      "y": -260
+    },
+    "v2": {
+      "kind": "title1",
+      "maxW": 3242,
+      "page": "ds2",
+      "text": "Главная: S3",
+      "w": 240,
+      "x": 2115,
+      "y": 1148
+    },
+    "v3": {
+      "kind": "title1",
+      "maxW": 3242,
+      "page": "ds2",
+      "text": "Профиль: S4, S4b",
+      "w": 240,
+      "x": 2115,
+      "y": 2592
+    },
+    "v4": {
+      "kind": "title1",
+      "maxW": 5560,
+      "page": "ds2",
+      "text": "Анкета и план: S5, S6, S9",
+      "w": 240,
+      "x": 2115,
+      "y": 4156
+    },
+    "v5": {
+      "kind": "title1",
+      "maxW": 5560,
+      "page": "ds2",
+      "text": "Чат: S10",
+      "w": 240,
+      "x": 2115,
+      "y": 5564
+    },
+    "v6": {
+      "kind": "title1",
+      "maxW": 2238,
+      "page": "ds2",
+      "text": "Глобальная ошибка",
+      "w": 240,
+      "x": 2115,
+      "y": 6972
+    },
+    "z1": {
+      "kind": "title1",
+      "maxW": 2270,
+      "page": "dz",
+      "text": "Эксперименты с дизайном",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "zA": {
+      "kind": "title1",
+      "maxW": 2270,
+      "page": "dz",
+      "text": "А · Лес",
+      "w": 240,
+      "x": 0,
+      "y": 1260
+    },
+    "zB": {
+      "kind": "title1",
+      "maxW": 2270,
+      "page": "dz",
+      "text": "Б · Двор",
+      "w": 240,
+      "x": 0,
+      "y": 2840
+    },
+    "zC": {
+      "kind": "title1",
+      "maxW": 2270,
+      "page": "dz",
+      "text": "В · Вечер",
+      "w": 240,
+      "x": 0,
+      "y": 4420
+    },
+    "zD": {
+      "kind": "title1",
+      "maxW": 2270,
+      "page": "dz",
+      "text": "Г · Цвета сайта + интерфейс ploof",
+      "w": 240,
+      "x": 0,
+      "y": 6000
+    },
+    "zE": {
+      "kind": "title1",
+      "maxW": 2270,
+      "page": "dz",
+      "text": "Д · Г с характером сайта",
+      "w": 240,
+      "x": 0,
+      "y": 7580
+    },
+    "zF": {
+      "kind": "title1",
+      "maxW": 2270,
+      "page": "dz",
+      "text": "Е · По мотивам Cool Cat's",
+      "w": 240,
+      "x": 0,
+      "y": 9220
+    },
+    "zG": {
+      "kind": "title1",
+      "maxW": 2270,
+      "page": "dz",
+      "text": "Ж · Е в цветах сайта",
+      "w": 240,
+      "x": 0,
+      "y": 10820
+    },
+    "zK": {
+      "kind": "title1",
+      "maxW": 2270,
+      "page": "dz",
+      "text": "К · Ж, доработка визуала (на утверждение)",
+      "w": 240,
+      "x": 0,
+      "y": 15680
+    },
+    "zM": {
+      "kind": "title1",
+      "maxW": 2270,
+      "page": "dz",
+      "text": "М · К с иллюстрациями из набора (пример)",
+      "w": 240,
+      "x": 0,
+      "y": 18168
+    },
+    "zN": {
+      "kind": "title1",
+      "maxW": 2270,
+      "page": "dz",
+      "text": "Н · Молочный + голубой как второй цвет интерфейса",
+      "w": 240,
+      "x": 0,
+      "y": 19412
+    },
+    "v7": {
+      "kind": "title1",
+      "maxW": 1800,
+      "page": "ds2",
+      "text": "Форма кнопок: варианты",
+      "w": 240,
+      "x": 2115,
+      "y": 8380
+    },
+    "v8": {
+      "kind": "title1",
+      "maxW": 2238,
+      "page": "ds2",
+      "text": "Закрытые карточки: варианты",
+      "w": 240,
+      "x": 2115,
+      "y": 10110
+    },
+    "v9": {
+      "kind": "title1",
+      "maxW": 1800,
+      "page": "ds2",
+      "text": "Поля формы: варианты",
+      "w": 240,
+      "x": 2115,
+      "y": 11518
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "M-S2-oshibki.dc.html",
+    "M-S3.dc.html",
+    "M-S3-dop.dc.html",
+    "M-S4.dc.html",
+    "M-S4-dop.dc.html",
+    "M-S5-S9.dc.html",
+    "M-S6-S7.dc.html",
+    "M-anketa-oshibki.dc.html",
+    "M-C1-C3.dc.html",
+    "M-C4-C7.dc.html",
+    "M-C8-C12.dc.html",
+    "M-global.dc.html",
+    "D-S1-S2.dc.html",
+    "D-S3.dc.html",
+    "D-S3-dop.dc.html",
+    "D-S4.dc.html",
+    "D-S5-S7.dc.html",
+    "D-S8-S9.dc.html",
+    "D-chat.dc.html",
+    "D-katalog.dc.html",
+    "Dz-Vhod.dc.html",
+    "Dz-Glavnaya.dc.html",
+    "Dz-Profil.dc.html",
+    "Dz-Opros.dc.html",
+    "Dz-Chat.dc.html",
+    "DzA-Vhod.dc.html",
+    "DzA-Glavnaya.dc.html",
+    "DzA-Profil.dc.html",
+    "DzA-Opros.dc.html",
+    "DzA-Chat.dc.html",
+    "DzB-Vhod.dc.html",
+    "DzB-Glavnaya.dc.html",
+    "DzB-Profil.dc.html",
+    "DzB-Opros.dc.html",
+    "DzB-Chat.dc.html",
+    "DzC-Vhod.dc.html",
+    "DzC-Glavnaya.dc.html",
+    "DzC-Profil.dc.html",
+    "DzC-Opros.dc.html",
+    "DzC-Chat.dc.html",
+    "DzD-Vhod.dc.html",
+    "DzD-Glavnaya.dc.html",
+    "DzD-Profil.dc.html",
+    "DzD-Opros.dc.html",
+    "DzD-Chat.dc.html",
+    "DzE-Vhod.dc.html",
+    "DzE-Glavnaya.dc.html",
+    "DzE-Profil.dc.html",
+    "DzE-Opros.dc.html",
+    "DzE-Chat.dc.html",
+    "DzF-Vhod.dc.html",
+    "DzF-Glavnaya.dc.html",
+    "DzF-Profil.dc.html",
+    "DzF-Opros.dc.html",
+    "DzF-Chat.dc.html",
+    "DzG-Vhod.dc.html",
+    "DzG-Glavnaya.dc.html",
+    "DzG-Profil.dc.html",
+    "DzG-Opros.dc.html",
+    "DzG-Chat.dc.html",
+    "DzK-Vhod.dc.html",
+    "DzK-Glavnaya.dc.html",
+    "DzK-Profil.dc.html",
+    "DzK-Opros.dc.html",
+    "DzK-Chat.dc.html",
+    "DzM-Vhod.dc.html",
+    "DzM-Glavnaya.dc.html",
+    "DzM-Profil.dc.html",
+    "DzM-Opros.dc.html",
+    "DzM-Chat.dc.html",
+    "DzN-Vhod.dc.html",
+    "DzN-Glavnaya.dc.html",
+    "DzN-Profil.dc.html",
+    "DzN-Opros.dc.html",
+    "DzN-Chat.dc.html",
+    "F-M-C1-C3.dc.html",
+    "F-M-C4-C7.dc.html",
+    "F-M-C8-C12.dc.html",
+    "F-M-S2-oshibki.dc.html",
+    "F-M-S3.dc.html",
+    "F-M-S4-dop.dc.html",
+    "F-M-S4.dc.html",
+    "F-M-S5-S9.dc.html",
+    "F-M-S6-S7.dc.html",
+    "F-M-anketa-oshibki.dc.html",
+    "F-M-global.dc.html",
+    "F-Main.dc.html",
+    "F-D-S1-S2.dc.html",
+    "F-D-S3-dop.dc.html",
+    "F-D-S3.dc.html",
+    "F-D-S4.dc.html",
+    "F-D-S5-S7.dc.html",
+    "F-D-S8-S9.dc.html",
+    "F-D-chat.dc.html",
+    "F-D-katalog.dc.html",
+    "F-DS.dc.html",
+    "V-Main.dc.html",
+    "V-M-S3.dc.html",
+    "N-DS.dc.html",
+    "V-M-S2-oshibki.dc.html",
+    "V-M-S4.dc.html",
+    "V-M-S4-dop.dc.html",
+    "V-M-S5-S9.dc.html",
+    "V-M-S6-S7.dc.html",
+    "V-M-C1-C3.dc.html",
+    "V-M-C4-C7.dc.html",
+    "V-M-C8-C12.dc.html",
+    "V-M-global.dc.html",
+    "N-Icons.dc.html",
+    "V-M-S4-pustye.dc.html",
+    "V-Forma.dc.html",
+    "V-Zamok.dc.html",
+    "V-Polya.dc.html"
+  ],
+  "pages": [
+    {
+      "id": "mob",
+      "name": "Мобильная · 390"
+    },
+    {
+      "id": "desk",
+      "name": "Десктоп · 1280"
+    },
+    {
+      "id": "dz",
+      "name": "Дизайн · эксперименты"
+    },
+    {
+      "id": "fin",
+      "name": "Дизайн · Н (финал)"
+    },
+    {
+      "id": "ds2",
+      "name": "Дизайн · новые цвета"
+    }
+  ],
+  "title": "Хвостун — макеты"
+}

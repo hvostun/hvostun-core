@@ -1,20 +1,26 @@
-# Future user frontend
+Этот каталог — справочник выгрузки с холста. В образ приложения он не входит,
+кроме `illustrations/`, которые импортирует код в `frontend/src`.
 
-`frontend/` is an inactive React/Vite template reserved for a future
-user-facing Hvostun interface.
+# Хвостун — мобильная версия
 
-It is intentionally outside the current admin MVP:
+Макеты мобильной версии сервиса поддержки владельцев собак в период адаптации: экраны в новой палитре и дизайн-система.
 
-- it is not built or served by FastAPI;
-- it is not included in Docker Compose or the backend image;
-- backend does not enable CORS for it;
-- its generated client and template routes are not guaranteed to match the
-  current API;
-- frontend checks are not part of the current release process.
+Источник правды — холст «Хвостун — макеты» в Claude, вкладка «Дизайн · новые цвета». Этот каталог — выгрузка с холста на 8 ноября 2026 года (холст v288). Собранное приложение живёт в `frontend/src`, его тесты — в `frontend/tests`. Кликабельный прототип и стартовая страница выгрузки в репозиторий не входят.
 
-The active UI is the Jinja + Bootstrap admin in `backend/app/admin`.
+## Что внутри
 
-When work on the user interface starts, define its API and authorization
-contract first. Only then enable CORS for explicit origins, regenerate the
-OpenAPI client, add a separate frontend service/build, and introduce frontend
-tests and deployment checks.
+| Папка | Что лежит |
+|---|---|
+| `docs/handoff.md` | **Передача в разработку**: экраны, состояния, поля и проверки, тексты ошибок, чат, модель данных и запросы к серверу, аналитика, отличия от ТЗ, открытые вопросы |
+| `mockups/` | Экраны 390 px, по одной доске на раздел: вход, главная A–D, профиль и ошибки, анкета, чат, глобальная ошибка |
+| `mockups/variants/` | Доски сравнения, по которым принимали решения: форма кнопок, закрытые карточки, поля |
+| `design-system/N-DS.dc.html` | Дизайн-система 2 (новые цвета) |
+| `design-system/hvostun-design-system.md` | Та же дизайн-система текстом: токены, компоненты, правила, CSS, иконки — для разработки и генерации |
+| `illustrations/` | Лицензионные иллюстрации DiCreate Dog illustrations, перекрашенные в цвета ДС (`*-blue.svg`, `*-cream.svg`), и паттерн фона чата |
+| `source/canvas/` | Доски в формате холста (`*.dc.html`) и `canvas.json` |
+
+Страницы макетов самодостаточные: картинки и шрифты встроены. Их можно открыть из файлов этой папки.
+
+## Иллюстрации
+
+Иллюстрации куплены (DiCreate Dog illustrations). Репозиторий должен оставаться приватным, пока лицензия не разрешает публикацию исходников.

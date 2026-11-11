@@ -1,9 +1,10 @@
 /// <reference types="vite/client" />
 
-interface ImportMetaEnv {
-  readonly VITE_API_URL?: string
+declare module "*.svg" {
+  const src: string
+  export default src
 }
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv
+interface Window {
+  __hvostunApi?: import("./api/client").HvostunApi
 }

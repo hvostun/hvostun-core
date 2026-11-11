@@ -33,10 +33,9 @@ Health: <http://localhost:8000/health>
 
 Mailpit: <http://localhost:8025>
 
-The catalog `frontend/` is an inactive React template for a future user UI. It
-is not served, built, deployed, or allowed through CORS by the backend. Its
-generated client is not kept in sync with the current API. Dependencies are
-locked in `frontend/bun.lock` (`axios` 1.20.0, `js-yaml` overridden to 4.3.2).
+`frontend/` is the profile SPA (React, TypeScript, Vite). It is served on
+`PROFILE_DOMAIN` from its own image and has no backend API yet. Commands are
+in the root README, section «Frontend (profile)».
 
 ## Full Stack with Docker Compose
 

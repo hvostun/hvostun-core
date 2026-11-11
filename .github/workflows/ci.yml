@@ -74,10 +74,41 @@ jobs:
         working-directory: backend
         run: uv run pytest -q
 
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install, check and test
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm audit --audit-level=high
+          npm run build
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+      - name: Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+
   image:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: test
+    needs: [test, frontend]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -93,8 +124,8 @@ jobs:
           push: false
           load: true
           tags: hvostun-backend:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
       - name: Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -104,3 +135,74 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
           ignore-unfixed: true
+      - name: Build frontend
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: false
+          load: true
+          tags: hvostun-frontend:ci
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+      - name: Trivy frontend
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.70.0
+          scan-type: image
+          image-ref: hvostun-frontend:ci
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+      - name: Frontend smoke
+        run: |
+          set -euo pipefail
+          docker rm -f fe >/dev/null 2>&1 || true
+          login=ci@example.com
+          password="$(openssl rand -hex 16)"
+          docker run -d --name fe --read-only --tmpfs /tmp --cap-drop ALL \
+            --security-opt no-new-privileges:true -p 18080:8080 \
+            -e PROFILE_LOGIN="$login" -e PROFILE_PASSWORD="$password" hvostun-frontend:ci
+          for _ in $(seq 1 20); do curl -fsS http://127.0.0.1:18080/healthz && break; sleep 1; done
+          curl -fsS http://127.0.0.1:18080/healthz >/dev/null
+          base=http://127.0.0.1:18080
+          code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+          test "$(code "$base/")" = 401
+          test "$(code -u "$login:wrong-password-0000" "$base/")" = 401
+          test "$(code "$base/healthz")" = 200
+          curl -fsS -u "$login:$password" "$base/" | grep -q '<div id="root">'
+          test "$(code -u "$login:$password" "$base/")" = 200
+          curl -fsS -u "$login:$password" "$base/chat" | grep -q '<div id="root">'
+          js="$(curl -fsS -u "$login:$password" "$base/" | grep -o '/assets/[^"]*\.js' | head -n 1)"
+          test -n "$js"
+          test "$(code -u "$login:$password" "$base$js")" = 200
+          case "$(curl -s -o /dev/null -w '%{content_type}' -u "$login:$password" "$base$js")" in
+            *javascript*) ;;
+            *) echo "asset is not javascript" >&2; exit 1 ;;
+          esac
+          css="$(curl -fsS -u "$login:$password" "$base/" | grep -o '/assets/[^"]*\.css' | head -n 1)"
+          font="$(curl -fsS -u "$login:$password" "$base$css" | grep -o '/assets/[^"[:space:]]*\.woff2' | head -n 1)"
+          test -n "$font"
+          test "$(curl -s -o /dev/null -w '%{content_type}' -u "$login:$password" "$base$font")" = font/woff2
+          body="$(curl -fsS -u "$login:$password" "$base/package.json")"
+          printf '%s' "$body" | grep -q '<div id="root">'
+          if printf '%s' "$body" | grep -q '"name"'; then
+            echo "package.json must not be served" >&2
+            exit 1
+          fi
+          test "$(code -u "$login:$password" -X POST "$base/")" = 403
+          if docker run --rm --entrypoint sh hvostun-frontend:ci -c \
+              'find /usr/share/nginx/html -type f -exec grep -E "fonts[.](googleapis|gstatic)[.]com" {} +'; then
+            echo "external font references in image" >&2
+            exit 1
+          fi
+          if docker run --rm --entrypoint sh hvostun-frontend:ci -c \
+              'find /usr/share/nginx/html -name "*.html" -exec grep -E "<script" {} + | grep -v "src="'; then
+            echo "inline script in image" >&2
+            exit 1
+          fi
+          if docker run --rm --read-only --tmpfs /tmp hvostun-frontend:ci; then
+            echo "frontend must refuse to start without PROFILE_LOGIN" >&2
+            exit 1
+          fi
+          docker rm -f fe >/dev/null

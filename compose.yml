@@ -18,13 +18,14 @@ services:
   proxy:
     image: traefik:v3.7@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0
     networks:
-      - default
+      - public
+      - admin
+      - profile
       - socket
     command:
       # Enable Docker in Traefik, so that it reads labels from Docker services
       - --providers.docker
       - --providers.docker.endpoint=tcp://socket-proxy:2375
-      - --providers.docker.network=hvostun_public
       # Do not expose all Docker services, only the ones explicitly exposed
       - --providers.docker.exposedbydefault=false
       # Create an entrypoint "http" listening on port 80
@@ -37,6 +38,8 @@ services:
   # Единственная OLTP admin-контура. БД: hvostun_{FASTAPI_ENV}.
   db:
     image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+    networks:
+      - db
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d hvostun_${FASTAPI_ENV:-development}"]
       interval: 10s
@@ -52,6 +55,8 @@ services:
   # Creates hvostun_migrator and hvostun_app on every start, including existing volumes.
   db-roles:
     image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+    networks:
+      - db
     depends_on:
       db:
         condition: service_healthy
@@ -70,6 +75,8 @@ services:
   # Admin-контур: FastAPI HTML-админка, без второго HTTP-сервиса.
   prestart:
     image: ${BACKEND_IMAGE:-backend:latest}
+    networks:
+      - db
     depends_on:
       db-roles:
         condition: service_completed_successfully
@@ -116,6 +123,15 @@ services:
       timeout: 5s
       retries: 5
 
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - admin
+      - db
+      - egress
+
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -123,6 +139,7 @@ services:
       - hvostun.contour=admin
       # Enable Traefik for this service
       - traefik.enable=true
+      - traefik.docker.network=hvostun_admin
 
       # Define the port inside of the Docker service to use
       - traefik.http.services.backend.loadbalancer.server.port=8000
@@ -131,12 +148,55 @@ services:
       - traefik.http.routers.backend-http.rule=Host(`${DOMAIN:-localhost}`)
       - traefik.http.routers.backend-http.entrypoints=http
 
+  frontend:
+    image: ${FRONTEND_IMAGE:-frontend:latest}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    networks:
+      - profile
+    environment:
+      PROFILE_LOGIN: ${PROFILE_LOGIN:?Variable not set}
+      PROFILE_PASSWORD: ${PROFILE_PASSWORD:?Variable not set}
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    labels:
+      - hvostun.contour=profile
+      - traefik.enable=true
+      - traefik.docker.network=hvostun_profile
+      - traefik.http.services.frontend.loadbalancer.server.port=8080
+      - traefik.http.routers.frontend-http.rule=Host(`${PROFILE_DOMAIN:-profile.localhost}`)
+      - traefik.http.routers.frontend-http.entrypoints=http
+
 volumes:
   hvostun-db-data:
 
 networks:
-  default:
+  public:
     name: hvostun_public
+  admin:
+    name: hvostun_admin
+    internal: true
+  profile:
+    name: hvostun_profile
+    internal: true
+  db:
+    name: hvostun_db
+    internal: true
+  egress:
+    name: hvostun_egress
   socket:
     name: hvostun_socket
     internal: true

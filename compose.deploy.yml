@@ -10,7 +10,6 @@ services:
     command:
       - --providers.docker
       - --providers.docker.endpoint=tcp://socket-proxy:2375
-      - --providers.docker.network=hvostun_public
       - --providers.docker.exposedbydefault=false
       - --entrypoints.http.address=:80
       - --entrypoints.http.http.redirections.entrypoint.to=https
@@ -91,6 +90,34 @@ services:
       - traefik.http.middlewares.secure-headers.headers.frameDeny=true
       - traefik.http.middlewares.secure-headers.headers.referrerPolicy=same-origin
       - traefik.http.middlewares.secure-headers.headers.contentSecurityPolicy=default-src 'self'; style-src 'self' https://cdn.jsdelivr.net; style-src-attr 'unsafe-inline'; frame-ancestors 'none'; form-action 'self'
+      - traefik.http.middlewares.secure-headers.headers.customResponseHeaders.Cross-Origin-Opener-Policy=same-origin
+      - traefik.http.middlewares.secure-headers.headers.customResponseHeaders.Cross-Origin-Resource-Policy=same-origin
+      - traefik.http.middlewares.secure-headers.headers.permissionsPolicy=camera=(), microphone=(), geolocation=(), payment=()
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?Variable not set}
+    build: !reset null
+    restart: unless-stopped
+    labels:
+      - traefik.http.routers.frontend-https.rule=Host(`${PROFILE_DOMAIN:?Variable not set}`)
+      - traefik.http.routers.frontend-https.entrypoints=https
+      - traefik.http.routers.frontend-https.tls=true
+      - traefik.http.routers.frontend-https.tls.certresolver=le
+      - traefik.http.routers.frontend-https.middlewares=profile-ratelimit,profile-headers
+      - traefik.http.middlewares.profile-ratelimit.ratelimit.average=60
+      - traefik.http.middlewares.profile-ratelimit.ratelimit.period=1m
+      - traefik.http.middlewares.profile-ratelimit.ratelimit.burst=120
+      - traefik.http.middlewares.profile-ratelimit.ratelimit.sourcecriterion.ipstrategy.depth=0
+      - traefik.http.middlewares.profile-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.profile-headers.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.profile-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.profile-headers.headers.frameDeny=true
+      - traefik.http.middlewares.profile-headers.headers.referrerPolicy=no-referrer
+      - traefik.http.middlewares.profile-headers.headers.contentSecurityPolicy=default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'none'; manifest-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'
+      - traefik.http.middlewares.profile-headers.headers.customResponseHeaders.Cross-Origin-Opener-Policy=same-origin
+      - traefik.http.middlewares.profile-headers.headers.customResponseHeaders.Cross-Origin-Resource-Policy=same-origin
+      - traefik.http.middlewares.profile-headers.headers.customResponseHeaders.X-Robots-Tag=noindex, nofollow
+      - traefik.http.middlewares.profile-headers.headers.permissionsPolicy=camera=(), microphone=(), geolocation=(), payment=()
 
 volumes:
   traefik-certificates:

@@ -20,7 +20,6 @@ extend-exclude = [
     "bun.lock",
     "backend/coverage/",
     "backend/htmlcov/",
-    "frontend/src/client/",
 ]
 
 [tool.typos.default]

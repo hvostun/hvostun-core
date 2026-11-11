@@ -34,6 +34,7 @@ jobs:
     outputs:
       sha: ${{ steps.sha.outputs.value }}
       digest: ${{ steps.result.outputs.digest }}
+      frontend_digest: ${{ steps.result_frontend.outputs.digest }}
     steps:
       - name: Resolve SHA
         id: sha
@@ -114,8 +115,8 @@ jobs:
             ghcr.io/hvostun/hvostun-backend:${{ steps.sha.outputs.value }}
             ${{ github.event_name == 'workflow_run' && 'ghcr.io/hvostun/hvostun-backend:main' || '' }}
           labels: org.opencontainers.image.revision=${{ steps.sha.outputs.value }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
       - name: Select digest
         id: result
         env:
@@ -131,6 +132,58 @@ jobs:
           fi
           if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "image digest missing" >&2
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Lookup existing frontend image
+        id: lookup_frontend
+        env:
+          SHA: ${{ steps.sha.outputs.value }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/hvostun/hvostun-frontend:${SHA}"
+          if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+            digest="$(docker buildx imagetools inspect "$image" --format '{{.Manifest.Digest}}')"
+            if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "unexpected digest for ${image}" >&2
+              exit 1
+            fi
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "digest=" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build and push frontend
+        id: build_frontend
+        if: steps.lookup_frontend.outputs.exists != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/hvostun/hvostun-frontend:${{ steps.sha.outputs.value }}
+            ${{ github.event_name == 'workflow_run' && 'ghcr.io/hvostun/hvostun-frontend:main' || '' }}
+          labels: org.opencontainers.image.revision=${{ steps.sha.outputs.value }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+      - name: Select frontend digest
+        id: result_frontend
+        env:
+          EXISTING: ${{ steps.lookup_frontend.outputs.digest }}
+          BUILT: ${{ steps.build_frontend.outputs.digest }}
+          EXISTS: ${{ steps.lookup_frontend.outputs.exists }}
+        run: |
+          set -euo pipefail
+          if [[ "$EXISTS" == "true" ]]; then
+            digest="$EXISTING"
+          else
+            digest="$BUILT"
+          fi
+          if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "frontend image digest missing" >&2
             exit 1
           fi
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
@@ -156,6 +209,7 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           SHA: ${{ needs.publish.outputs.sha }}
           DIGEST: ${{ needs.publish.outputs.digest }}
+          FRONTEND_DIGEST: ${{ needs.publish.outputs.frontend_digest }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
         run: |
@@ -166,6 +220,10 @@ jobs:
           fi
           if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "digest must be sha256 and 64 hex characters" >&2
+            exit 1
+          fi
+          if ! [[ "$FRONTEND_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "frontend digest must be sha256 and 64 hex characters" >&2
             exit 1
           fi
           if ! [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]] || [[ "$DEPLOY_PATH" == *..* ]]; then
@@ -186,6 +244,7 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy_key"
           chmod 600 "$HOME/.ssh/known_hosts" "$HOME/.ssh/deploy_key"
           image="ghcr.io/hvostun/hvostun-backend@${DIGEST}"
+          frontend_image="ghcr.io/hvostun/hvostun-frontend@${FRONTEND_DIGEST}"
           remote="$RUNNER_TEMP/deploy.sh"
           {
             printf '%s\n' 'set -euo pipefail'
@@ -194,7 +253,7 @@ jobs:
             printf '%s\n' 'git fetch --prune origin'
             printf 'git checkout --detach %q\n' "$SHA"
             printf "printf '%%s\\\\n' %q | docker login ghcr.io -u %q --password-stdin\n" "$GITHUB_TOKEN" "$GITHUB_ACTOR"
-            printf 'BACKEND_IMAGE=%q bash scripts/deploy.sh up -d\n' "$image"
+            printf 'BACKEND_IMAGE=%q FRONTEND_IMAGE=%q bash scripts/deploy.sh up -d\n' "$image" "$frontend_image"
           } > "$remote"
           ssh -i "$HOME/.ssh/deploy_key" \
             -o StrictHostKeyChecking=yes \
@@ -206,6 +265,9 @@ jobs:
       - name: Smoke
         env:
           DOMAIN: ${{ vars.DOMAIN }}
+          PROFILE_DOMAIN: ${{ vars.PROFILE_DOMAIN }}
+          PROFILE_LOGIN: ${{ secrets.PROFILE_LOGIN }}
+          PROFILE_PASSWORD: ${{ secrets.PROFILE_PASSWORD }}
         run: |
           set -euo pipefail
           if ! [[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]]; then
@@ -225,3 +287,17 @@ jobs:
               exit 1
             fi
           done
+          if ! [[ "$PROFILE_DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]]; then
+            echo "PROFILE_DOMAIN must be a hostname" >&2
+            exit 1
+          fi
+          test "$(curl -s -o /dev/null -w '%{http_code}' "https://${PROFILE_DOMAIN}/")" = 401
+          headers="$(curl --retry 10 --retry-all-errors --retry-delay 5 -fsS -D - -o /dev/null \
+            -u "${PROFILE_LOGIN}:${PROFILE_PASSWORD}" "https://${PROFILE_DOMAIN}/")"
+          grep -qi '^content-security-policy: .*connect-src .none.' <<<"$headers"
+          grep -qi '^x-robots-tag: noindex' <<<"$headers"
+          health="$(curl -fsS -u "${PROFILE_LOGIN}:${PROFILE_PASSWORD}" "https://${PROFILE_DOMAIN}/health")"
+          if printf '%s' "$health" | grep -q '{"status":"ok"}'; then
+            echo "profile /health must not be the backend health JSON" >&2
+            exit 1
+          fi
