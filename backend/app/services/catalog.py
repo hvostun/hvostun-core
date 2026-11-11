@@ -1,3 +1,4 @@
+import re
 import uuid
 from collections.abc import Sequence
 
@@ -7,7 +8,7 @@ from sqlmodel import Session, col, func, select
 from app.models import (
     Question,
     Recommendation,
-    RecommendationGroup,
+    RecommendationStatus,
     Scale,
     ScaleType,
     Survey,
@@ -166,6 +167,15 @@ def update_survey_question_layout(
     session.commit()
 
 
+def draft_recommendation_count(session: Session) -> int:
+    value = session.exec(
+        select(func.count())
+        .select_from(Recommendation)
+        .where(Recommendation.status == RecommendationStatus.DRAFT)
+    ).one()
+    return int(value)
+
+
 def get_recommendation(
     session: Session, recommendation_id: uuid.UUID
 ) -> Recommendation:
@@ -175,6 +185,24 @@ def get_recommendation(
     return row
 
 
+def recommendation_slug(name: str) -> str:
+    base = re.sub(r"[^\w]+", "-", name.strip().lower(), flags=re.UNICODE).strip("-_")
+    base = base[:60].strip("-_") or "recommendation"
+    return f"{base}-{uuid.uuid4().hex[:8]}"
+
+
+def unique_recommendation_slug(session: Session, name: str) -> str:
+    slug = recommendation_slug(name)
+    for _ in range(4):
+        taken = session.exec(
+            select(Recommendation.id).where(Recommendation.slug == slug)
+        ).first()
+        if taken is None:
+            return slug
+        slug = recommendation_slug(name)
+    raise CatalogUpdateError("Не удалось сохранить рекомендацию")
+
+
 def create_recommendation(
     session: Session,
     *,
@@ -182,7 +210,8 @@ def create_recommendation(
     slug: str,
     text: str,
     description: str | None,
-    group: RecommendationGroup,
+    group: str,
+    status: RecommendationStatus = RecommendationStatus.DRAFT,
 ) -> Recommendation:
     row = Recommendation(
         name=name,
@@ -190,13 +219,14 @@ def create_recommendation(
         text=text,
         description=description,
         group=group,
+        status=status,
     )
     session.add(row)
     try:
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise CatalogUpdateError("Такой slug уже есть") from exc
+        raise CatalogUpdateError("Такой код уже есть") from exc
     session.refresh(row)
     return row
 
@@ -209,18 +239,23 @@ def update_recommendation(
     slug: str,
     text: str,
     description: str | None,
-    group: RecommendationGroup,
+    group: str,
+    status: RecommendationStatus | None = None,
+    text_and_status_only: bool = False,
 ) -> Recommendation:
     row = get_recommendation(session, recommendation_id)
-    row.name = name
-    row.slug = slug
     row.text = text
     row.description = description
+    if status is not None:
+        row.status = status
     row.group = group
+    if not text_and_status_only:
+        row.name = name
+        row.slug = slug
     try:
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise CatalogUpdateError("Такой slug уже есть") from exc
+        raise CatalogUpdateError("Такой код уже есть") from exc
     session.refresh(row)
     return row

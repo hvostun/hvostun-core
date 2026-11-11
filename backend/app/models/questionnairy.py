@@ -254,6 +254,11 @@ class SurveySession(TimestampMixin, SQLModel, table=True):
         default=None,
         sa_column=Column(JSONB, nullable=True),
     )
+    summary: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+    )
+    cluster: str | None = Field(default=None, sa_type=Text)
 
 
 class SurveySessionPublic(SQLModel):
@@ -263,6 +268,7 @@ class SurveySessionPublic(SQLModel):
     survey_version_id: uuid.UUID
     status: SessionStatus
     client_metadata: dict[str, Any] | None = None
+    cluster: str | None = None
     created_at: datetime
     updated_at: datetime
 

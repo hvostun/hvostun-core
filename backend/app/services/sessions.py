@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, TypedDict
 
 from sqlalchemy import Text, case, cast, literal_column
 from sqlalchemy.dialects.postgresql import JSONB
@@ -17,6 +17,7 @@ from app.models import (
     Owner,
     Question,
     Recommendation,
+    RecommendationStatus,
     Scale,
     SessionRecommendation,
     Survey,
@@ -37,6 +38,9 @@ UNANSWERED_FILTER = "unanswered"
 MISSING_ANSWER = -999
 DEFAULT_SCALE_MIN = 0
 DEFAULT_SCALE_MAX = 4
+# Experts read 0-4 answers on a 10-point scale; storage stays 0-4.
+EXPERT_SCALE_MAX = 10
+EXPERT_SCALE = {0: 0, 1: 3, 2: 5, 3: 7, 4: 10}
 
 _LEGEND_LINE = re.compile(r"^(-?\d+)\s*(?:[-–]\s+)?(.*)$")
 
@@ -55,6 +59,35 @@ class SessionRecommendationPermissionError(PermissionError):
 
 def can_manage_all_session_recommendations(user: User) -> bool:
     return user.is_superuser or user.group == UserGroup.ADMIN
+
+
+def can_see_evaluation_counts(user: User) -> bool:
+    return user.is_superuser or user.group == UserGroup.ADMIN
+
+
+# «Без моей рекомендации»: hide a session once this many distinct experts
+# have evaluated it. «Мои рекомендации» keeps every session of the user.
+EXPERT_LIST_EVALUATION_CAP = 3
+
+
+def uses_expert_session_queue(user: User) -> bool:
+    return user.group == UserGroup.EXPERT and not user.is_superuser
+
+
+def expert_evaluation_count_subquery() -> Any:
+    """Distinct experts who left a recommendation, one row per session."""
+    return (
+        select(
+            col(SessionRecommendation.session_id).label("session_id"),
+            func.count(func.distinct(SessionRecommendation.user_id)).label(
+                "user_count"
+            ),
+        )
+        .join(User, col(User.id) == SessionRecommendation.user_id)
+        .where(User.group == UserGroup.EXPERT)
+        .group_by(col(SessionRecommendation.session_id))
+        .subquery()
+    )
 
 
 def parse_chart_number(raw: str) -> int:
@@ -212,11 +245,27 @@ def _scale_bounds(config: object) -> tuple[float, float]:
     return min_value, max_value
 
 
+def expert_points(value: object, config: object) -> int | None:
+    min_value, max_value = _scale_bounds(config)
+    if min_value > DEFAULT_SCALE_MIN or max_value != DEFAULT_SCALE_MAX:
+        return None
+    scalar = answer_scalar(value)
+    if isinstance(scalar, bool) or not isinstance(scalar, int | float):
+        return None
+    if isinstance(scalar, float) and not scalar.is_integer():
+        return None
+    return EXPERT_SCALE.get(int(scalar))
+
+
 def answer_progress(
     session: Session, value: object, config: object, category: object
 ) -> dict[str, Any]:
     color = dictionary_service.group_color(session, str(category))
     hidden = {"show_bar": False, "percent": 0, "color": color}
+    points = expert_points(value, config)
+    if points is not None:
+        percent = round(points / EXPERT_SCALE_MAX * 100)
+        return {"show_bar": True, "percent": percent, "color": color}
     scalar = answer_scalar(value)
     if scalar is None or scalar == "":
         return hidden
@@ -317,12 +366,13 @@ def get_session_answers(
     for question, link, scale in question_rows:
         latest_event = latest.get(question.id)
         value = latest_event.value if latest_event else None
+        points = expert_points(value, scale.config)
         answers.append(
             SessionAnswer(
                 question=question,
                 link=link,
                 event=latest_event,
-                display_value=format_answer(value),
+                display_value=format_answer(value) if points is None else str(points),
                 legend=legend_label(scale.config, value),
                 progress=answer_progress(session, value, scale.config, link.group),
             )
@@ -382,31 +432,108 @@ def get_session_recommendations(
     return list(
         session.exec(
             statement.order_by(
-                col(SessionRecommendation.user_id),
-                col(SessionRecommendation.chart_number),
-                col(SessionRecommendation.created_at),
+                col(SessionRecommendation.created_at).desc(),
+                col(SessionRecommendation.id).desc(),
             )
         ).all()
     )
 
 
-def session_recommendation_counts(
-    session: Session, session_ids: list[uuid.UUID], current_user: User
-) -> dict[uuid.UUID, tuple[int, int]]:
-    counts = dict.fromkeys(session_ids, (0, 0))
+def session_recommendation_user_counts(
+    session: Session, session_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    counts = dict.fromkeys(session_ids, 0)
     if not session_ids:
         return counts
-    statement = select(
-        SessionRecommendation.session_id,
-        func.count(),
-        func.count(func.distinct(SessionRecommendation.user_id)),
-    ).where(col(SessionRecommendation.session_id).in_(session_ids))
-    if not can_manage_all_session_recommendations(current_user):
-        statement = statement.where(SessionRecommendation.user_id == current_user.id)
+    statement = (
+        select(
+            SessionRecommendation.session_id,
+            func.count(func.distinct(SessionRecommendation.user_id)),
+        )
+        .join(User, col(User.id) == SessionRecommendation.user_id)
+        .where(col(SessionRecommendation.session_id).in_(session_ids))
+        .where(User.group == UserGroup.EXPERT)
+    )
     rows = session.exec(statement.group_by(col(SessionRecommendation.session_id))).all()
-    for session_id, rec_count, user_count in rows:
-        counts[session_id] = (int(rec_count), int(user_count))
+    for session_id, user_count in rows:
+        counts[session_id] = int(user_count)
     return counts
+
+
+def _latest_answer_subquery() -> Any:
+    return (
+        select(
+            col(AnswerEvent.surveys_session_id).label("session_id"),
+            AnswerEvent.question_id,
+            AnswerEvent.value,
+        )
+        .distinct(
+            col(AnswerEvent.surveys_session_id),
+            col(AnswerEvent.question_id),
+        )
+        .order_by(
+            col(AnswerEvent.surveys_session_id),
+            col(AnswerEvent.question_id),
+            col(AnswerEvent.created_at).desc(),
+            col(AnswerEvent.id).desc(),
+        )
+        .subquery()
+    )
+
+
+def _answered_question_count(latest: Any) -> Any:
+    value_json = cast(latest.c.value, JSONB)
+    value_type = func.jsonb_typeof(value_json)
+    # Stored answers are a bare JSON number. Wrapped {"value": ...} is also accepted.
+    scalar_text = case(
+        (value_type == "number", cast(value_json, Text)),
+        (value_type == "string", value_json.op("#>>")(literal_column("'{}'::text[]"))),
+        (value_type == "object", value_json["value"].astext),
+    )
+    return (
+        select(
+            latest.c.session_id.label("session_id"),
+            func.count().label("answered"),
+        )
+        .where(scalar_text.is_not(None))
+        .where(scalar_text != str(MISSING_ANSWER))
+        .group_by(latest.c.session_id)
+        .subquery()
+    )
+
+
+def answer_rate_subquery() -> Any:
+    """One row per session: rounded fill percent, or 0 when there are no questions."""
+    latest = _latest_answer_subquery()
+    answered = _answered_question_count(latest)
+    totals = (
+        select(
+            SurveyQuestion.survey_version_id,
+            func.count().label("total"),
+        )
+        .group_by(col(SurveyQuestion.survey_version_id))
+        .subquery()
+    )
+    total = func.coalesce(totals.c.total, 0)
+    rate = case(
+        (
+            total > 0,
+            func.round(func.coalesce(answered.c.answered, 0) * 100.0 / total),
+        ),
+        else_=0,
+    )
+    return (
+        select(
+            col(SurveySession.id).label("session_id"),
+            rate.label("rate"),
+        )
+        .outerjoin(
+            totals,
+            col(SurveySession.survey_version_id) == totals.c.survey_version_id,
+        )
+        .outerjoin(answered, col(SurveySession.id) == answered.c.session_id)
+        .subquery()
+    )
 
 
 def answer_rates(
@@ -414,9 +541,8 @@ def answer_rates(
 ) -> dict[uuid.UUID, int | None]:
     """Share of latest answers that are not the missing-answer marker.
 
-    Computed only for the given sessions (one list page). Sorting the
-    session list by this percent is deferred: it would aggregate
-    answer_events before LIMIT.
+    Computed only for the given sessions (one list page). The list filter
+    uses answer_rate_subquery so the threshold applies before LIMIT.
     """
     rates: dict[uuid.UUID, int | None] = dict.fromkeys(session_ids)
     if not session_ids:
@@ -497,7 +623,9 @@ def answer_rates(
 def list_catalog_recommendations(session: Session) -> list[Recommendation]:
     return list(
         session.exec(
-            select(Recommendation).order_by(
+            select(Recommendation)
+            .where(Recommendation.status == RecommendationStatus.ACTIVE)
+            .order_by(
                 col(Recommendation.name),
                 col(Recommendation.slug),
             )
@@ -525,6 +653,93 @@ def available_recommendations_for_user(
     ]
 
 
+class RecommendationChoice(TypedDict):
+    id: uuid.UUID
+    label: str
+
+
+def available_recommendation_choices(
+    session: Session,
+    *,
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> list[RecommendationChoice]:
+    labels = {
+        item["value"]: item["label"]
+        for item in dictionary_service.recommendation_category_options(session)
+    }
+    choices: list[RecommendationChoice] = [
+        {
+            "id": row.id,
+            "label": f"{labels.get(row.group, row.group)} - {row.name}",
+        }
+        for row in available_recommendations_for_user(
+            session, session_id=session_id, user_id=user_id
+        )
+    ]
+    choices.sort(key=lambda item: item["label"].casefold())
+    return choices
+
+
+def _recommendation_slug(name: str) -> str:
+    base = re.sub(r"[^\w]+", "-", name.strip().lower(), flags=re.UNICODE).strip("-_")
+    base = base[:60].strip("-_") or "recommendation"
+    return f"{base}-{uuid.uuid4().hex[:8]}"
+
+
+def create_session_recommendation(
+    session: Session,
+    *,
+    session_id: uuid.UUID,
+    current_user: User,
+    name: str,
+    description: str,
+    group: str,
+) -> SessionRecommendation:
+    get_accessible_session(session, session_id, current_user)
+    title = name.strip()
+    body = description.strip()
+    if not title or not body:
+        raise SessionRecommendationError("Название и описание обязательны")
+    chosen_group = group.strip()
+    allowed = {
+        item["value"]
+        for item in dictionary_service.recommendation_category_options(session)
+    }
+    if chosen_group not in allowed:
+        raise SessionRecommendationError("Неизвестная категория")
+    slug = _recommendation_slug(title)
+    for _ in range(4):
+        taken = session.exec(
+            select(Recommendation.id).where(Recommendation.slug == slug)
+        ).first()
+        if taken is None:
+            break
+        slug = _recommendation_slug(title)
+    else:
+        raise SessionRecommendationError("Не удалось сохранить рекомендацию")
+    catalog = Recommendation(
+        name=title, slug=slug, text="", description=body, group=chosen_group
+    )
+    session.add(catalog)
+    session.flush()
+    row = SessionRecommendation(
+        user_id=current_user.id,
+        session_id=session_id,
+        recomendation_id=catalog.id,
+        chart_number=MANUAL_CHART_NUMBER,
+        weight=MANUAL_WEIGHT,
+    )
+    session.add(row)
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise SessionRecommendationError("Не удалось сохранить рекомендацию") from exc
+    session.refresh(row)
+    return row
+
+
 def add_session_recommendation(
     session: Session,
     *,
@@ -537,7 +752,7 @@ def add_session_recommendation(
 ) -> SessionRecommendation:
     get_accessible_session(session, session_id, current_user)
     catalog = session.get(Recommendation, recomendation_id)
-    if catalog is None:
+    if catalog is None or catalog.status != RecommendationStatus.ACTIVE:
         raise SessionRecommendationError("Рекомендация не найдена")
     if chart_number < 0:
         raise SessionRecommendationError("Очередность не может быть отрицательной")
@@ -678,7 +893,7 @@ def group_recommendations(
             "id": item.id,
             "recommendation_name": catalog.name,
             "recommendation_slug": catalog.slug,
-            "recommendation_text": catalog.text,
+            "recommendation_description": catalog.description,
             "author_name": author.full_name or author.email,
             "user_id": item.user_id,
             "chart_number": item.chart_number,

@@ -6,11 +6,27 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
-from app.admin.deps import AdminUser, SessionDep, SuperUser
+from app.admin.deps import (
+    AdminUser,
+    CurrentUser,
+    RecommendationEditor,
+    SessionDep,
+    SuperUser,
+    can_edit_recommendations,
+    is_admin,
+)
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
-from app.models import Owner, Recommendation, RecommendationGroup, User, UserGroup
+from app.models import (
+    Owner,
+    Recommendation,
+    RecommendationStatus,
+    User,
+    UserGroup,
+)
+from app.models.recommendation import RECOMMENDATION_STATUS_LABELS
 from app.pagination import execute_page, page_window
 from app.services import catalog
+from app.services import dictionaries as dictionary_service
 from app.services import users as user_service
 
 router = APIRouter()
@@ -28,11 +44,13 @@ def _render_list(
     filters_sql: list[Any],
     columns: list[dict[str, str]],
     row_cells: Any,
-    filters: list[dict[str, str]],
+    filters: list[Any],
     filter_values: dict[str, str],
     row_href: Callable[[Any], str | None] | None = None,
+    row_class: Callable[[Any], str] | None = None,
     create_href: str | None = None,
     create_label: str | None = None,
+    link_key: str | None = None,
 ) -> Any:
     offset, limit, page = page_window(page, PAGE_SIZE)
     count_stmt = select(func.count()).select_from(model)
@@ -57,6 +75,7 @@ def _render_list(
             rows=[
                 {
                     "href": row_href(row) if row_href else None,
+                    "class": row_class(row) if row_class else "",
                     "cells": row_cells(row),
                 }
                 for row in rows
@@ -67,6 +86,7 @@ def _render_list(
             filter_values=filter_values,
             create_href=create_href,
             create_label=create_label,
+            link_key=link_key,
         ),
     )
 
@@ -98,11 +118,11 @@ def owners_page(
         statement=select(Owner).order_by(col(Owner.created_at).desc()),
         filters_sql=filters_sql,
         columns=[
-            {"key": "id", "label": "id"},
-            {"key": "name", "label": "name"},
-            {"key": "email", "label": "email"},
-            {"key": "phone", "label": "phone"},
-            {"key": "contact", "label": "contact"},
+            {"key": "id", "label": "Идентификатор"},
+            {"key": "name", "label": "Имя"},
+            {"key": "email", "label": "Эл. почта"},
+            {"key": "phone", "label": "Телефон"},
+            {"key": "contact", "label": "Контакт"},
         ],
         row_cells=lambda row: {
             "id": cell(row.id),
@@ -112,9 +132,9 @@ def owners_page(
             "contact": cell(row.contact),
         },
         filters=[
-            {"name": "name", "label": "name", "value": name},
-            {"name": "email", "label": "email", "value": email},
-            {"name": "phone", "label": "phone", "value": phone},
+            {"name": "name", "label": "Имя", "value": name},
+            {"name": "email", "label": "Эл. почта", "value": email},
+            {"name": "phone", "label": "Телефон", "value": phone},
         ],
         filter_values={"name": name, "email": email, "phone": phone},
     )
@@ -124,16 +144,58 @@ def owners_page(
 def recommendations_page(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: CurrentUser,
     page: int = 1,
-    name: str = "",
-    slug: str = "",
+    status: str = "",
+    group: str = "",
 ) -> Any:
     filters_sql: list[Any] = []
-    if name:
-        filters_sql.append(col(Recommendation.name).ilike(f"%{name}%"))
-    if slug:
-        filters_sql.append(col(Recommendation.slug).ilike(f"%{slug}%"))
+    can_edit = can_edit_recommendations(user)
+    visible_statuses = (
+        RecommendationStatus.DRAFT,
+        RecommendationStatus.ACTIVE,
+        RecommendationStatus.CANCELED,
+    )
+    chosen = status if status in {item.value for item in visible_statuses} else ""
+    categories = dictionary_service.recommendation_category_options(session)
+    category_labels = {item["value"]: item["label"] for item in categories}
+    chosen_group = group if group in category_labels else ""
+    if not can_edit:
+        filters_sql.append(Recommendation.status == RecommendationStatus.ACTIVE)
+    elif chosen:
+        filters_sql.append(Recommendation.status == RecommendationStatus(chosen))
+    if chosen_group:
+        filters_sql.append(Recommendation.group == chosen_group)
+    columns: list[dict[str, str]] = [
+        {"key": "group", "label": "Категория"},
+        {"key": "name", "label": "Название"},
+        {"key": "description", "label": "Описание"},
+    ]
+    if can_edit:
+        columns.append({"key": "status", "label": "Статус"})
+    category_filter: dict[str, Any] = {
+        "name": "group",
+        "type": "select",
+        "label": "Категория",
+        "value": chosen_group,
+        "options": [{"value": "", "label": "Все"}, *categories],
+    }
+    status_filter: dict[str, Any] = {
+        "name": "status",
+        "type": "select",
+        "label": "Статус",
+        "value": chosen,
+        "options": [
+            {"value": "", "label": "Все"},
+            *[
+                {
+                    "value": item.value,
+                    "label": RECOMMENDATION_STATUS_LABELS[item],
+                }
+                for item in visible_statuses
+            ],
+        ],
+    }
     return _render_list(
         request=request,
         session=session,
@@ -142,25 +204,25 @@ def recommendations_page(
         title="Рекомендации",
         model=Recommendation,
         statement=select(Recommendation).order_by(
-            col(Recommendation.slug), col(Recommendation.created_at)
+            col(Recommendation.name), col(Recommendation.created_at)
         ),
         filters_sql=filters_sql,
-        columns=[
-            {"key": "name", "label": "name"},
-            {"key": "description", "label": "description"},
-        ],
+        columns=columns,
         row_cells=lambda row: {
+            "group": cell(category_labels.get(row.group, row.group)),
             "name": cell(row.name),
             "description": cell(row.description),
+            "status": cell(RECOMMENDATION_STATUS_LABELS[row.status]),
         },
-        filters=[
-            {"name": "name", "label": "name", "value": name},
-            {"name": "slug", "label": "slug", "value": slug},
-        ],
-        filter_values={"name": name, "slug": slug},
+        row_class=lambda row: (
+            "recommendation-pending" if row.status == RecommendationStatus.DRAFT else ""
+        ),
+        filters=[category_filter, *([status_filter] if can_edit else [])],
+        filter_values={"group": chosen_group, "status": chosen},
         row_href=lambda row: f"/recommendations/{row.id}",
         create_href="/recommendations/new",
         create_label="Создать",
+        link_key="name",
     )
 
 
@@ -170,7 +232,8 @@ def _recommendation_form(
     slug: str = "",
     text: str = "",
     description: str = "",
-    group: str = RecommendationGroup.OTHER,
+    group: str = "",
+    status: str = "",
 ) -> dict[str, str]:
     return {
         "name": name,
@@ -178,6 +241,7 @@ def _recommendation_form(
         "text": text,
         "description": description,
         "group": group,
+        "status": status,
     }
 
 
@@ -188,17 +252,30 @@ def _recommendation_form_from_row(row: Recommendation) -> dict[str, str]:
         text=row.text,
         description=row.description or "",
         group=row.group,
+        status=RecommendationStatus(row.status).value,
     )
+
+
+def _recommendation_edit_mode(user: User, target: Recommendation | None) -> str:
+    if target is None:
+        return "create"
+    if is_admin(user):
+        return "full"
+    if user.group == UserGroup.MODERATOR:
+        return "moderate"
+    return "view"
 
 
 def _recommendation_form_response(
     request: Request,
+    session: SessionDep,
     user: User,
     *,
     form: dict[str, str],
     target: Recommendation | None = None,
     error: str | None = None,
     status_code: int = 200,
+    can_edit: bool | None = None,
 ) -> Any:
     return templates.TemplateResponse(
         request,
@@ -207,16 +284,32 @@ def _recommendation_form_response(
             "user": user,
             "target": target,
             "form": form,
-            "groups": [item.value for item in RecommendationGroup],
+            "groups": dictionary_service.recommendation_category_options(
+                session,
+                current=None if target is None else target.group,
+            ),
+            "statuses": [
+                {"value": item.value, "label": RECOMMENDATION_STATUS_LABELS[item]}
+                for item in RecommendationStatus
+            ],
             "error": error,
             "is_create": target is None,
+            "edit_mode": _recommendation_edit_mode(user, target),
+            "can_edit": (
+                can_edit_recommendations(user) if can_edit is None else can_edit
+            ),
         },
         status_code=status_code,
     )
 
 
 def _recommendation_fields(
-    name: str, slug: str, text: str, description: str, group: str
+    name: str,
+    slug: str,
+    text: str,
+    description: str,
+    group: str,
+    status: str = "",
 ) -> tuple[dict[str, str], str | None]:
     form = _recommendation_form(
         name=name,
@@ -224,45 +317,116 @@ def _recommendation_fields(
         text=text,
         description=description,
         group=group,
+        status=status,
     )
     if not name.strip() or not slug.strip() or not text.strip():
-        return form, "Название, slug и текст обязательны"
+        return form, "Название, код и текст обязательны"
     return form, None
 
 
+def _parse_recommendation_status(raw: str) -> RecommendationStatus | None:
+    try:
+        return RecommendationStatus(raw)
+    except ValueError:
+        return None
+
+
+def _accepted_category(
+    session: SessionDep, raw: str, *, current: str | None = None
+) -> str | None:
+    text = raw.strip()
+    if not text:
+        stored = "" if current is None else current.strip()
+        return stored or None
+    allowed = {
+        item["value"]
+        for item in dictionary_service.recommendation_category_options(session)
+    }
+    if current and current.strip():
+        allowed.add(current.strip())
+    return text if text in allowed else None
+
+
+def _create_status(user: User, raw: str) -> RecommendationStatus | None:
+    if user.group != UserGroup.MODERATOR:
+        return RecommendationStatus.DRAFT
+    if not raw.strip():
+        return RecommendationStatus.DRAFT
+    return _parse_recommendation_status(raw)
+
+
 @router.get("/recommendations/new")
-def recommendation_new(request: Request, user: AdminUser) -> Any:
-    return _recommendation_form_response(request, user, form=_recommendation_form())
+def recommendation_new(request: Request, session: SessionDep, user: CurrentUser) -> Any:
+    options = dictionary_service.recommendation_category_options(session)
+    return _recommendation_form_response(
+        request,
+        session,
+        user,
+        form=_recommendation_form(
+            group=options[0]["value"] if options else "",
+            status=RecommendationStatus.DRAFT.value,
+        ),
+    )
 
 
 @router.post("/recommendations/new")
 def recommendation_create(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: CurrentUser,
     name: str = Form(""),
-    slug: str = Form(""),
-    text: str = Form(""),
     description: str = Form(""),
-    group: str = Form(RecommendationGroup.OTHER),
+    group: str = Form(""),
+    status: str = Form(""),
 ) -> Any:
-    form, error = _recommendation_fields(name, slug, text, description, group)
-    if error:
+    chosen = _create_status(user, status)
+    form = _recommendation_form(
+        name=name,
+        description=description,
+        group=group.strip(),
+        status=(chosen or RecommendationStatus.DRAFT).value,
+    )
+    if chosen is None:
         return _recommendation_form_response(
-            request, user, form=form, error=error, status_code=400
+            request,
+            session,
+            user,
+            form=form,
+            error="Неизвестный статус",
+            status_code=400,
+        )
+    if not name.strip() or not description.strip():
+        return _recommendation_form_response(
+            request,
+            session,
+            user,
+            form=form,
+            error="Название и описание обязательны",
+            status_code=400,
+        )
+    chosen_group = _accepted_category(session, group)
+    if chosen_group is None:
+        return _recommendation_form_response(
+            request,
+            session,
+            user,
+            form=form,
+            error="Неизвестная категория",
+            status_code=400,
         )
     try:
         created = catalog.create_recommendation(
             session,
             name=name.strip(),
-            slug=slug.strip(),
-            text=text.strip(),
-            description=description.strip() or None,
-            group=RecommendationGroup(group),
+            slug=catalog.unique_recommendation_slug(session, name),
+            text="",
+            description=description.strip(),
+            group=chosen_group,
+            status=chosen,
         )
     except (catalog.CatalogUpdateError, ValueError) as exc:
         return _recommendation_form_response(
-            request, user, form=form, error=str(exc), status_code=400
+            request, session, user, form=form, error=str(exc), status_code=400
         )
     return RedirectResponse(f"/recommendations/{created.id}", status_code=303)
 
@@ -271,15 +435,24 @@ def recommendation_create(
 def recommendation_detail(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: CurrentUser,
     recommendation_id: uuid.UUID,
 ) -> Any:
     try:
         target = catalog.get_recommendation(session, recommendation_id)
     except catalog.CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not can_edit_recommendations(user) and target.status not in (
+        RecommendationStatus.ACTIVE,
+        RecommendationStatus.DRAFT,
+    ):
+        raise HTTPException(status_code=404, detail="Recommendation not found")
     return _recommendation_form_response(
-        request, user, form=_recommendation_form_from_row(target), target=target
+        request,
+        session,
+        user,
+        form=_recommendation_form_from_row(target),
+        target=target,
     )
 
 
@@ -287,37 +460,114 @@ def recommendation_detail(
 def recommendation_update(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: RecommendationEditor,
     recommendation_id: uuid.UUID,
     name: str = Form(""),
     slug: str = Form(""),
     text: str = Form(""),
     description: str = Form(""),
-    group: str = Form(RecommendationGroup.OTHER),
+    group: str = Form(""),
+    status: str = Form(""),
 ) -> Any:
     try:
         target = catalog.get_recommendation(session, recommendation_id)
     except catalog.CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    form, error = _recommendation_fields(name, slug, text, description, group)
-    if error:
-        return _recommendation_form_response(
-            request, user, form=form, target=target, error=error, status_code=400
+    moderate = not is_admin(user)
+    if moderate:
+        form = _recommendation_form_from_row(target)
+        form["description"] = description
+        form["group"] = group
+        form["status"] = status
+        parsed_status = _parse_recommendation_status(status)
+        if parsed_status is None:
+            return _recommendation_form_response(
+                request,
+                session,
+                user,
+                form=form,
+                target=target,
+                error="Неизвестный статус",
+                status_code=400,
+            )
+        saved_name = target.name
+        saved_slug = target.slug
+        saved_text = target.text
+        saved_description = description.strip() or None
+        chosen_group = _accepted_category(session, group, current=target.group)
+        if chosen_group is None:
+            return _recommendation_form_response(
+                request,
+                session,
+                user,
+                form=form,
+                target=target,
+                error="Неизвестная категория",
+                status_code=400,
+            )
+        saved_group = chosen_group
+    else:
+        form, error = _recommendation_fields(
+            name, slug, text, description, group, status
         )
+        if error:
+            return _recommendation_form_response(
+                request,
+                session,
+                user,
+                form=form,
+                target=target,
+                error=error,
+                status_code=400,
+            )
+        parsed_status = (
+            RecommendationStatus(target.status)
+            if not status.strip()
+            else _parse_recommendation_status(status)
+        )
+        if parsed_status is None:
+            return _recommendation_form_response(
+                request,
+                session,
+                user,
+                form=form,
+                target=target,
+                error="Неизвестный статус",
+                status_code=400,
+            )
+        saved_name = name.strip()
+        saved_slug = slug.strip()
+        saved_text = text.strip()
+        saved_description = description.strip() or None
+        chosen_group = _accepted_category(session, group, current=target.group)
+        if chosen_group is None:
+            return _recommendation_form_response(
+                request,
+                session,
+                user,
+                form=form,
+                target=target,
+                error="Неизвестная категория",
+                status_code=400,
+            )
+        saved_group = chosen_group
     try:
         catalog.update_recommendation(
             session,
             recommendation_id,
-            name=name.strip(),
-            slug=slug.strip(),
-            text=text.strip(),
-            description=description.strip() or None,
-            group=RecommendationGroup(group),
+            name=saved_name,
+            slug=saved_slug,
+            text=saved_text,
+            description=saved_description,
+            group=saved_group,
+            status=parsed_status,
+            text_and_status_only=moderate,
         )
     except (catalog.CatalogUpdateError, ValueError) as exc:
         session.rollback()
         return _recommendation_form_response(
             request,
+            session,
             user,
             form=form,
             target=target,
@@ -351,24 +601,24 @@ def users_page(
         statement=select(User).order_by(col(User.created_at).desc()),
         filters_sql=filters_sql,
         columns=[
-            {"key": "email", "label": "email"},
-            {"key": "full_name", "label": "full_name"},
-            {"key": "group", "label": "group"},
-            {"key": "is_superuser", "label": "is_superuser"},
-            {"key": "is_active", "label": "is_active"},
+            {"key": "email", "label": "Эл. почта"},
+            {"key": "full_name", "label": "Имя"},
+            {"key": "group", "label": "Группа"},
+            {"key": "is_superuser", "label": "Суперпользователь", "type": "checkbox"},
+            {"key": "is_active", "label": "Активен", "type": "checkbox"},
         ],
         row_cells=lambda row: {
             "email": cell(row.email),
             "full_name": cell(row.full_name),
             "group": cell(row.group),
-            "is_superuser": cell(row.is_superuser),
-            "is_active": cell(row.is_active),
+            "is_superuser": row.is_superuser,
+            "is_active": row.is_active,
         },
         filters=[
-            {"name": "email", "label": "email", "value": email},
+            {"name": "email", "label": "Эл. почта", "value": email},
             {
                 "name": "full_name",
-                "label": "full_name",
+                "label": "Имя",
                 "value": full_name,
             },
         ],
@@ -473,7 +723,7 @@ def user_create(
             request,
             user,
             form=form,
-            error="Только superuser может назначать флаг superuser",
+            error="Только суперпользователь может назначать флаг суперпользователя",
             status_code=403,
         )
     try:
@@ -550,7 +800,7 @@ def user_update(
             user,
             form=form,
             target=target,
-            error="Только superuser может назначать флаг superuser",
+            error="Только суперпользователь может назначать флаг суперпользователя",
             status_code=403,
         )
     try:

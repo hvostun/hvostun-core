@@ -11,7 +11,12 @@ from app.pagination import DEFAULT_PAGE_SIZE, page_count
 
 
 def _template_context(request: Request) -> dict[str, Any]:
-    return {"csrf_token": getattr(request.state, "csrf_token", "")}
+    return {
+        "csrf_token": getattr(request.state, "csrf_token", ""),
+        "pending_recommendation_count": getattr(
+            request.state, "pending_recommendation_count", 0
+        ),
+    }
 
 
 templates = Jinja2Templates(
@@ -42,6 +47,7 @@ def list_context(
     filter_values: dict[str, str],
     create_href: str | None = None,
     create_label: str | None = None,
+    link_key: str | None = None,
 ) -> dict[str, Any]:
     return {
         "request": request,
@@ -56,4 +62,5 @@ def list_context(
         "filter_qs": filter_qs(filter_values),
         "create_href": create_href,
         "create_label": create_label,
+        "link_key": link_key,
     }

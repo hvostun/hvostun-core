@@ -30,9 +30,9 @@
     <textarea class="form-control" id="description" name="description" rows="3">{{ form_description }}</textarea>
   </div>
   <div class="mb-3">
-    <label class="form-label" for="config">config (JSON)</label>
+    <label class="form-label" for="config">Конфигурация (JSON)</label>
     <textarea class="form-control font-monospace" id="config" name="config" rows="10">{{ config_text }}</textarea>
-    <div class="form-text">Объект с полями min_value, max_value, legend.</div>
+    <div class="form-text">JSON-объект с ключами min_value (минимум), max_value (максимум) и legend (легенда).</div>
   </div>
   <button class="btn btn-primary" type="submit">Сохранить</button>
 </form>
@@ -42,7 +42,7 @@
   <dd class="col-sm-10">{{ scale.type }}</dd>
   <dt class="col-sm-2">Описание</dt>
   <dd class="col-sm-10">{{ scale.description or "—" }}</dd>
-  <dt class="col-sm-2">config</dt>
+  <dt class="col-sm-2">Конфигурация</dt>
   <dd class="col-sm-10">
     {% if config_text %}
     <pre class="bg-white border rounded p-2 small mb-0">{{ config_text }}</pre>
@@ -51,6 +51,6 @@
     {% endif %}
   </dd>
 </dl>
-<p class="text-muted">Редактирование доступно группе admin.</p>
+<p class="text-muted">Редактирование доступно администраторам.</p>
 {% endif %}
 {% endblock %}

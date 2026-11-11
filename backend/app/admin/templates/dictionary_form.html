@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{% if is_create %}Новый справочник{% else %}{{ key }} — Справочники{% endif %}{% endblock %}
+{% block content %}
+<p><a href="/dictionaries">← Справочники</a></p>
+<h1 class="h3">{% if is_create %}Новый справочник{% else %}{{ key }}{% endif %}</h1>
+{% if error %}
+<div class="alert alert-danger" role="alert">{{ error }}</div>
+{% endif %}
+<form method="post" action="{% if is_create %}/dictionaries/new{% else %}/dictionaries/{{ key }}{% endif %}" class="mt-3">
+  {% include "csrf.html" %}
+  {% if is_create %}
+  <div class="mb-3">
+    <label class="form-label" for="key">Ключ</label>
+    <input
+      class="form-control font-monospace"
+      id="key"
+      name="key"
+      required
+      maxlength="255"
+      value="{{ key }}"
+      placeholder="namespace::name"
+    />
+    <div class="form-text">Например: gigachat::models</div>
+  </div>
+  {% endif %}
+  <div class="mb-3">
+    <label class="form-label" for="value">Значение (JSON)</label>
+    <textarea class="form-control font-monospace" id="value" name="value" rows="16" required>{{ value_text }}</textarea>
+  </div>
+  <button class="btn btn-primary" type="submit">{% if is_create %}Создать{% else %}Сохранить{% endif %}</button>
+</form>
+{% endblock %}

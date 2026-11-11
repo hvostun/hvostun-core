@@ -81,7 +81,7 @@ def test_answer_progress_maps_scale_and_skips_missing(db: Session) -> None:
     config = {"min_value": 0, "max_value": 4}
     bar = answer_progress(db, {"value": 3}, config, "Excitability")
     assert bar["show_bar"] is True
-    assert bar["percent"] == 67
+    assert bar["percent"] == 70
     assert bar["color"] == "var(--bs-orange)"
     missing = answer_progress(db, {"value": -999}, config, "Aggression")
     assert missing["show_bar"] is False

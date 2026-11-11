@@ -11,6 +11,7 @@ from app.core import security
 from app.core.config import settings
 from app.core.deps import SessionDep as SessionDep
 from app.models import User, UserGroup
+from app.services import catalog
 
 COOKIE_NAME = "admin_access_token"
 CSRF_COOKIE_NAME = "admin_csrf"
@@ -43,6 +44,10 @@ def get_current_user(request: Request, session: SessionDep) -> User:
             status_code=status.HTTP_303_SEE_OTHER,
             headers={"Location": "/login"},
         )
+    if user.group == UserGroup.MODERATOR:
+        request.state.pending_recommendation_count = catalog.draft_recommendation_count(
+            session
+        )
     return user
 
 
@@ -53,6 +58,10 @@ def is_admin(user: User) -> bool:
     return user.is_superuser or user.group == UserGroup.ADMIN
 
 
+def can_edit_recommendations(user: User) -> bool:
+    return is_admin(user) or user.group == UserGroup.MODERATOR
+
+
 def get_current_admin(current_user: CurrentUser) -> User:
     if not is_admin(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
@@ -60,6 +69,15 @@ def get_current_admin(current_user: CurrentUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(get_current_admin)]
+
+
+def get_recommendation_editor(current_user: CurrentUser) -> User:
+    if not can_edit_recommendations(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return current_user
+
+
+RecommendationEditor = Annotated[User, Depends(get_recommendation_editor)]
 
 
 def get_current_superuser(current_user: CurrentUser) -> User:

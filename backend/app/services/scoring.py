@@ -7,6 +7,8 @@ from app.services import dictionaries as dictionary_service
 from app.services.sessions import (
     DEFAULT_SCALE_MAX,
     DEFAULT_SCALE_MIN,
+    EXPERT_SCALE,
+    EXPERT_SCALE_MAX,
     SessionAnswer,
     answer_scalar,
     group_label,
@@ -15,7 +17,7 @@ from app.services.sessions import (
 CBARQ_SHORT_KEY = "c-barq-short-42"
 OTHER_GROUP = "other"
 # Sections at or above this score start open. Not a scoring threshold.
-DOMAIN_OPEN_SCORE = 2
+DOMAIN_OPEN_SCORE = 5
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,7 @@ class ScoredPoint:
     answer: SessionAnswer
     raw: int | None
     scored: int | None
+    points: int | None
     reversed: bool
 
 
@@ -109,6 +112,7 @@ def _point(answer: SessionAnswer, *, reverse: bool) -> ScoredPoint:
         answer=answer,
         raw=raw,
         scored=scored,
+        points=None if scored is None else EXPERT_SCALE[scored],
         reversed=reverse,
     )
 
@@ -120,7 +124,7 @@ def _domain_score(
         _point(answer, reverse=answer.link.order_num in consts.reverse)
         for answer in answers
     )
-    counted = [point.scored for point in points if point.scored is not None]
+    counted = [point.points for point in points if point.points is not None]
     answered = len(counted)
     total = len(points)
     score: float | None = None
@@ -164,11 +168,7 @@ def score_session(
 
 
 def _bar_percent(score: float) -> int:
-    span = DEFAULT_SCALE_MAX - DEFAULT_SCALE_MIN
-    if span <= 0:
-        return 0
-    percent = (score - DEFAULT_SCALE_MIN) / span * 100
-    return max(0, min(100, round(percent)))
+    return max(0, min(100, round(score / EXPERT_SCALE_MAX * 100)))
 
 
 def answer_row(
@@ -189,9 +189,10 @@ def answer_row(
 
 
 def _point_note(point: ScoredPoint) -> str:
-    if point.reversed and point.scored is not None:
-        return f"в балл: {DEFAULT_SCALE_MAX} − x = {point.scored}"
-    return ""
+    if not point.reversed or point.raw is None or point.points is None:
+        return ""
+    answer = EXPERT_SCALE[point.raw]
+    return f"обратный пункт: в балл {EXPERT_SCALE_MAX} − {answer} = {point.points}"
 
 
 def _point_rows(
@@ -208,9 +209,7 @@ def scoring_view(session: Session, scoring: DomainScoring) -> dict[str, Any]:
             {
                 "key": domain.key,
                 "label": group_label(session, domain.key),
-                "score_label": (
-                    "—" if domain.score is None else f"{(domain.score / 4 * 10):.2f}"
-                ),
+                "score_label": ("—" if domain.score is None else f"{domain.score:.2f}"),
                 "answered": domain.answered,
                 "total": domain.total,
                 "low_answers": domain.score is None,

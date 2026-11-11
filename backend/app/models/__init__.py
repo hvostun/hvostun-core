@@ -43,9 +43,9 @@ from app.models.questionnairy import (
 )
 from app.models.recommendation import (
     Recommendation,
-    RecommendationGroup,
     RecommendationPublic,
     RecommendationsPublic,
+    RecommendationStatus,
     SessionRecommendation,
     SessionRecommendationItemPublic,
     SessionRecommendationItemsPublic,
@@ -103,8 +103,8 @@ __all__ = [
     "SessionAnswerPublic",
     "SessionAnswersPublic",
     "Recommendation",
-    "RecommendationGroup",
     "RecommendationPublic",
+    "RecommendationStatus",
     "RecommendationsPublic",
     "SessionRecommendation",
     "SessionRecommendationItemPublic",

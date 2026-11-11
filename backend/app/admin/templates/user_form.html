@@ -9,7 +9,7 @@
 <form method="post" action="{% if is_create %}/users/new{% else %}/users/{{ target.id }}{% endif %}" class="mt-3">
   {% include "csrf.html" %}
   <div class="mb-3">
-    <label class="form-label" for="email">Email</label>
+    <label class="form-label" for="email">Эл. почта</label>
     <input class="form-control" id="email" name="email" type="email" required value="{{ form.email }}" />
   </div>
   <div class="mb-3">
@@ -57,7 +57,7 @@
     </div>
     {% if can_manage_superusers %}
     <div class="col-md-6 mb-3">
-      <label class="form-label" for="is_superuser">Superuser</label>
+      <label class="form-label" for="is_superuser">Суперпользователь</label>
       <select class="form-select" id="is_superuser" name="is_superuser">
         <option value="true" {% if form.is_superuser == "true" %}selected{% endif %}>да</option>
         <option value="false" {% if form.is_superuser == "false" %}selected{% endif %}>нет</option>
@@ -71,9 +71,9 @@
 </form>
 {% if target %}
 <dl class="row mt-4 text-muted">
-  <dt class="col-sm-3">created_at</dt>
+  <dt class="col-sm-3">Создано</dt>
   <dd class="col-sm-9">{{ target.created_at or "—" }}</dd>
-  <dt class="col-sm-3">updated_at</dt>
+  <dt class="col-sm-3">Изменено</dt>
   <dd class="col-sm-9">{{ target.updated_at or "—" }}</dd>
 </dl>
 {% endif %}
