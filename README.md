@@ -34,9 +34,12 @@ hvostun-core/
 | `db` | PostgreSQL 18 — OLTP `hvostun_{FASTAPI_ENV}` (local: `hvostun_development`) |
 | `backend` | FastAPI: HTML-админка + `GET /health` |
 | `db-ui` / `proxy` / `mailpit` | вспомогательные local-сервисы; `db-ui` — образ Adminer, не продуктовая админка |
+| `rag` | локально: FastAPI RAG (`/query`, `/health`), собирается из `rag/`, требует `rag/env.local`; наружу не публикуется |
 | `redis` / `jupyter` / `worker` | позже, в Compose сейчас нет |
 
 Проверка стека: скопировать `.env.example` → `.env`, затем `docker compose up -d db backend`.
+
+RAG (опционально, нужен `rag/env.local` с ключами): `docker compose up -d --build rag`, проверка `docker compose exec rag python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health').read())"`.
 
 ## Стек
 

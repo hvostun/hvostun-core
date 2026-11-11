@@ -28,13 +28,15 @@ if bundled.exists():
     shutil.rmtree(bundled)
 PY
 
-# The pinned amd64 base ships apt 3.0.3 (CVE-2026-109518) and
-# libpcre2 10.46-1~deb13u2 (CVE-2026-103111). libpq5 needs libpcre2.
-# `apt-get upgrade` refreshes every installed Debian package.
-# CI caches this layer until the instruction or the base digest changes,
-# so a new advisory needs a touch here or a base bump.
-# Do not install psycopg-binary: its wheel vendors libpcre2 10.32.
-RUN apt-get update \
+# The pinned base ships apt 3.0.3 (CVE-2026-109518, fixed in 3.0.4) and
+# may ship libpcre2 10.46-1~deb13u2 (CVE-2026-103111, fixed in
+# 10.46-1~deb13u3). libpq5 needs libpcre2.
+# `apt-get upgrade` pulls the Debian security updates. The date inside
+# this RUN is the CI layer cache key (type=gha): bump it when a new
+# advisory needs a fresh upgrade. Do not install psycopg-binary: its
+# wheel vendors libpcre2 10.32.
+RUN : 'security refresh 2026-11-11' \
+ && apt-get update \
  && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends libpq5 \
  && rm -rf /var/lib/apt/lists/*
