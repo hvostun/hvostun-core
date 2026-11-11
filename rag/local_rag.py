@@ -14,72 +14,62 @@ Two phases, run separately so the knowledge base persists on disk:
 Reuses the LM Studio LLM/embedding functions from lmstudio_ex.py.
 """
 
+import asyncio
+import json
 import os
 import sys
-import asyncio
 
-from openai import OpenAI
-from lightrag.llm.openai import openai_complete_if_cache, openai_embed
-
-from typing import List, Dict, Optional
-
-from raganything import RAGAnything, RAGAnythingConfig
-from lightrag.utils import EmbeddingFunc
-
-import requests , json 
+import numpy as np
+import requests
 from dotenv import load_dotenv
-from pathlib import Path
-
+from lightrag.llm.openai import openai_complete_if_cache
+from openai import (
+    OpenAI,
+    RateLimitError,  # Убедитесь, что импорт корректен
+)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 from utils import build_rag
 
-import numpy as np 
-
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from openai import RateLimitError # Убедитесь, что импорт корректен 
-
-
-
-TOKEN = None 
+TOKEN = None
 GLOBAL_COUNTER = 0
-load_dotenv('env.local')
+load_dotenv("env.local")
 
 AUTH_URL = os.environ["AUTH_URL"]
-CHAT_URL = os.environ["CHAT_URL"] 
+CHAT_URL = os.environ["CHAT_URL"]
 RqUID = os.environ["RqUID"]
 ATOKEN = os.environ["ATOKEN"]
-CHAT_MODEL = os.environ["CHAT_MODEL"] 
+CHAT_MODEL = os.environ["CHAT_MODEL"]
 
 EMBED_URL = os.environ["EMBED_URL"]
 EMBED_KEY = os.environ["EMBED_TOKEN"]
 EMBED_MODEL = os.environ["EMBED_MODEL"]
 EMBED_DIM = int(os.environ["EMBED_DIM"])
 
-WORKING_DIR = os.environ["WORKING_DIR"] 
-OUTPUT_DIR = os.environ["OUTPUT_DIR"] 
+WORKING_DIR = os.environ["WORKING_DIR"]
+OUTPUT_DIR = os.environ["OUTPUT_DIR"]
 
 
-async def embedding_func(texts: List[str]):
-    client = OpenAI(
-        api_key=EMBED_KEY,
-        base_url=EMBED_URL
-    )
-    response = client.embeddings.create(
-        model=EMBED_MODEL,
-        input=texts
-    )
+async def embedding_func(texts: list[str]):
+    client = OpenAI(api_key=EMBED_KEY, base_url=EMBED_URL)
+    response = client.embeddings.create(model=EMBED_MODEL, input=texts)
     return np.array([d.embedding for d in response.data])
 
 
 @retry(
     retry=retry_if_exception_type(RateLimitError),
     stop=stop_after_attempt(5),  # Максимум 5 попыток
-    wait=wait_exponential(multiplier=1, min=4, max=15), # Экспоненциальная задержка
-    reraise=True
+    wait=wait_exponential(multiplier=1, min=4, max=15),  # Экспоненциальная задержка
+    reraise=True,
 )
 async def llm_model_func(
     prompt: str,
-    system_prompt: Optional[str] = None,
-    history_messages: List[Dict] = None,
+    system_prompt: str | None = None,
+    history_messages: list[dict] = None,
     **kwargs,
 ) -> str:
     global GLOBAL_COUNTER
@@ -103,20 +93,20 @@ def auth():
     global TOKEN
     global GLOBAL_COUNTER
     GLOBAL_COUNTER = 0
-    payload={'scope': 'GIGACHAT_API_PERS'}
+    payload = {"scope": "GIGACHAT_API_PERS"}
     headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
-        'RqUID': RqUID,
-        'Authorization': f'Basic {ATOKEN}'
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json",
+        "RqUID": RqUID,
+        "Authorization": f"Basic {ATOKEN}",
     }
     response = requests.request("POST", AUTH_URL, headers=headers, data=payload)
     payload = json.loads(response.text)
-    print(payload['expires_at'])
-    TOKEN = payload['access_token']
-    
-    headers = {'Accept': 'application/json', 'Authorization': f"Bearer {TOKEN}"}
-    response = requests.request("GET", CHAT_URL + '/models', headers=headers, data={})
+    print(payload["expires_at"])
+    TOKEN = payload["access_token"]
+
+    headers = {"Accept": "application/json", "Authorization": f"Bearer {TOKEN}"}
+    response = requests.request("GET", CHAT_URL + "/models", headers=headers, data={})
     print(json.loads(response.text))
 
 
@@ -136,7 +126,8 @@ async def build(pdf_path: str) -> None:
         )
     finally:
         await rag.finalize_storages()
-    print(f"✅ Storage built. Now query it with:\n   python {sys.argv[0]} query \"...\"")
+    print(f'✅ Storage built. Now query it with:\n   python {sys.argv[0]} query "..."')
+
 
 async def query(question: str, mode: str) -> None:
     if not os.path.isdir(WORKING_DIR):
@@ -152,8 +143,6 @@ async def query(question: str, mode: str) -> None:
     print(f"\n{answer}")
 
 
-
-
 def main() -> None:
     args = sys.argv[1:]
     if not args:
@@ -161,7 +150,7 @@ def main() -> None:
         sys.exit(1)
 
     auth()
-    GLOBAL_COUNTER 
+    GLOBAL_COUNTER
 
     command = args[0]
     if command == "build" or command == "b":
@@ -172,13 +161,12 @@ def main() -> None:
 
     elif command == "query" or command == "q":
         if len(args) < 2:
-            print("Usage: python local_rag.py query \"<question>\" [mode]")
+            print('Usage: python local_rag.py query "<question>" [mode]')
             sys.exit(1)
         asyncio.run(query(args[1], args[2] if len(args) > 2 else "hybrid"))
     else:
         print(__doc__)
         sys.exit(1)
-
 
 
 if __name__ == "__main__":

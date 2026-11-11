@@ -10,12 +10,11 @@ pip install fastapi uvicorn
 python rag_server.py            # http://127.0.0.1:8000
 ```
 
-How the extra params map (this is the important part): 
-- LightRAG has no per-query generation params — aquery kwargs go to QueryParam, which has no temperature/max_tokens. 
+How the extra params map (this is the important part):
+- LightRAG has no per-query generation params — aquery kwargs go to QueryParam, which has no temperature/max_tokens.
 - So system_prompt is passed straight to aquery, while temperature/max_tokens are applied by rebuilding LightRAG's query role via update_llm_role_config("query", model_kwargs=...) (pdf_rag_server.py:77), only when they change. top_k/chunk_top_k are retrieval breadth, not sampling.
 
 
 `/build` does not call finalize_storages() (that shuts down the LLM queues/storages and would break later queries); it's only called at shutdown.
 
 Skipped: no streaming, auth, or per-request model/role switching (LightRAG rebuilds that wrapper, so it's not free). Couldn't run it — fastapi/uvicorn aren't installed in this env, and I couldn't exercise a live LM Studio; run it in your project venv to verify.
-

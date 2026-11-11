@@ -28,50 +28,42 @@ Query body fields:
     user_prompt          extra instructions for the LLM
 """
 
-import os
 import json
+import os
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any
 
+import numpy as np
+import requests
+import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from lightrag.llm.openai import openai_complete_if_cache
+from openai import (
+    OpenAI,  # Убедитесь, что импорт корректен
+    RateLimitError,  # Убедитесь, что импорт корректен
+)
+from pydantic import BaseModel
 
 # RAG-Anything imports
-from raganything import RAGAnything, RAGAnythingConfig
-from lightrag.utils import EmbeddingFunc
-from lightrag.llm.openai import openai_complete_if_cache, openai_embed
-
-
-import uvicorn
-
-import requests
-
-import shutil
-import uuid
-from pathlib import Path
-
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from openai import RateLimitError # Убедитесь, что импорт корректен
-
-
-from fastapi import FastAPI, File, HTTPException, UploadFile
-
-from dotenv import load_dotenv
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 from utils import build_rag
-import numpy as np
-from openai import OpenAI, RateLimitError # Убедитесь, что импорт корректен
-
 
 TOKEN = None
 GLOBAL_COUNTER = 0
 
-load_dotenv('env.local')
+load_dotenv("env.local")
 
 AUTH_URL = os.environ["AUTH_URL"]
-CHAT_URL = os.environ["CHAT_URL"] 
+CHAT_URL = os.environ["CHAT_URL"]
 RqUID = os.environ["RqUID"]
 ATOKEN = os.environ["ATOKEN"]
-CHAT_MODEL = os.environ["CHAT_MODEL"] 
+CHAT_MODEL = os.environ["CHAT_MODEL"]
 
 
 EMBED_URL = os.environ["EMBED_URL"]
@@ -79,32 +71,26 @@ EMBED_KEY = os.environ["EMBED_TOKEN"]
 EMBED_MODEL = os.environ["EMBED_MODEL"]
 EMBED_DIM = int(os.environ["EMBED_DIM"])
 
-WORKING_DIR = os.environ["WORKING_DIR"] 
-OUTPUT_DIR = os.environ["OUTPUT_DIR"] 
+WORKING_DIR = os.environ["WORKING_DIR"]
+OUTPUT_DIR = os.environ["OUTPUT_DIR"]
 
 
-async def embedding_func(texts: List[str]):
-    client = OpenAI(
-        api_key=EMBED_KEY,
-        base_url=EMBED_URL
-    )
-    response = client.embeddings.create(
-        model=EMBED_MODEL,
-        input=texts
-    )
+async def embedding_func(texts: list[str]):
+    client = OpenAI(api_key=EMBED_KEY, base_url=EMBED_URL)
+    response = client.embeddings.create(model=EMBED_MODEL, input=texts)
     return np.array([d.embedding for d in response.data])
 
 
 @retry(
     retry=retry_if_exception_type(RateLimitError),
     stop=stop_after_attempt(5),  # Максимум 5 попыток
-    wait=wait_exponential(multiplier=1, min=4, max=15), # Экспоненциальная задержка
-    reraise=True
+    wait=wait_exponential(multiplier=1, min=4, max=15),  # Экспоненциальная задержка
+    reraise=True,
 )
 async def llm_model_func(
     prompt: str,
-    system_prompt: Optional[str] = None,
-    history_messages: List[Dict] = None,
+    system_prompt: str | None = None,
+    history_messages: list[dict] = None,
     **kwargs,
 ) -> str:
     global GLOBAL_COUNTER
@@ -116,7 +102,7 @@ async def llm_model_func(
     kwargs.pop("response_format", None)
     kwargs.pop("keyword_extraction", None)
     # fuckin madness......
-    
+
     # kwargs.pop("response_format", None)
     # 1. Достаём response_format из kwargs (если он есть)
     # response_format = kwargs.get("response_format")
@@ -173,7 +159,7 @@ async def llm_model_func(
     )
 
 
-state: Dict[str, Any] = {"rag": None, "gen_kwargs": {}}
+state: dict[str, Any] = {"rag": None, "gen_kwargs": {}}
 
 
 @asynccontextmanager
@@ -195,15 +181,15 @@ app = FastAPI(title="LM Studio PDF RAG", lifespan=lifespan)
 class QueryRequest(BaseModel):
     query: str
     mode: str = "hybrid"
-    system_prompt: Optional[str] = None
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-    top_k: Optional[int] = None
-    chunk_top_k: Optional[int] = None
+    system_prompt: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    top_k: int | None = None
+    chunk_top_k: int | None = None
     only_need_context: bool = False
-    response_type: Optional[str] = None
-    conversation_history: Optional[List[Dict[str, Any]]] = None
-    user_prompt: Optional[str] = None
+    response_type: str | None = None
+    conversation_history: list[dict[str, Any]] | None = None
+    user_prompt: str | None = None
 
 
 def _apply_generation_kwargs(rag, temperature, max_tokens):
@@ -225,7 +211,9 @@ def _apply_generation_kwargs(rag, temperature, max_tokens):
     # rag.lightrag.role_llm_kwargs.get("query")
     # merged = dict(rag.lightrag._get_effective_role_llm_kwargs("query") or rag.lightrag.llm_model_kwargs or {})
     merged.update(gen)
-    rag.lightrag.aupdate_llm_role_config("query", provider_options={"temperature": temperature, "max_tokens": max_tokens})
+    rag.lightrag.aupdate_llm_role_config(
+        "query", provider_options={"temperature": temperature, "max_tokens": max_tokens}
+    )
     # rag.lightrag.update_llm_role_config("query", model_kwargs=merged)
     state["gen_kwargs"] = gen
 
@@ -240,7 +228,7 @@ async def health():
         "embedding_model": EMBED_MODEL,
         "embedding_dim": EMBED_DIM,
         "CHAT_URL": CHAT_URL,
-        "EMBED_URL": EMBED_URL, 
+        "EMBED_URL": EMBED_URL,
     }
 
 
@@ -248,34 +236,34 @@ def auth():
     global TOKEN
     global GLOBAL_COUNTER
     GLOBAL_COUNTER = 0
-    payload={'scope': 'GIGACHAT_API_PERS'}
+    payload = {"scope": "GIGACHAT_API_PERS"}
     headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
-        'RqUID': RqUID,
-        'Authorization': f'Basic {ATOKEN}'
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json",
+        "RqUID": RqUID,
+        "Authorization": f"Basic {ATOKEN}",
     }
     response = requests.request("POST", AUTH_URL, headers=headers, data=payload)
     payload = json.loads(response.text)
-    print(payload['expires_at'])
-    TOKEN = payload['access_token']
-    headers = {'Accept': 'application/json', 'Authorization': f"Bearer {TOKEN}"}
-    response = requests.request("GET", CHAT_URL + '/models', headers=headers, data={})
+    print(payload["expires_at"])
+    TOKEN = payload["access_token"]
+    headers = {"Accept": "application/json", "Authorization": f"Bearer {TOKEN}"}
+    response = requests.request("GET", CHAT_URL + "/models", headers=headers, data={})
 
 
 @app.get("/auth")
 async def auth():
     global TOKEN
-    payload={'scope': 'GIGACHAT_API_PERS'}
+    payload = {"scope": "GIGACHAT_API_PERS"}
     headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
-        'RqUID': RqUID,
-        'Authorization': f'Basic {ATOKEN}'
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json",
+        "RqUID": RqUID,
+        "Authorization": f"Basic {ATOKEN}",
     }
     response = requests.request("POST", AUTH_URL, headers=headers, data=payload)
     payload = json.loads(response.text)
-    TOKEN = payload['access_token']
+    TOKEN = payload["access_token"]
     return {"ok": True, "lifetime": payload["expires_at"]}
 
 
@@ -306,9 +294,6 @@ async def query(req: QueryRequest):
     return {"query": req.query, "mode": req.mode, "answer": answer}
 
 
-
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
     # "127.0.0.1:8000/docs"
-
-
