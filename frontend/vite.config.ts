@@ -1,26 +1,18 @@
-import path from "node:path"
-import tailwindcss from "@tailwindcss/vite"
-import { tanstackRouter } from "@tanstack/router-plugin/vite"
-import react from "@vitejs/plugin-react-swc"
-import { defineConfig } from "vite"
+import react from "@vitejs/plugin-react"
+import { defineConfig } from "vitest/config"
 
-// https://vitejs.dev/config/
 export default defineConfig({
+  plugins: [react()],
   build: {
-    outDir: "../backend/app/frontend",
-    emptyOutDir: true,
+    assetsInlineLimit: 0,
+    modulePreload: { polyfill: false },
   },
-  resolve: {
-    alias: {
-      "@": path.resolve(import.meta.dirname, "./src"),
-    },
+  server: {
+    fs: { allow: [".", "design/illustrations"] },
   },
-  plugins: [
-    tanstackRouter({
-      target: "react",
-      autoCodeSplitting: true,
-    }),
-    react(),
-    tailwindcss(),
-  ],
+  test: {
+    environment: "jsdom",
+    setupFiles: "tests/setup.ts",
+    include: ["tests/unit/**/*.test.tsx"],
+  },
 })

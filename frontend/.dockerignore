@@ -1,2 +1,15 @@
-node_modules
-dist
+*
+!package.json
+!package-lock.json
+!tsconfig.json
+!vite.config.ts
+!index.html
+!src
+!src/**
+!design
+design/**
+!design/illustrations
+!design/illustrations/**
+!nginx.conf
+!docker-entrypoint.d
+!docker-entrypoint.d/**
