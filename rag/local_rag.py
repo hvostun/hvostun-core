@@ -69,7 +69,7 @@ async def embedding_func(texts: list[str]):
 async def llm_model_func(
     prompt: str,
     system_prompt: str | None = None,
-    history_messages: list[dict] = None,
+    history_messages: list[dict] = None,  # noqa RUF013
     **kwargs,
 ) -> str:
     global GLOBAL_COUNTER
@@ -150,8 +150,6 @@ def main() -> None:
         sys.exit(1)
 
     auth()
-    GLOBAL_COUNTER
-
     command = args[0]
     if command == "build" or command == "b":
         if len(args) < 2:

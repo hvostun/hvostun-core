@@ -90,13 +90,14 @@ async def embedding_func(texts: list[str]):
 async def llm_model_func(
     prompt: str,
     system_prompt: str | None = None,
-    history_messages: list[dict] = None,
+    history_messages: list[dict] = None,  # noqa RUF013
     **kwargs,
 ) -> str:
+    # history_messages: list[dict] = None, RUF013 PEP 484 prohibits implicit `Optional`
     global GLOBAL_COUNTER
     GLOBAL_COUNTER += 1
     if GLOBAL_COUNTER == 10:
-        auth()
+        authh()
 
     # ✅ Удаляем оба параметра, которые заставляют GigaChat ломаться
     kwargs.pop("response_format", None)
@@ -232,7 +233,7 @@ async def health():
     }
 
 
-def auth():
+def authh():
     global TOKEN
     global GLOBAL_COUNTER
     GLOBAL_COUNTER = 0
@@ -247,24 +248,13 @@ def auth():
     payload = json.loads(response.text)
     print(payload["expires_at"])
     TOKEN = payload["access_token"]
-    headers = {"Accept": "application/json", "Authorization": f"Bearer {TOKEN}"}
-    response = requests.request("GET", CHAT_URL + "/models", headers=headers, data={})
+    return payload["expires_at"]
 
 
 @app.get("/auth")
 async def auth():
-    global TOKEN
-    payload = {"scope": "GIGACHAT_API_PERS"}
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-        "RqUID": RqUID,
-        "Authorization": f"Basic {ATOKEN}",
-    }
-    response = requests.request("POST", AUTH_URL, headers=headers, data=payload)
-    payload = json.loads(response.text)
-    TOKEN = payload["access_token"]
-    return {"ok": True, "lifetime": payload["expires_at"]}
+    exp = authh()
+    return {"ok": True, "lifetime": exp}
 
 
 @app.post("/query")
@@ -289,7 +279,7 @@ async def query(req: QueryRequest):
     params = {k: v for k, v in params.items() if v is not None}
     try:
         answer = await rag.aquery(req.query, **params)
-    except Exception as e:
+    except Exception as e:  # noqa BLE001
         raise HTTPException(500, str(e))
     return {"query": req.query, "mode": req.mode, "answer": answer}
 
