@@ -7,7 +7,14 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
-from app.admin.deps import AdminUser, CurrentUser, SessionDep, SuperUser, is_admin
+from app.admin.deps import (
+    AdminUser,
+    CurrentUser,
+    SessionDep,
+    SuperUser,
+    is_admin,
+    is_auditor,
+)
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
 from app.core.config import settings
 from app.models import AnswerEvent, Dog, SessionRecommendation, SurveySession
@@ -447,6 +454,7 @@ def _session_detail_response(
             "can_manage_all_recommendations": (
                 session_service.can_manage_all_session_recommendations(user)
             ),
+            "can_edit_session_recommendations": not is_auditor(user),
             "available_recommendations": available,
             "recommendation_categories": (
                 dictionary_service.recommendation_category_options(session)

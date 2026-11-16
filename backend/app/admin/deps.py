@@ -58,8 +58,20 @@ def is_admin(user: User) -> bool:
     return user.is_superuser or user.group == UserGroup.ADMIN
 
 
+def is_auditor(user: User) -> bool:
+    return user.group == UserGroup.AUDITOR
+
+
+def can_view_admin(user: User) -> bool:
+    return is_admin(user) or is_auditor(user)
+
+
 def can_edit_recommendations(user: User) -> bool:
     return is_admin(user) or user.group == UserGroup.MODERATOR
+
+
+def can_view_stats(user: User) -> bool:
+    return can_view_admin(user) or user.group == UserGroup.MODERATOR
 
 
 def get_current_admin(current_user: CurrentUser) -> User:
@@ -71,6 +83,15 @@ def get_current_admin(current_user: CurrentUser) -> User:
 AdminUser = Annotated[User, Depends(get_current_admin)]
 
 
+def get_admin_viewer(current_user: CurrentUser) -> User:
+    if not can_view_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return current_user
+
+
+AdminViewer = Annotated[User, Depends(get_admin_viewer)]
+
+
 def get_recommendation_editor(current_user: CurrentUser) -> User:
     if not can_edit_recommendations(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
@@ -78,6 +99,15 @@ def get_recommendation_editor(current_user: CurrentUser) -> User:
 
 
 RecommendationEditor = Annotated[User, Depends(get_recommendation_editor)]
+
+
+def get_stats_viewer(current_user: CurrentUser) -> User:
+    if not can_view_stats(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return current_user
+
+
+StatsViewer = Annotated[User, Depends(get_stats_viewer)]
 
 
 def get_current_superuser(current_user: CurrentUser) -> User:
@@ -140,6 +170,20 @@ class CsrfCookieMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_cookie)
+
+
+_AUDITOR_WRITE_EXEMPT = {"/login", "/logout"}
+
+
+def forbid_auditor_writes(request: Request, session: SessionDep) -> None:
+    """Auditors may open the same pages as admins, but never change data."""
+    if request.method != "POST":
+        return
+    if request.url.path in _AUDITOR_WRITE_EXEMPT:
+        return
+    user = get_optional_user(request, session)
+    if user is not None and is_auditor(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
 
 async def enforce_csrf(request: Request) -> None:

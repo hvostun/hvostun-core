@@ -6,7 +6,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
-from app.admin.deps import AdminUser, CurrentUser, SessionDep
+from app.admin.deps import AdminUser, AdminViewer, CurrentUser, SessionDep, is_admin
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
 from app.models import Dog, DogStatus, Owner, Shelter
 from app.models.catalog_immutability import DomainValueValidationError
@@ -123,6 +123,7 @@ def _dog_detail_response(
             "created_by": context.created_by,
             "statuses": [item.value for item in DogStatus],
             "form": form or _dog_form_from_row(context.dog),
+            "can_edit": is_admin(user),
             "error": error,
         },
         status_code=status_code,
@@ -133,7 +134,7 @@ def _dog_detail_response(
 def dogs_page(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: AdminViewer,
     page: int = 1,
     name: str = "",
     status: str = "",
@@ -204,7 +205,7 @@ def dogs_page(
 def dog_detail(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: AdminViewer,
     dog_id: uuid.UUID,
 ) -> Any:
     return _dog_detail_response(request, session, user, dog_id)

@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
 from sqlmodel import Session, select
@@ -1114,7 +1115,7 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert "представить собаку с этой карточки" in page.text
     assert "экспертное решение" in page.text
     assert "Важность" in page.text
-    assert "Критичность" in page.text
+    assert "Критичность" not in page.text
     assert "Другое" in page.text
     assert "Другое - Короткая прогулка" in page.text
     assert page.text.index("Другое - Короткая прогулка") < page.text.index(
@@ -1376,7 +1377,7 @@ def test_session_recommendation_can_be_updated(client: TestClient, db: Session) 
         user_id=user.id,
         session_id=session_row.id,
         recomendation_id=recommendation.id,
-        chart_number=0,
+        chart_number=1,
         weight=1.0,
         comment="черновик",
     )
@@ -1387,8 +1388,11 @@ def test_session_recommendation_can_be_updated(client: TestClient, db: Session) 
     page = client.get(f"/sessions/{session_row.id}")
     assert page.status_code == 200
     assert 'name="chart_number"' in page.text
-    assert 'type="range"' in page.text
-    assert "Критичность" in page.text
+    assert 'value="1" selected' in page.text
+    assert 'type="hidden" name="weight"' in page.text
+    assert 'type="range"' not in page.text
+    assert "Критичность" not in page.text
+    assert "видна всем" in page.text
     assert page.text.count("Сохранить") == 1
     assert f"/sessions/{session_row.id}/recommendations/save" in page.text
     assert f'/sessions/{session_row.id}/recommendations/{row.id}"' not in page.text
@@ -1539,6 +1543,164 @@ def _login_moderator(client: TestClient, db: Session) -> User:
     return user
 
 
+def _login_auditor(client: TestClient, db: Session) -> User:
+    password = f"Aud1-{random_lower_string()[:8]}"
+    user = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"auditor-{random_lower_string()}@example.com",
+            password=password,
+            group=UserGroup.AUDITOR,
+        ),
+    )
+    post(client, "/login", data={"email": user.email, "password": password})
+    return user
+
+
+def test_auditor_reads_admin_pages_and_cannot_write(
+    client: TestClient, db: Session
+) -> None:
+    expert = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"auditor-expert-{random_lower_string()}@example.com",
+            password=f"Pass1-{random_lower_string()[:8]}",
+            group=UserGroup.EXPERT,
+        ),
+    )
+    owner = Owner(name="Владелец аудита")
+    dog = Dog(name="Rex Auditor", status="unknown")
+    survey = Survey(name="Анкета аудита", slug=f"audit-{random_lower_string()}")
+    scale = Scale(
+        name="Шкала аудита", type="integer", config={"min_value": 0, "max_value": 4}
+    )
+    visible = Recommendation(
+        name="Чужая рекомендация",
+        slug=f"audit-visible-{random_lower_string()}",
+        text="Текст.",
+        status=RecommendationStatus.ACTIVE,
+    )
+    canceled = Recommendation(
+        name="Отклонённая для аудита",
+        slug=f"audit-canceled-{random_lower_string()}",
+        text="Текст.",
+        status=RecommendationStatus.CANCELED,
+    )
+    db.add(owner)
+    db.add(dog)
+    db.add(survey)
+    db.add(scale)
+    db.add(visible)
+    db.add(canceled)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(survey)
+    db.refresh(scale)
+    db.refresh(visible)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    session_row = SurveySession(
+        owner_id=owner.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="finished",
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+    db.add(
+        SessionRecommendation(
+            user_id=expert.id,
+            session_id=session_row.id,
+            recomendation_id=visible.id,
+            chart_number=0,
+            weight=1.0,
+        )
+    )
+    db.commit()
+
+    auditor = _login_auditor(client, db)
+    for path in (
+        "/dogs",
+        f"/dogs/{dog.id}",
+        "/surveys",
+        "/scales",
+        "/users",
+        "/sessions",
+        f"/sessions/{session_row.id}",
+        "/recommendations",
+        "/stats",
+    ):
+        assert client.get(path).status_code == 200, path
+    for path in ("/owners", "/dictionaries", "/answer-events", "/recommendations/new"):
+        assert client.get(path, follow_redirects=False).status_code == 403, path
+
+    home = client.get("/")
+    for path in ("/dogs", "/surveys", "/scales", "/users", "/stats"):
+        assert f'href="{path}"' in home.text
+    assert 'href="/owners"' not in home.text
+    assert 'href="/dictionaries"' not in home.text
+
+    dog_page = client.get(f"/dogs/{dog.id}")
+    assert "Сохранить" not in dog_page.text
+    assert "Rex Auditor" in dog_page.text
+    users_page = client.get("/users")
+    assert "Создать" not in users_page.text
+    user_page = client.get(f"/users/{auditor.id}")
+    assert "Сохранить" not in user_page.text
+    assert 'type="password"' not in user_page.text
+    recommendations = client.get("/recommendations")
+    assert "Создать" not in recommendations.text
+    assert "Отклонённая для аудита" in recommendations.text
+    assert "Статус" in recommendations.text
+    session_page = client.get(f"/sessions/{session_row.id}")
+    assert "Чужая рекомендация" in session_page.text
+    assert "Добавить" not in session_page.text
+    assert "Удалить" not in session_page.text
+    assert "Сохранить" not in session_page.text
+    stats = client.get("/stats")
+    assert "Опубликовать" not in stats.text
+
+    users_before = len(db.exec(select(User)).all())
+    recommendations_before = len(db.exec(select(Recommendation)).all())
+    assignments_before = len(db.exec(select(SessionRecommendation)).all())
+    blocked = (
+        (
+            f"/dogs/{dog.id}",
+            {"name": "Переименована", "status": "shelter"},
+        ),
+        (
+            "/users/new",
+            {
+                "email": f"blocked-{random_lower_string()}@example.com",
+                "password": "Blocked-1",
+                "full_name": "Не должен создаться",
+                "group": UserGroup.EXPERT,
+            },
+        ),
+        (
+            "/recommendations/new",
+            {"name": "Новая от аудитора", "description": "Нельзя", "group": "other"},
+        ),
+        (
+            f"/sessions/{session_row.id}/recommendations",
+            {"recomendation_id": str(visible.id), "chart_number": "0", "weight": "1"},
+        ),
+        (f"/sessions/{session_row.id}/summary", {"model": ""}),
+    )
+    for path, data in blocked:
+        response = post(client, path, data=data, follow_redirects=False)
+        assert response.status_code == 403, path
+
+    db.refresh(dog)
+    assert dog.name == "Rex Auditor"
+    assert len(db.exec(select(User)).all()) == users_before
+    assert len(db.exec(select(Recommendation)).all()) == recommendations_before
+    assert len(db.exec(select(SessionRecommendation)).all()) == assignments_before
+
+
 def test_moderator_sessions_hide_evaluation_count(
     client: TestClient, db: Session
 ) -> None:
@@ -1634,10 +1796,12 @@ def test_expert_access_matrix(client: TestClient, db: Session) -> None:
         "/dictionaries",
         "/answer-events",
         "/owners",
+        "/stats",
     ):
         assert client.get(path, follow_redirects=False).status_code == 403
 
     home = client.get("/")
+    assert 'href="/stats"' not in home.text
     assert 'href="/surveys"' not in home.text
     assert 'href="/scales"' not in home.text
     assert 'href="/sessions?mine=no"' in home.text
@@ -1683,6 +1847,7 @@ def test_moderator_cannot_open_surveys_and_scales(
     assert 'href="/surveys"' not in home.text
     assert 'href="/scales"' not in home.text
     assert 'href="/sessions?mine=no"' in home.text
+    assert 'href="/stats"' in home.text
     assert "recommendations?status=" in home.text
 
 
@@ -1695,6 +1860,7 @@ def test_admin_access_matrix(client: TestClient, db: Session) -> None:
         "/sessions",
         "/recommendations",
         "/users",
+        "/stats",
     ):
         assert client.get(path).status_code == 200
     for path in ("/dictionaries", "/answer-events", "/owners"):
@@ -1708,6 +1874,7 @@ def test_admin_access_matrix(client: TestClient, db: Session) -> None:
         "/sessions?mine=no",
         "/recommendations",
         "/users",
+        "/stats",
     ):
         assert f'href="{path}"' in home.text
     assert 'href="/dictionaries"' not in home.text
@@ -1789,6 +1956,7 @@ def test_html_pages_respond_ok(client: TestClient, db: Session) -> None:
         f"/dictionaries/{dictionary.key}",
         "/answer-events",
         "/owners",
+        "/stats",
     ]
     for path in pages:
         response = client.get(path)
@@ -3509,3 +3677,203 @@ def test_session_summary_post_saves_gigachat_text(
     assert "Рассказ для эксперта" in after_change.text
     assert "живёт с семьёй 2 месяца" in after_change.text
     assert "Обновить" in after_change.text
+
+
+def _stats_user(
+    db: Session,
+    group: UserGroup,
+    *,
+    full_name: str | None = None,
+) -> User:
+    return crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"stats-{random_lower_string()}@example.com",
+            password=f"Stat1-{random_lower_string()[:8]}",
+            group=group,
+            full_name=full_name,
+        ),
+    )
+
+
+def _stats_session(db: Session, owner: Owner, name: str) -> SurveySession:
+    dog = Dog(name=name)
+    survey = Survey(name=name, slug=f"stats-{random_lower_string()}")
+    db.add(dog)
+    db.add(survey)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(survey)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    row = SurveySession(
+        owner_id=owner.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def _stats_assign(
+    db: Session, user: User, session_row: SurveySession, count: int
+) -> None:
+    for _ in range(count):
+        recommendation = Recommendation(
+            name=f"Стат {random_lower_string()}",
+            slug=f"stats-rec-{random_lower_string()}",
+            text="Текст рекомендации",
+        )
+        db.add(recommendation)
+        db.commit()
+        db.refresh(recommendation)
+        db.add(
+            SessionRecommendation(
+                user_id=user.id,
+                session_id=session_row.id,
+                recomendation_id=recommendation.id,
+                chart_number=0,
+                weight=1.0,
+            )
+        )
+    db.commit()
+
+
+def _compact_html(html: str) -> str:
+    return re.sub(r"\s+", " ", html)
+
+
+def _stats_card(html: str, element_id: str) -> int:
+    match = re.search(rf'id="{element_id}">(\d+)<', html)
+    assert match is not None
+    return int(match.group(1))
+
+
+def test_stats_counts_include_every_author(client: TestClient, db: Session) -> None:
+    _login_moderator(client, db)
+    before = client.get("/stats")
+    assert before.status_code == 200
+    surveys = _stats_card(before.text, "stats-surveys")
+    evaluations = _stats_card(before.text, "stats-evaluations")
+    recommendations = _stats_card(before.text, "stats-recommendations")
+
+    owner = _create_owner(db, "Владелец статистики")
+    first = _stats_session(db, owner, "Анкета 1")
+    second = _stats_session(db, owner, "Анкета 2")
+    admin_only = _stats_session(db, owner, "Анкета только админа")
+    alpha = _stats_user(db, UserGroup.EXPERT, full_name="Эксперт Альфа")
+    beta = _stats_user(db, UserGroup.EXPERT)
+    idle = _stats_user(db, UserGroup.EXPERT, full_name="Эксперт Пустой")
+    admin = _stats_user(db, UserGroup.ADMIN, full_name="Админ Статистики")
+    _stats_assign(db, alpha, first, 1)
+    _stats_assign(db, alpha, second, 1)
+    _stats_assign(db, beta, second, 1)
+    _stats_assign(db, admin, first, 1)
+    _stats_assign(db, admin, admin_only, 1)
+
+    page = client.get("/stats")
+    assert page.status_code == 200
+    assert "Обработок анкет экспертами" not in page.text
+    assert "<th>Пользователь</th>" in page.text
+    assert _stats_card(page.text, "stats-surveys") == surveys + 3
+    assert _stats_card(page.text, "stats-evaluations") == evaluations + 5
+    assert _stats_card(page.text, "stats-recommendations") == recommendations + 5
+    checkbox = re.search(r'id="active"[^>]*>', page.text)
+    assert checkbox is not None
+    assert "checked" in checkbox.group(0)
+    compact = _compact_html(page.text)
+    assert "<td>Эксперт Альфа</td> <td>2</td> <td>1,0</td> <td>1,0</td>" in compact
+    assert f"<td>{beta.email}</td> <td>1</td> <td>1,0</td> <td>1,0</td>" in compact
+    assert "<td>Админ Статистики</td> <td>2</td> <td>1,0</td> <td>1,0</td>" in compact
+    assert "Эксперт Пустой" not in page.text
+
+    same = client.get("/stats", params={"active": "1"})
+    assert "Эксперт Пустой" not in same.text
+    assert _stats_card(same.text, "stats-evaluations") == evaluations + 5
+
+    everyone = client.get("/stats", params={"active": "0"})
+    assert everyone.status_code == 200
+    assert _stats_card(everyone.text, "stats-surveys") == surveys + 3
+    checkbox = re.search(r'id="active"[^>]*>', everyone.text)
+    assert checkbox is not None
+    assert "checked" not in checkbox.group(0)
+    assert "<td>Эксперт Пустой</td> <td>0</td> <td>—</td> <td>—</td>" in _compact_html(
+        everyone.text
+    )
+    assert idle.email not in everyone.text
+    assert "<td>Админ Статистики</td> <td>2</td> <td>1,0</td> <td>1,0</td>" in (
+        _compact_html(everyone.text)
+    )
+
+    _login_admin(client, db)
+    assert client.get("/stats").status_code == 200
+    _login_superuser(client)
+    assert client.get("/stats").status_code == 200
+    _login_expert(client, db)
+    assert client.get("/stats", follow_redirects=False).status_code == 403
+
+
+def test_stats_average_and_median(client: TestClient, db: Session) -> None:
+    _login_moderator(client, db)
+    before = client.get("/stats")
+    surveys = _stats_card(before.text, "stats-surveys")
+    evaluations = _stats_card(before.text, "stats-evaluations")
+    recommendations = _stats_card(before.text, "stats-recommendations")
+
+    owner = _create_owner(db, "Владелец медианы")
+    expert = _stats_user(db, UserGroup.EXPERT, full_name="Эксперт Медиана")
+    for count in (1, 2, 6):
+        _stats_assign(db, expert, _stats_session(db, owner, f"Медиана {count}"), count)
+
+    page = client.get("/stats")
+    assert page.status_code == 200
+    assert _stats_card(page.text, "stats-surveys") == surveys + 3
+    assert _stats_card(page.text, "stats-evaluations") == evaluations + 3
+    assert _stats_card(page.text, "stats-recommendations") == recommendations + 9
+    assert (
+        "<td>Эксперт Медиана</td> <td>3</td> <td>3,0</td> <td>2,0</td>"
+        in _compact_html(page.text)
+    )
+
+
+def test_stats_send_to_telegram_now(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _login_moderator(client, db)
+    page = client.get("/stats")
+    assert page.status_code == 200
+    assert "Опубликовать" in page.text
+    assert 'action="/stats/telegram"' in page.text
+
+    monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", None)
+    monkeypatch.setattr(settings, "TELEGRAM_CHAT_IDS", None)
+    missing = post(client, "/stats/telegram", follow_redirects=False)
+    assert missing.status_code == 303
+    assert missing.headers["location"] == "/stats?telegram=missing"
+    shown = client.get(missing.headers["location"])
+    assert "Telegram не настроен" in shown.text
+
+    sent: list[str] = []
+    monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "secret-token")
+    monkeypatch.setattr(settings, "TELEGRAM_CHAT_IDS", "@chan")
+
+    def _send(text: str) -> list[str]:
+        sent.append(text)
+        return []
+
+    monkeypatch.setattr("app.admin.routes.stats.send_message", _send)
+    delivered = post(client, "/stats/telegram", follow_redirects=False)
+    assert delivered.status_code == 303
+    assert delivered.headers["location"] == "/stats?telegram=sent"
+    shown = client.get(delivered.headers["location"])
+    assert "Статистика отправлена в канал" in shown.text
+    assert sent and sent[0].startswith("Статистика разметки за ")
+
+    _login_expert(client, db)
+    forbidden = post(client, "/stats/telegram", follow_redirects=False)
+    assert forbidden.status_code == 403

@@ -75,6 +75,25 @@ def test_deployed_cookie_defaults_to_twelve_hours(
     assert deployed.ACCESS_TOKEN_EXPIRE_MINUTES == _DEPLOYED_TOKEN_MINUTES
 
 
+def test_telegram_chat_ids_split_and_enable_the_bot() -> None:
+    configured = _settings(
+        TELEGRAM_BOT_TOKEN="token",
+        TELEGRAM_CHAT_IDS=" @hvostun_stats, -100123 ,",
+    )
+    assert configured.telegram_enabled
+    assert configured.telegram_chat_ids == ["@hvostun_stats", "-100123"]
+    assert not _settings().telegram_enabled
+    assert _settings().DAILY_STATS_TIME == "11:00"
+    assert _settings().DAILY_STATS_TZ == "Europe/Moscow"
+
+
+def test_daily_stats_time_must_be_hh_mm() -> None:
+    with pytest.raises(ValidationError, match="DAILY_STATS_TIME"):
+        _settings(DAILY_STATS_TIME="11")
+    with pytest.raises(ValidationError, match="DAILY_STATS_TZ"):
+        _settings(DAILY_STATS_TZ="  ")
+
+
 def test_explicit_cookie_ttl_is_kept(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(_LOCAL_TOKEN_MINUTES))
     deployed = _settings()

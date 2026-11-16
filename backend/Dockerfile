@@ -35,7 +35,7 @@ PY
 # this RUN is the CI layer cache key (type=gha): bump it when a new
 # advisory needs a fresh upgrade. Do not install psycopg-binary: its
 # wheel vendors libpcre2 10.32.
-RUN : 'security refresh 2026-11-11' \
+RUN : 'security refresh 2026-11-16' \
  && apt-get update \
  && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends libpq5 \
