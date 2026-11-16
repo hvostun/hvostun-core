@@ -19,13 +19,8 @@ from app.models import (
     UserGroup,
 )
 from app.services import telegram
-from app.services.stats import expert_totals
-from scripts.telegram_daily_stats import (
-    build_report,
-    main,
-    next_run,
-    yesterday_bounds,
-)
+from app.services.stats import build_report, expert_totals, yesterday_bounds
+from scripts.telegram_daily_stats import main, next_run
 from tests.utils.utils import random_lower_string
 
 _MOSCOW = ZoneInfo("Europe/Moscow")

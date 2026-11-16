@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 import logging
 import time
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from datetime import time as dt_time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -26,7 +26,7 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.core.db import engine
 from app.services import telegram as telegram_service
-from app.services.stats import expert_totals
+from app.services.stats import build_report
 from app.services.telegram import TelegramNotConfigured
 
 logger = logging.getLogger(__name__)
@@ -58,13 +58,6 @@ def parse_stats_time(value: str) -> dt_time:
     return dt_time(hour=int(hour_text), minute=int(minute_text))
 
 
-def yesterday_bounds(today: date, zone: ZoneInfo) -> tuple[datetime, datetime]:
-    """``[yesterday 00:00, today 00:00)`` in ``zone``."""
-    start = datetime.combine(today - timedelta(days=1), dt_time.min, tzinfo=zone)
-    end = datetime.combine(today, dt_time.min, tzinfo=zone)
-    return start, end
-
-
 def next_run(now: datetime, at: dt_time) -> datetime:
     """Next ``at`` in ``now``'s timezone. An exact match is due immediately."""
     if now.tzinfo is None:
@@ -73,22 +66,6 @@ def next_run(now: datetime, at: dt_time) -> datetime:
     if candidate < now:
         return candidate + timedelta(days=1)
     return candidate
-
-
-def build_report(session: Session, today: date, zone: ZoneInfo) -> str:
-    since, until = yesterday_bounds(today, zone)
-    day = expert_totals(session, since=since, until=until)
-    total = expert_totals(session)
-    yesterday = today - timedelta(days=1)
-    return (
-        f"Статистика разметки за {yesterday:%d.%m.%Y}\n"
-        f"Анкет обработано: {day.surveys}\n"
-        f"Рекомендаций дано: {day.recommendations}\n"
-        "\n"
-        "Всего\n"
-        f"Анкет обработано: {total.surveys}\n"
-        f"Рекомендаций дано: {total.recommendations}"
-    )
 
 
 def _render(zone: ZoneInfo) -> str:

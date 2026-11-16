@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
 from sqlmodel import Session, select
@@ -3680,3 +3681,41 @@ def test_stats_average_and_median(client: TestClient, db: Session) -> None:
         "<td>Эксперт Медиана</td> <td>3</td> <td>3,0</td> <td>2,0</td>"
         in _compact_html(page.text)
     )
+
+
+def test_stats_send_to_telegram_now(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _login_moderator(client, db)
+    page = client.get("/stats")
+    assert page.status_code == 200
+    assert "Опубликовать" in page.text
+    assert 'action="/stats/telegram"' in page.text
+
+    monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", None)
+    monkeypatch.setattr(settings, "TELEGRAM_CHAT_IDS", None)
+    missing = post(client, "/stats/telegram", follow_redirects=False)
+    assert missing.status_code == 303
+    assert missing.headers["location"] == "/stats?telegram=missing"
+    shown = client.get(missing.headers["location"])
+    assert "Telegram не настроен" in shown.text
+
+    sent: list[str] = []
+    monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "secret-token")
+    monkeypatch.setattr(settings, "TELEGRAM_CHAT_IDS", "@chan")
+
+    def _send(text: str) -> list[str]:
+        sent.append(text)
+        return []
+
+    monkeypatch.setattr("app.admin.routes.stats.send_message", _send)
+    delivered = post(client, "/stats/telegram", follow_redirects=False)
+    assert delivered.status_code == 303
+    assert delivered.headers["location"] == "/stats?telegram=sent"
+    shown = client.get(delivered.headers["location"])
+    assert "Статистика отправлена в канал" in shown.text
+    assert sent and sent[0].startswith("Статистика разметки за ")
+
+    _login_expert(client, db)
+    forbidden = post(client, "/stats/telegram", follow_redirects=False)
+    assert forbidden.status_code == 403

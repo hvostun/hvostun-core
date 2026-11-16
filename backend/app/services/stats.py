@@ -1,6 +1,7 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import tuple_
 from sqlmodel import Session, col, func, select
@@ -120,3 +121,27 @@ def expert_rows(session: Session, *, active_only: bool) -> list[ExpertStatsRow]:
             )
         )
     return rows
+
+
+def yesterday_bounds(today: date, zone: ZoneInfo) -> tuple[datetime, datetime]:
+    """``[yesterday 00:00, today 00:00)`` in ``zone``."""
+    start = datetime.combine(today - timedelta(days=1), time.min, tzinfo=zone)
+    end = datetime.combine(today, time.min, tzinfo=zone)
+    return start, end
+
+
+def build_report(session: Session, today: date, zone: ZoneInfo) -> str:
+    """Yesterday and all-time markup totals, the same text the scheduler sends."""
+    since, until = yesterday_bounds(today, zone)
+    day = expert_totals(session, since=since, until=until)
+    total = expert_totals(session)
+    yesterday = today - timedelta(days=1)
+    return (
+        f"Статистика разметки за {yesterday:%d.%m.%Y}\n"
+        f"Анкет обработано: {day.surveys}\n"
+        f"Рекомендаций дано: {day.recommendations}\n"
+        "\n"
+        "Всего\n"
+        f"Анкет обработано: {total.surveys}\n"
+        f"Рекомендаций дано: {total.recommendations}"
+    )

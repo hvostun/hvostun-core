@@ -103,6 +103,10 @@ services:
       EMAILS_FROM_EMAIL: ${EMAILS_FROM_EMAIL}
       DATABASE_URL: postgresql://hvostun_app:${POSTGRES_APP_PASSWORD:?Variable not set}@db:5432/hvostun_${FASTAPI_ENV:-development}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_IDS: ${TELEGRAM_CHAT_IDS:-}
+      DAILY_STATS_TIME: ${DAILY_STATS_TIME:-11:00}
+      DAILY_STATS_TZ: ${DAILY_STATS_TZ:-Europe/Moscow}
 
     healthcheck:
       test:
