@@ -3595,7 +3595,7 @@ def _stats_card(html: str, element_id: str) -> int:
     return int(match.group(1))
 
 
-def test_stats_counts_exclude_admin_and_filter(client: TestClient, db: Session) -> None:
+def test_stats_counts_include_every_author(client: TestClient, db: Session) -> None:
     _login_moderator(client, db)
     before = client.get("/stats")
     assert before.status_code == 200
@@ -3619,26 +3619,27 @@ def test_stats_counts_exclude_admin_and_filter(client: TestClient, db: Session) 
 
     page = client.get("/stats")
     assert page.status_code == 200
-    assert _stats_card(page.text, "stats-surveys") == surveys + 2
-    assert _stats_card(page.text, "stats-evaluations") == evaluations + 3
-    assert _stats_card(page.text, "stats-recommendations") == recommendations + 3
+    assert "Обработок анкет экспертами" not in page.text
+    assert "<th>Пользователь</th>" in page.text
+    assert _stats_card(page.text, "stats-surveys") == surveys + 3
+    assert _stats_card(page.text, "stats-evaluations") == evaluations + 5
+    assert _stats_card(page.text, "stats-recommendations") == recommendations + 5
     checkbox = re.search(r'id="active"[^>]*>', page.text)
     assert checkbox is not None
     assert "checked" in checkbox.group(0)
     compact = _compact_html(page.text)
     assert "<td>Эксперт Альфа</td> <td>2</td> <td>1,0</td> <td>1,0</td>" in compact
     assert f"<td>{beta.email}</td> <td>1</td> <td>1,0</td> <td>1,0</td>" in compact
+    assert "<td>Админ Статистики</td> <td>2</td> <td>1,0</td> <td>1,0</td>" in compact
     assert "Эксперт Пустой" not in page.text
-    assert admin.email not in page.text
-    assert "Админ Статистики" not in page.text
 
     same = client.get("/stats", params={"active": "1"})
     assert "Эксперт Пустой" not in same.text
-    assert _stats_card(same.text, "stats-evaluations") == evaluations + 3
+    assert _stats_card(same.text, "stats-evaluations") == evaluations + 5
 
     everyone = client.get("/stats", params={"active": "0"})
     assert everyone.status_code == 200
-    assert _stats_card(everyone.text, "stats-surveys") == surveys + 2
+    assert _stats_card(everyone.text, "stats-surveys") == surveys + 3
     checkbox = re.search(r'id="active"[^>]*>', everyone.text)
     assert checkbox is not None
     assert "checked" not in checkbox.group(0)
@@ -3646,7 +3647,9 @@ def test_stats_counts_exclude_admin_and_filter(client: TestClient, db: Session) 
         everyone.text
     )
     assert idle.email not in everyone.text
-    assert admin.email not in everyone.text
+    assert "<td>Админ Статистики</td> <td>2</td> <td>1,0</td> <td>1,0</td>" in (
+        _compact_html(everyone.text)
+    )
 
     _login_admin(client, db)
     assert client.get("/stats").status_code == 200

@@ -131,6 +131,34 @@ services:
       - traefik.http.routers.backend-http.rule=Host(`${DOMAIN:-localhost}`)
       - traefik.http.routers.backend-http.entrypoints=http
 
+  # Daily markup report. Same image as backend, no HTTP.
+  scheduler:
+    image: ${BACKEND_IMAGE:-backend:latest}
+    depends_on:
+      prestart:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    environment:
+      PROJECT_NAME: ${PROJECT_NAME:?Variable not set}
+      SECRET_KEY: ${SECRET_KEY:?Variable not set}
+      FASTAPI_ENV: ${FASTAPI_ENV:-development}
+      FIRST_SUPERUSER: ${FIRST_SUPERUSER:?Variable not set}
+      FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD:?Variable not set}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAILS_FROM_EMAIL: ${EMAILS_FROM_EMAIL}
+      DATABASE_URL: postgresql://hvostun_app:${POSTGRES_APP_PASSWORD:?Variable not set}@db:5432/hvostun_${FASTAPI_ENV:-development}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_IDS: ${TELEGRAM_CHAT_IDS:-}
+      DAILY_STATS_TIME: ${DAILY_STATS_TIME:-11:00}
+      DAILY_STATS_TZ: ${DAILY_STATS_TZ:-Europe/Moscow}
+    command: ["python", "scripts/telegram_daily_stats.py"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+
 volumes:
   hvostun-db-data:
 

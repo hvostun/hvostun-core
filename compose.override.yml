@@ -75,6 +75,17 @@ services:
       SMTP_PORT: "1025"
       SMTP_TLS: "false"
 
+  scheduler:
+    develop:
+      watch:
+        - path: ./backend
+          action: sync
+          target: /app/backend
+          ignore:
+            - .venv
+        - path: ./backend/pyproject.toml
+          action: rebuild
+
   mailpit:
     image: axllent/mailpit:v1.27@sha256:e22dce5b36f93c77082e204a3942fb6b283b7896e057458400a4c88344c3df68
     ports:

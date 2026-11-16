@@ -108,6 +108,51 @@ class Settings(BaseSettings):
     def gigachat_enabled(self) -> bool:
         return bool(self.GIGACHAT_AUTH_KEY)
 
+    TELEGRAM_BOT_TOKEN: str | None = None
+    # Comma-separated chat ids, for example "@hvostun_stats,-100123".
+    TELEGRAM_CHAT_IDS: str | None = None
+    DAILY_STATS_TIME: str = "11:00"
+    DAILY_STATS_TZ: str = "Europe/Moscow"
+
+    @field_validator("DAILY_STATS_TIME")
+    @classmethod
+    def _check_daily_stats_time(cls, value: str) -> str:
+        parts = value.split(":")
+        if (
+            len(parts) != 2
+            or len(parts[0]) != 2
+            or len(parts[1]) != 2
+            or not parts[0].isdigit()
+            or not parts[1].isdigit()
+        ):
+            raise ValueError("DAILY_STATS_TIME must be HH:MM")
+        hour = int(parts[0])
+        minute = int(parts[1])
+        if hour > 23 or minute > 59:
+            raise ValueError("DAILY_STATS_TIME must be HH:MM")
+        return value
+
+    @field_validator("DAILY_STATS_TZ")
+    @classmethod
+    def _check_daily_stats_tz(cls, value: str) -> str:
+        name = value.strip()
+        if not name:
+            raise ValueError("DAILY_STATS_TZ must be an IANA timezone name")
+        return name
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def telegram_chat_ids(self) -> list[str]:
+        raw = self.TELEGRAM_CHAT_IDS
+        if not raw:
+            return []
+        return [item.strip() for item in raw.split(",") if item.strip()]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def telegram_enabled(self) -> bool:
+        return bool(self.TELEGRAM_BOT_TOKEN and self.telegram_chat_ids)
+
     EMAIL_TEST_USER: EmailStr = "test@example.com"
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str

@@ -92,5 +92,16 @@ services:
       - traefik.http.middlewares.secure-headers.headers.referrerPolicy=same-origin
       - traefik.http.middlewares.secure-headers.headers.contentSecurityPolicy=default-src 'self'; style-src 'self' https://cdn.jsdelivr.net; style-src-attr 'unsafe-inline'; frame-ancestors 'none'; form-action 'self'
 
+  scheduler:
+    image: ${BACKEND_IMAGE:?Variable not set}
+    build: !reset null
+    restart: unless-stopped
+    depends_on:
+      prestart:
+        condition: service_completed_successfully
+    environment:
+      FASTAPI_ENV: production
+      DATABASE_URL: postgresql://hvostun_app:${POSTGRES_APP_PASSWORD:?Variable not set}@db:5432/hvostun_production
+
 volumes:
   traefik-certificates:

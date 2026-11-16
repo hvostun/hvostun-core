@@ -1,10 +1,11 @@
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import tuple_
 from sqlmodel import Session, col, func, select
 
-from app.models import SessionRecommendation, User, UserGroup
+from app.models import SessionRecommendation, User
 
 
 @dataclass(frozen=True)
@@ -29,22 +30,31 @@ class ExpertStatsRow:
         return name or self.email
 
 
-def expert_totals(session: Session) -> ExpertTotals:
-    """Surveys, expert-survey pairs, and recommendation rows by group=expert."""
+def expert_totals(
+    session: Session,
+    *,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> ExpertTotals:
+    """Surveys, author-survey pairs, and recommendation rows for every author.
+
+    ``since`` and ``until`` bound ``session_recomendations.created_at`` as
+    ``[since, until)``. The stats page calls this without a window.
+    """
     pair = tuple_(
         col(SessionRecommendation.user_id),
         col(SessionRecommendation.session_id),
     )
-    statement = (
-        select(
-            func.count(func.distinct(col(SessionRecommendation.session_id))),
-            func.count(func.distinct(pair)),
-            func.count(),
-        )
-        .select_from(SessionRecommendation)
-        .join(User, col(User.id) == SessionRecommendation.user_id)
-        .where(User.group == UserGroup.EXPERT)
-    )
+    created_at = col(SessionRecommendation.created_at)
+    statement = select(
+        func.count(func.distinct(col(SessionRecommendation.session_id))),
+        func.count(func.distinct(pair)),
+        func.count(),
+    ).select_from(SessionRecommendation)
+    if since is not None:
+        statement = statement.where(created_at >= since)
+    if until is not None:
+        statement = statement.where(created_at < until)
     surveys, evaluations, recommendations = session.exec(statement).one()
     return ExpertTotals(
         surveys=int(surveys),
@@ -54,15 +64,13 @@ def expert_totals(session: Session) -> ExpertTotals:
 
 
 def expert_rows(session: Session, *, active_only: bool) -> list[ExpertStatsRow]:
-    """One row per expert. Median is percentile_cont(0.5) of per-survey counts."""
+    """One row per user. Median is percentile_cont(0.5) of per-survey counts."""
     per_session = (
         select(
             col(SessionRecommendation.user_id).label("user_id"),
             col(SessionRecommendation.session_id).label("session_id"),
             func.count().label("n"),
         )
-        .join(User, col(User.id) == SessionRecommendation.user_id)
-        .where(User.group == UserGroup.EXPERT)
         .group_by(
             col(SessionRecommendation.user_id),
             col(SessionRecommendation.session_id),
@@ -92,7 +100,6 @@ def expert_rows(session: Session, *, active_only: bool) -> list[ExpertStatsRow]:
             per_user.c.median,
         )
         .outerjoin(per_user, per_user.c.user_id == User.id)
-        .where(User.group == UserGroup.EXPERT)
         .order_by(surveys.desc(), col(User.email).asc())
     )
     if active_only:
