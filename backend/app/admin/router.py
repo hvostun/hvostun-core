@@ -8,6 +8,7 @@ from app.admin.routes import (
     management,
     scales,
     sessions,
+    stats,
     surveys,
 )
 
@@ -18,4 +19,5 @@ router.include_router(surveys.router)
 router.include_router(scales.router)
 router.include_router(dictionaries.router)
 router.include_router(sessions.router)
+router.include_router(stats.router)
 router.include_router(management.router)

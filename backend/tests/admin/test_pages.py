@@ -1634,10 +1634,12 @@ def test_expert_access_matrix(client: TestClient, db: Session) -> None:
         "/dictionaries",
         "/answer-events",
         "/owners",
+        "/stats",
     ):
         assert client.get(path, follow_redirects=False).status_code == 403
 
     home = client.get("/")
+    assert 'href="/stats"' not in home.text
     assert 'href="/surveys"' not in home.text
     assert 'href="/scales"' not in home.text
     assert 'href="/sessions?mine=no"' in home.text
@@ -1683,6 +1685,7 @@ def test_moderator_cannot_open_surveys_and_scales(
     assert 'href="/surveys"' not in home.text
     assert 'href="/scales"' not in home.text
     assert 'href="/sessions?mine=no"' in home.text
+    assert 'href="/stats"' in home.text
     assert "recommendations?status=" in home.text
 
 
@@ -1695,6 +1698,7 @@ def test_admin_access_matrix(client: TestClient, db: Session) -> None:
         "/sessions",
         "/recommendations",
         "/users",
+        "/stats",
     ):
         assert client.get(path).status_code == 200
     for path in ("/dictionaries", "/answer-events", "/owners"):
@@ -1708,6 +1712,7 @@ def test_admin_access_matrix(client: TestClient, db: Session) -> None:
         "/sessions?mine=no",
         "/recommendations",
         "/users",
+        "/stats",
     ):
         assert f'href="{path}"' in home.text
     assert 'href="/dictionaries"' not in home.text
@@ -1789,6 +1794,7 @@ def test_html_pages_respond_ok(client: TestClient, db: Session) -> None:
         f"/dictionaries/{dictionary.key}",
         "/answer-events",
         "/owners",
+        "/stats",
     ]
     for path in pages:
         response = client.get(path)
@@ -3509,3 +3515,162 @@ def test_session_summary_post_saves_gigachat_text(
     assert "Рассказ для эксперта" in after_change.text
     assert "живёт с семьёй 2 месяца" in after_change.text
     assert "Обновить" in after_change.text
+
+
+def _stats_user(
+    db: Session,
+    group: UserGroup,
+    *,
+    full_name: str | None = None,
+) -> User:
+    return crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"stats-{random_lower_string()}@example.com",
+            password=f"Stat1-{random_lower_string()[:8]}",
+            group=group,
+            full_name=full_name,
+        ),
+    )
+
+
+def _stats_session(db: Session, owner: Owner, name: str) -> SurveySession:
+    dog = Dog(name=name)
+    survey = Survey(name=name, slug=f"stats-{random_lower_string()}")
+    db.add(dog)
+    db.add(survey)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(survey)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    row = SurveySession(
+        owner_id=owner.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def _stats_assign(
+    db: Session, user: User, session_row: SurveySession, count: int
+) -> None:
+    for _ in range(count):
+        recommendation = Recommendation(
+            name=f"Стат {random_lower_string()}",
+            slug=f"stats-rec-{random_lower_string()}",
+            text="Текст рекомендации",
+        )
+        db.add(recommendation)
+        db.commit()
+        db.refresh(recommendation)
+        db.add(
+            SessionRecommendation(
+                user_id=user.id,
+                session_id=session_row.id,
+                recomendation_id=recommendation.id,
+                chart_number=0,
+                weight=1.0,
+            )
+        )
+    db.commit()
+
+
+def _compact_html(html: str) -> str:
+    return re.sub(r"\s+", " ", html)
+
+
+def _stats_card(html: str, element_id: str) -> int:
+    match = re.search(rf'id="{element_id}">(\d+)<', html)
+    assert match is not None
+    return int(match.group(1))
+
+
+def test_stats_counts_exclude_admin_and_filter(client: TestClient, db: Session) -> None:
+    _login_moderator(client, db)
+    before = client.get("/stats")
+    assert before.status_code == 200
+    surveys = _stats_card(before.text, "stats-surveys")
+    evaluations = _stats_card(before.text, "stats-evaluations")
+    recommendations = _stats_card(before.text, "stats-recommendations")
+
+    owner = _create_owner(db, "Владелец статистики")
+    first = _stats_session(db, owner, "Анкета 1")
+    second = _stats_session(db, owner, "Анкета 2")
+    admin_only = _stats_session(db, owner, "Анкета только админа")
+    alpha = _stats_user(db, UserGroup.EXPERT, full_name="Эксперт Альфа")
+    beta = _stats_user(db, UserGroup.EXPERT)
+    idle = _stats_user(db, UserGroup.EXPERT, full_name="Эксперт Пустой")
+    admin = _stats_user(db, UserGroup.ADMIN, full_name="Админ Статистики")
+    _stats_assign(db, alpha, first, 1)
+    _stats_assign(db, alpha, second, 1)
+    _stats_assign(db, beta, second, 1)
+    _stats_assign(db, admin, first, 1)
+    _stats_assign(db, admin, admin_only, 1)
+
+    page = client.get("/stats")
+    assert page.status_code == 200
+    assert _stats_card(page.text, "stats-surveys") == surveys + 2
+    assert _stats_card(page.text, "stats-evaluations") == evaluations + 3
+    assert _stats_card(page.text, "stats-recommendations") == recommendations + 3
+    checkbox = re.search(r'id="active"[^>]*>', page.text)
+    assert checkbox is not None
+    assert "checked" in checkbox.group(0)
+    compact = _compact_html(page.text)
+    assert "<td>Эксперт Альфа</td> <td>2</td> <td>1,0</td> <td>1,0</td>" in compact
+    assert f"<td>{beta.email}</td> <td>1</td> <td>1,0</td> <td>1,0</td>" in compact
+    assert "Эксперт Пустой" not in page.text
+    assert admin.email not in page.text
+    assert "Админ Статистики" not in page.text
+
+    same = client.get("/stats", params={"active": "1"})
+    assert "Эксперт Пустой" not in same.text
+    assert _stats_card(same.text, "stats-evaluations") == evaluations + 3
+
+    everyone = client.get("/stats", params={"active": "0"})
+    assert everyone.status_code == 200
+    assert _stats_card(everyone.text, "stats-surveys") == surveys + 2
+    checkbox = re.search(r'id="active"[^>]*>', everyone.text)
+    assert checkbox is not None
+    assert "checked" not in checkbox.group(0)
+    assert "<td>Эксперт Пустой</td> <td>0</td> <td>—</td> <td>—</td>" in _compact_html(
+        everyone.text
+    )
+    assert idle.email not in everyone.text
+    assert admin.email not in everyone.text
+
+    _login_admin(client, db)
+    assert client.get("/stats").status_code == 200
+    _login_superuser(client)
+    assert client.get("/stats").status_code == 200
+    _login_expert(client, db)
+    assert client.get("/stats", follow_redirects=False).status_code == 403
+
+
+def test_stats_average_and_median(client: TestClient, db: Session) -> None:
+    _login_moderator(client, db)
+    before = client.get("/stats")
+    surveys = _stats_card(before.text, "stats-surveys")
+    evaluations = _stats_card(before.text, "stats-evaluations")
+    recommendations = _stats_card(before.text, "stats-recommendations")
+
+    owner = _create_owner(db, "Владелец медианы")
+    expert = _stats_user(db, UserGroup.EXPERT, full_name="Эксперт Медиана")
+    for count in (1, 2, 6):
+        _stats_assign(db, expert, _stats_session(db, owner, f"Медиана {count}"), count)
+
+    page = client.get("/stats")
+    assert page.status_code == 200
+    assert _stats_card(page.text, "stats-surveys") == surveys + 3
+    assert _stats_card(page.text, "stats-evaluations") == evaluations + 3
+    assert _stats_card(page.text, "stats-recommendations") == recommendations + 9
+    assert (
+        "<td>Эксперт Медиана</td> <td>3</td> <td>3,0</td> <td>2,0</td>"
+        in _compact_html(page.text)
+    )

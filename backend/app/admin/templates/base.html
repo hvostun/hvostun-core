@@ -43,6 +43,9 @@
               <span class="badge text-bg-danger">{{ pending_recommendation_count }}</span>
               {% endif %}
             </a>
+            {% if user.is_superuser or user.group in ("admin", "moderator") %}
+            <a class="nav-link" href="/stats">Статистика</a>
+            {% endif %}
             {% if user.is_superuser or user.group == "admin" %}
             <a class="nav-link" href="/users">Администраторы</a>
             {% endif %}

@@ -62,6 +62,10 @@ def can_edit_recommendations(user: User) -> bool:
     return is_admin(user) or user.group == UserGroup.MODERATOR
 
 
+def can_view_stats(user: User) -> bool:
+    return is_admin(user) or user.group == UserGroup.MODERATOR
+
+
 def get_current_admin(current_user: CurrentUser) -> User:
     if not is_admin(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
@@ -78,6 +82,15 @@ def get_recommendation_editor(current_user: CurrentUser) -> User:
 
 
 RecommendationEditor = Annotated[User, Depends(get_recommendation_editor)]
+
+
+def get_stats_viewer(current_user: CurrentUser) -> User:
+    if not can_view_stats(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return current_user
+
+
+StatsViewer = Annotated[User, Depends(get_stats_viewer)]
 
 
 def get_current_superuser(current_user: CurrentUser) -> User:
