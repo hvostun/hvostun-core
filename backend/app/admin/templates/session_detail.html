@@ -78,7 +78,6 @@
         </p>
         <ul class="mb-0 ps-3">
           <li><strong>Важность</strong> — насколько пункт приоритетен для этой семьи сейчас.</li>
-          <li><strong>Критичность</strong> — насколько срочно/рискованно игнорировать совет.</li>
           <li><strong>Комментарий</strong> — уточнение под случай или полный текст своей рекомендации.</li>
         </ul>
       </div>
@@ -126,26 +125,21 @@
         <div class="card mb-2">
           <div class="card-body p-3">
             <input type="hidden" name="recommendation_id" value="{{ item.id }}" />
-            <p class="mb-3"><strong>{{ item.recommendation_name }}</strong>{% if item.recommendation_description %}. {{
+            <p class="mb-3"><strong>{{ item.recommendation_name }}</strong>
+              <span class="badge {% if item.status == 'draft' %}text-bg-warning{% elif item.status == 'active' %}text-bg-success{% else %}text-bg-secondary{% endif %}">{{ item.status_label }}</span>{% if item.recommendation_description %}. {{
               item.recommendation_description }}{% endif %}</p>
+            <input type="hidden" name="weight" value="{{ item.weight }}" />
             <div class="row g-3">
               <div class="col-12 col-md-4">
                 <label class="form-label" for="chart_number-{{ item.id }}">Важность</label>
                 <div class="form-text mb-1">Приоритет для этой семьи сейчас</div>
                 <select class="form-select" id="chart_number-{{ item.id }}" name="chart_number">
-                  <option value="0">Высокая</option>
-                  <option value="1">Средняя</option>
-                  <option value="2">Низкая</option>
+                  <option value="0" {% if item.chart_number == 0 %}selected{% endif %}>Высокая</option>
+                  <option value="1" {% if item.chart_number == 1 %}selected{% endif %}>Средняя</option>
+                  <option value="2" {% if item.chart_number == 2 %}selected{% endif %}>Низкая</option>
                 </select>
               </div>
-              <div class="col-12 col-md-4">
-                <label class="form-label" for="weight-{{ item.id }}">Критичность: <span
-                    id="weight-value-{{ item.id }}">{{ item.weight }}</span></label>
-                <div class="form-text mb-1">Насколько срочно не игнорировать</div>
-                <input type="range" class="form-range" id="weight-{{ item.id }}" name="weight" min="0" max="1"
-                  step="0.1" value="{{ item.weight }}" data-weight-output="weight-value-{{ item.id }}" />
-              </div>
-              <div class="col-12 col-md-4">
+              <div class="col-12 col-md-8">
                 <label class="form-label" for="comment-{{ item.id }}">Комментарий</label>
                 <div class="form-text mb-1">Уточнение или свой текст (для «Другое»)</div>
                 <textarea class="form-control" id="comment-{{ item.id }}" name="comment"

@@ -1114,7 +1114,7 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert "представить собаку с этой карточки" in page.text
     assert "экспертное решение" in page.text
     assert "Важность" in page.text
-    assert "Критичность" in page.text
+    assert "Критичность" not in page.text
     assert "Другое" in page.text
     assert "Другое - Короткая прогулка" in page.text
     assert page.text.index("Другое - Короткая прогулка") < page.text.index(
@@ -1376,7 +1376,7 @@ def test_session_recommendation_can_be_updated(client: TestClient, db: Session) 
         user_id=user.id,
         session_id=session_row.id,
         recomendation_id=recommendation.id,
-        chart_number=0,
+        chart_number=1,
         weight=1.0,
         comment="черновик",
     )
@@ -1387,8 +1387,11 @@ def test_session_recommendation_can_be_updated(client: TestClient, db: Session) 
     page = client.get(f"/sessions/{session_row.id}")
     assert page.status_code == 200
     assert 'name="chart_number"' in page.text
-    assert 'type="range"' in page.text
-    assert "Критичность" in page.text
+    assert 'value="1" selected' in page.text
+    assert 'type="hidden" name="weight"' in page.text
+    assert 'type="range"' not in page.text
+    assert "Критичность" not in page.text
+    assert "видна всем" in page.text
     assert page.text.count("Сохранить") == 1
     assert f"/sessions/{session_row.id}/recommendations/save" in page.text
     assert f'/sessions/{session_row.id}/recommendations/{row.id}"' not in page.text

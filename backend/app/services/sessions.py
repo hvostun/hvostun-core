@@ -28,6 +28,7 @@ from app.models import (
     User,
     UserGroup,
 )
+from app.models.recommendation import RECOMMENDATION_STATUS_LABELS
 from app.services import dictionaries as dictionary_service
 
 MANUAL_CHART_NUMBER = 0
@@ -899,6 +900,8 @@ def group_recommendations(
             "chart_number": item.chart_number,
             "weight": item.weight,
             "comment": item.comment,
+            "status": catalog.status,
+            "status_label": RECOMMENDATION_STATUS_LABELS[catalog.status],
         }
         if groups and groups[-1]["user_id"] == item.user_id:
             groups[-1]["recommendations"].append(entry)
