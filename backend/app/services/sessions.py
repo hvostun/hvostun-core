@@ -63,7 +63,9 @@ def can_manage_all_session_recommendations(user: User) -> bool:
 
 
 def can_view_all_session_recommendations(user: User) -> bool:
-    return can_manage_all_session_recommendations(user) or user.group == UserGroup.AUDITOR
+    return (
+        can_manage_all_session_recommendations(user) or user.group == UserGroup.AUDITOR
+    )
 
 
 def can_see_evaluation_counts(user: User) -> bool:
