@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.admin.deps import enforce_csrf
+from app.admin.deps import enforce_csrf, forbid_auditor_writes
 from app.admin.routes import (
     auth,
     dictionaries,
@@ -12,7 +12,10 @@ from app.admin.routes import (
     surveys,
 )
 
-router = APIRouter(tags=["admin-ui"], dependencies=[Depends(enforce_csrf)])
+router = APIRouter(
+    tags=["admin-ui"],
+    dependencies=[Depends(enforce_csrf), Depends(forbid_auditor_writes)],
+)
 router.include_router(auth.router)
 router.include_router(dogs.router)
 router.include_router(surveys.router)

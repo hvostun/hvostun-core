@@ -8,12 +8,14 @@ from sqlmodel import col, func, select
 
 from app.admin.deps import (
     AdminUser,
+    AdminViewer,
     CurrentUser,
     RecommendationEditor,
     SessionDep,
     SuperUser,
     can_edit_recommendations,
     is_admin,
+    is_auditor,
 )
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
 from app.models import (
@@ -151,6 +153,7 @@ def recommendations_page(
 ) -> Any:
     filters_sql: list[Any] = []
     can_edit = can_edit_recommendations(user)
+    show_status = can_edit or is_auditor(user)
     visible_statuses = (
         RecommendationStatus.DRAFT,
         RecommendationStatus.ACTIVE,
@@ -160,7 +163,7 @@ def recommendations_page(
     categories = dictionary_service.recommendation_category_options(session)
     category_labels = {item["value"]: item["label"] for item in categories}
     chosen_group = group if group in category_labels else ""
-    if not can_edit:
+    if not show_status:
         filters_sql.append(Recommendation.status == RecommendationStatus.ACTIVE)
     elif chosen:
         filters_sql.append(Recommendation.status == RecommendationStatus(chosen))
@@ -171,7 +174,7 @@ def recommendations_page(
         {"key": "name", "label": "Название"},
         {"key": "description", "label": "Описание"},
     ]
-    if can_edit:
+    if show_status:
         columns.append({"key": "status", "label": "Статус"})
     category_filter: dict[str, Any] = {
         "name": "group",
@@ -217,10 +220,10 @@ def recommendations_page(
         row_class=lambda row: (
             "recommendation-pending" if row.status == RecommendationStatus.DRAFT else ""
         ),
-        filters=[category_filter, *([status_filter] if can_edit else [])],
+        filters=[category_filter, *([status_filter] if show_status else [])],
         filter_values={"group": chosen_group, "status": chosen},
         row_href=lambda row: f"/recommendations/{row.id}",
-        create_href="/recommendations/new",
+        create_href=None if is_auditor(user) else "/recommendations/new",
         create_label="Создать",
         link_key="name",
     )
@@ -357,6 +360,8 @@ def _create_status(user: User, raw: str) -> RecommendationStatus | None:
 
 @router.get("/recommendations/new")
 def recommendation_new(request: Request, session: SessionDep, user: CurrentUser) -> Any:
+    if is_auditor(user):
+        raise HTTPException(status_code=403, detail="Forbidden")
     options = dictionary_service.recommendation_category_options(session)
     return _recommendation_form_response(
         request,
@@ -442,9 +447,14 @@ def recommendation_detail(
         target = catalog.get_recommendation(session, recommendation_id)
     except catalog.CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    if not can_edit_recommendations(user) and target.status not in (
-        RecommendationStatus.ACTIVE,
-        RecommendationStatus.DRAFT,
+    if (
+        not can_edit_recommendations(user)
+        and not is_auditor(user)
+        and target.status
+        not in (
+            RecommendationStatus.ACTIVE,
+            RecommendationStatus.DRAFT,
+        )
     ):
         raise HTTPException(status_code=404, detail="Recommendation not found")
     return _recommendation_form_response(
@@ -581,7 +591,7 @@ def recommendation_update(
 def users_page(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: AdminViewer,
     page: int = 1,
     email: str = "",
     full_name: str = "",
@@ -624,7 +634,7 @@ def users_page(
         ],
         filter_values={"email": email, "full_name": full_name},
         row_href=lambda row: f"/users/{row.id}",
-        create_href="/users/new",
+        create_href=None if is_auditor(user) else "/users/new",
         create_label="Создать администратора",
     )
 
@@ -683,6 +693,7 @@ def _user_form_response(
             "groups": [item.value for item in UserGroup],
             "error": error,
             "is_create": target is None,
+            "can_edit": is_admin(user),
             "can_manage_superusers": user.is_superuser,
         },
         status_code=status_code,
@@ -749,7 +760,7 @@ def user_create(
 def user_detail(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: AdminViewer,
     user_id: uuid.UUID,
 ) -> Any:
     try:

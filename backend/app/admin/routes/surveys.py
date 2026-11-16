@@ -5,7 +5,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import col, func, select
 
-from app.admin.deps import AdminUser, CurrentUser, SessionDep, is_admin
+from app.admin.deps import AdminUser, AdminViewer, CurrentUser, SessionDep, is_admin
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
 from app.models import Question, Scale, Survey, SurveyQuestion, SurveyVersion
 from app.pagination import execute_page, page_window
@@ -18,7 +18,7 @@ router = APIRouter()
 def surveys_page(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: AdminViewer,
     page: int = 1,
     name: str = "",
     description: str = "",
@@ -198,7 +198,7 @@ def _parse_display_num(raw: str) -> int:
 def survey_detail(
     request: Request,
     session: SessionDep,
-    user: AdminUser,
+    user: AdminViewer,
     survey_id: uuid.UUID,
     sort: str = "",
 ) -> Any:

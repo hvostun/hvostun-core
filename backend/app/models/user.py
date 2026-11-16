@@ -13,6 +13,7 @@ class UserGroup(StrEnum):
     ADMIN = "admin"
     EXPERT = "expert"
     MODERATOR = "moderator"
+    AUDITOR = "auditor"
 
 
 class UserBase(SQLModel):
@@ -54,7 +55,7 @@ class User(UserBase, TimestampMixin, table=True):
     __tablename__ = "users"  # pyright: ignore[reportAssignmentType]
     __table_args__ = (
         CheckConstraint(
-            "\"group\" IN ('admin', 'expert', 'moderator')",
+            "\"group\" IN ('admin', 'expert', 'moderator', 'auditor')",
             name="ck_users_group",
         ),
     )

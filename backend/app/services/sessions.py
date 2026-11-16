@@ -62,8 +62,12 @@ def can_manage_all_session_recommendations(user: User) -> bool:
     return user.is_superuser or user.group == UserGroup.ADMIN
 
 
+def can_view_all_session_recommendations(user: User) -> bool:
+    return can_manage_all_session_recommendations(user) or user.group == UserGroup.AUDITOR
+
+
 def can_see_evaluation_counts(user: User) -> bool:
-    return user.is_superuser or user.group == UserGroup.ADMIN
+    return user.is_superuser or user.group in (UserGroup.ADMIN, UserGroup.AUDITOR)
 
 
 # «Без моей рекомендации»: hide a session once this many distinct experts
@@ -428,7 +432,7 @@ def get_session_recommendations(
         .where(SessionRecommendation.recomendation_id == Recommendation.id)
         .where(SessionRecommendation.user_id == User.id)
     )
-    if not can_manage_all_session_recommendations(current_user):
+    if not can_view_all_session_recommendations(current_user):
         statement = statement.where(SessionRecommendation.user_id == current_user.id)
     return list(
         session.exec(

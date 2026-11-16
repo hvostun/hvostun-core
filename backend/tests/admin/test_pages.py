@@ -1543,6 +1543,164 @@ def _login_moderator(client: TestClient, db: Session) -> User:
     return user
 
 
+def _login_auditor(client: TestClient, db: Session) -> User:
+    password = f"Aud1-{random_lower_string()[:8]}"
+    user = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"auditor-{random_lower_string()}@example.com",
+            password=password,
+            group=UserGroup.AUDITOR,
+        ),
+    )
+    post(client, "/login", data={"email": user.email, "password": password})
+    return user
+
+
+def test_auditor_reads_admin_pages_and_cannot_write(
+    client: TestClient, db: Session
+) -> None:
+    expert = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"auditor-expert-{random_lower_string()}@example.com",
+            password=f"Pass1-{random_lower_string()[:8]}",
+            group=UserGroup.EXPERT,
+        ),
+    )
+    owner = Owner(name="Владелец аудита")
+    dog = Dog(name="Rex Auditor", status="unknown")
+    survey = Survey(name="Анкета аудита", slug=f"audit-{random_lower_string()}")
+    scale = Scale(
+        name="Шкала аудита", type="integer", config={"min_value": 0, "max_value": 4}
+    )
+    visible = Recommendation(
+        name="Чужая рекомендация",
+        slug=f"audit-visible-{random_lower_string()}",
+        text="Текст.",
+        status=RecommendationStatus.ACTIVE,
+    )
+    canceled = Recommendation(
+        name="Отклонённая для аудита",
+        slug=f"audit-canceled-{random_lower_string()}",
+        text="Текст.",
+        status=RecommendationStatus.CANCELED,
+    )
+    db.add(owner)
+    db.add(dog)
+    db.add(survey)
+    db.add(scale)
+    db.add(visible)
+    db.add(canceled)
+    db.commit()
+    db.refresh(dog)
+    db.refresh(survey)
+    db.refresh(scale)
+    db.refresh(visible)
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    session_row = SurveySession(
+        owner_id=owner.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="finished",
+    )
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+    db.add(
+        SessionRecommendation(
+            user_id=expert.id,
+            session_id=session_row.id,
+            recomendation_id=visible.id,
+            chart_number=0,
+            weight=1.0,
+        )
+    )
+    db.commit()
+
+    auditor = _login_auditor(client, db)
+    for path in (
+        "/dogs",
+        f"/dogs/{dog.id}",
+        "/surveys",
+        "/scales",
+        "/users",
+        "/sessions",
+        f"/sessions/{session_row.id}",
+        "/recommendations",
+        "/stats",
+    ):
+        assert client.get(path).status_code == 200, path
+    for path in ("/owners", "/dictionaries", "/answer-events", "/recommendations/new"):
+        assert client.get(path, follow_redirects=False).status_code == 403, path
+
+    home = client.get("/")
+    for path in ("/dogs", "/surveys", "/scales", "/users", "/stats"):
+        assert f'href="{path}"' in home.text
+    assert 'href="/owners"' not in home.text
+    assert 'href="/dictionaries"' not in home.text
+
+    dog_page = client.get(f"/dogs/{dog.id}")
+    assert "Сохранить" not in dog_page.text
+    assert "Rex Auditor" in dog_page.text
+    users_page = client.get("/users")
+    assert "Создать" not in users_page.text
+    user_page = client.get(f"/users/{auditor.id}")
+    assert "Сохранить" not in user_page.text
+    assert 'type="password"' not in user_page.text
+    recommendations = client.get("/recommendations")
+    assert "Создать" not in recommendations.text
+    assert "Отклонённая для аудита" in recommendations.text
+    assert "Статус" in recommendations.text
+    session_page = client.get(f"/sessions/{session_row.id}")
+    assert "Чужая рекомендация" in session_page.text
+    assert "Добавить" not in session_page.text
+    assert "Удалить" not in session_page.text
+    assert "Сохранить" not in session_page.text
+    stats = client.get("/stats")
+    assert "Опубликовать" not in stats.text
+
+    users_before = len(db.exec(select(User)).all())
+    recommendations_before = len(db.exec(select(Recommendation)).all())
+    assignments_before = len(db.exec(select(SessionRecommendation)).all())
+    blocked = (
+        (
+            f"/dogs/{dog.id}",
+            {"name": "Переименована", "status": "shelter"},
+        ),
+        (
+            "/users/new",
+            {
+                "email": f"blocked-{random_lower_string()}@example.com",
+                "password": "Blocked-1",
+                "full_name": "Не должен создаться",
+                "group": UserGroup.EXPERT,
+            },
+        ),
+        (
+            "/recommendations/new",
+            {"name": "Новая от аудитора", "description": "Нельзя", "group": "other"},
+        ),
+        (
+            f"/sessions/{session_row.id}/recommendations",
+            {"recomendation_id": str(visible.id), "chart_number": "0", "weight": "1"},
+        ),
+        (f"/sessions/{session_row.id}/summary", {"model": ""}),
+    )
+    for path, data in blocked:
+        response = post(client, path, data=data, follow_redirects=False)
+        assert response.status_code == 403, path
+
+    db.refresh(dog)
+    assert dog.name == "Rex Auditor"
+    assert len(db.exec(select(User)).all()) == users_before
+    assert len(db.exec(select(Recommendation)).all()) == recommendations_before
+    assert len(db.exec(select(SessionRecommendation)).all()) == assignments_before
+
+
 def test_moderator_sessions_hide_evaluation_count(
     client: TestClient, db: Session
 ) -> None:

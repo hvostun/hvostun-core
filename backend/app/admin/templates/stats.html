@@ -3,10 +3,12 @@
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
   <h1 class="h3 mb-0">Статистика</h1>
+  {% if user.group != "auditor" %}
   <form method="post" action="/stats/telegram">
     {% include "csrf.html" %}
     <button class="btn btn-primary" type="submit">Опубликовать</button>
   </form>
+  {% endif %}
 </div>
 {% if notice %}
 <div class="alert alert-success" role="status">{{ notice }}</div>
