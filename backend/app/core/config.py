@@ -1,0 +1,198 @@
+import os
+import warnings
+from pathlib import Path
+from typing import Literal, Self
+from urllib.parse import urlparse, urlunparse
+
+from pydantic import (
+    EmailStr,
+    HttpUrl,
+    PostgresDsn,
+    ValidationInfo,
+    computed_field,
+    field_validator,
+    model_validator,
+)
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_LOCAL_ENVS = frozenset({"development", "test"})
+_DEPLOYED_ENVS = frozenset({"staging", "production"})
+_KNOWN_LOCAL_SECRETS = frozenset(
+    {
+        "changethis",
+        "local-dev-secret-change-me",
+        "local-dev-password",
+        "local-dev-postgres",
+        "local-dev-app",
+        "local-dev-migrator",
+    }
+)
+_MIN_SECRET_KEY_BYTES = 32
+_LOCAL_TOKEN_MINUTES = 60 * 24 * 8
+_DEPLOYED_TOKEN_MINUTES = 60 * 12
+# backend/app/core/config.py → repo root .env (independent of process cwd)
+_REPO_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=_REPO_ENV_FILE,
+        env_ignore_empty=True,
+        extra="ignore",
+    )
+    SECRET_KEY: str
+    # Local default is 8 days. Staging and production use 12 hours unless this
+    # variable is set in the environment.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = _LOCAL_TOKEN_MINUTES
+    FASTAPI_ENV: Literal["development", "test", "staging", "production"] = "development"
+
+    PROJECT_NAME: str
+    SENTRY_DSN: HttpUrl | None = None
+    DATABASE_URL: PostgresDsn
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def postgres_db(self) -> str:
+        return f"hvostun_{self.FASTAPI_ENV}"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def is_deployed(self) -> bool:
+        return self.FASTAPI_ENV in _DEPLOYED_ENVS
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def _normalize_database_url(
+        cls, value: str | PostgresDsn, info: ValidationInfo
+    ) -> str:
+        database_url = str(value)
+        for scheme in ("postgres://", "postgresql://"):
+            if database_url.startswith(scheme):
+                database_url = database_url.replace(scheme, "postgresql+psycopg://", 1)
+                break
+        env = info.data.get("FASTAPI_ENV", "development")
+        parsed = urlparse(database_url)
+        return urlunparse(parsed._replace(path=f"/hvostun_{env}"))
+
+    SMTP_TLS: bool = True
+    SMTP_SSL: bool = False
+    SMTP_PORT: int = 587
+    SMTP_HOST: str | None = None
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    EMAILS_FROM_EMAIL: EmailStr | None = None
+    EMAILS_FROM_NAME: str | None = None
+
+    @model_validator(mode="after")
+    def _set_default_emails_from(self) -> Self:
+        if not self.EMAILS_FROM_NAME:
+            self.EMAILS_FROM_NAME = self.PROJECT_NAME
+        return self
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def emails_enabled(self) -> bool:
+        return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
+
+    GIGACHAT_AUTH_KEY: str | None = None
+    GIGACHAT_SCOPE: str = "GIGACHAT_API_PERS"
+    GIGACHAT_MODEL: str = "GigaChat-2-Max"
+    GIGACHAT_BASE_URL: str = "https://api.giga.chat/v1"
+    GIGACHAT_OAUTH_URL: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+    # PEM with the Russian Trusted Root CA; GigaChat OAuth is signed by it.
+    GIGACHAT_CA_BUNDLE: str | None = None
+    GIGACHAT_TIMEOUT_SECONDS: float = 60.0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def gigachat_enabled(self) -> bool:
+        return bool(self.GIGACHAT_AUTH_KEY)
+
+    TELEGRAM_BOT_TOKEN: str | None = None
+    # Comma-separated chat ids, for example "@hvostun_stats,-100123".
+    TELEGRAM_CHAT_IDS: str | None = None
+    DAILY_STATS_TIME: str = "11:00"
+    DAILY_STATS_TZ: str = "Europe/Moscow"
+
+    @field_validator("DAILY_STATS_TIME")
+    @classmethod
+    def _check_daily_stats_time(cls, value: str) -> str:
+        parts = value.split(":")
+        if (
+            len(parts) != 2
+            or len(parts[0]) != 2
+            or len(parts[1]) != 2
+            or not parts[0].isdigit()
+            or not parts[1].isdigit()
+        ):
+            raise ValueError("DAILY_STATS_TIME must be HH:MM")
+        hour = int(parts[0])
+        minute = int(parts[1])
+        if hour > 23 or minute > 59:
+            raise ValueError("DAILY_STATS_TIME must be HH:MM")
+        return value
+
+    @field_validator("DAILY_STATS_TZ")
+    @classmethod
+    def _check_daily_stats_tz(cls, value: str) -> str:
+        name = value.strip()
+        if not name:
+            raise ValueError("DAILY_STATS_TZ must be an IANA timezone name")
+        return name
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def telegram_chat_ids(self) -> list[str]:
+        raw = self.TELEGRAM_CHAT_IDS
+        if not raw:
+            return []
+        return [item.strip() for item in raw.split(",") if item.strip()]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def telegram_enabled(self) -> bool:
+        return bool(self.TELEGRAM_BOT_TOKEN and self.telegram_chat_ids)
+
+    EMAIL_TEST_USER: EmailStr = "test@example.com"
+    FIRST_SUPERUSER: EmailStr
+    FIRST_SUPERUSER_PASSWORD: str
+
+    def _reject_or_warn(self, message: str) -> None:
+        if self.FASTAPI_ENV in _LOCAL_ENVS:
+            warnings.warn(message, stacklevel=2)
+            return
+        raise ValueError(message)
+
+    def _check_default_secret(self, var_name: str, value: str | None) -> None:
+        if not value:
+            return
+        if value in _KNOWN_LOCAL_SECRETS:
+            self._reject_or_warn(
+                f"The value of {var_name} is a known local default, "
+                "for security, please change it, at least for deployments."
+            )
+            return
+        if var_name == "SECRET_KEY" and len(value.encode()) < _MIN_SECRET_KEY_BYTES:
+            self._reject_or_warn(
+                f"The value of {var_name} must be at least "
+                f"{_MIN_SECRET_KEY_BYTES} bytes for staging and production."
+            )
+
+    @model_validator(mode="after")
+    def _enforce_non_default_secrets(self) -> Self:
+        self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
+        for host in self.DATABASE_URL.hosts():
+            self._check_default_secret("DATABASE_URL password", host["password"])
+        self._check_default_secret(
+            "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
+        )
+        if (
+            self.FASTAPI_ENV in _DEPLOYED_ENVS
+            and self.ACCESS_TOKEN_EXPIRE_MINUTES == _LOCAL_TOKEN_MINUTES
+            and "ACCESS_TOKEN_EXPIRE_MINUTES" not in os.environ
+        ):
+            self.ACCESS_TOKEN_EXPIRE_MINUTES = _DEPLOYED_TOKEN_MINUTES
+        return self
+
+
+settings = Settings()  # type: ignore # ty: ignore[unused-ignore-comment]
