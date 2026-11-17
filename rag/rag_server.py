@@ -11,28 +11,24 @@ Run it:
     # or: uvicorn pdf_rag_server:app --reload
 
 Endpoints:
-    GET  /health                     -> server + storage status
-    POST /build  {"pdf_path": "..."} -> parse + index a PDF into the storage
-    POST /query  {"query": "...", ...} -> ask a question
+    GET  /health -> server + storage status
+    GET  /auth   -> refresh the GigaChat access token
+    POST /query  -> question against the index, or the same LLM without RAG
 
-Query body fields:
-    query                (required)
-    mode                 hybrid | local | global | mix | naive | bypass  (default hybrid)
-    system_prompt        the "system role" instruction for the answer
-    temperature          LLM sampling temperature (per request)
-    max_tokens           LLM max output tokens (per request)
-    top_k, chunk_top_k   retrieval breadth
-    only_need_context    return retrieved context instead of an answer
-    response_type        e.g. "Bullet Points", "Single Paragraph"
-    conversation_history [{"role": "...", "content": "..."}]
-    user_prompt          extra instructions for the LLM
+POST /query mode:
+    hybrid | local | global | mix | naive  retrieval + answer (default hybrid)
+    bypass                                 same GigaChat, no retrieval (baseline)
+
+In bypass only query, system_prompt and conversation_history are sent to the LLM.
+top_k, chunk_top_k, only_need_context, response_type and user_prompt are ignored.
+temperature and max_tokens are accepted but not applied in any mode.
 """
 
 import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import requests
@@ -44,7 +40,7 @@ from openai import (
     OpenAI,  # Убедитесь, что импорт корректен
     RateLimitError,  # Убедитесь, что импорт корректен
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 # RAG-Anything imports
 from tenacity import (
@@ -168,17 +164,73 @@ app = FastAPI(title="LM Studio PDF RAG", lifespan=lifespan)
 
 
 class QueryRequest(BaseModel):
-    query: str
-    mode: str = "hybrid"
-    system_prompt: str | None = None
-    temperature: float | None = None
-    max_tokens: int | None = None
-    top_k: int | None = None
-    chunk_top_k: int | None = None
-    only_need_context: bool = False
-    response_type: str | None = None
-    conversation_history: list[dict[str, Any]] | None = None
-    user_prompt: str | None = None
+    """One body for both RAG and no-RAG (`mode=bypass`) so the same JSON can be compared."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "query": "Как приучить щенка к поводку?",
+                    "mode": "hybrid",
+                    "system_prompt": "Please answer in Russian and format your response as a bulleted list.",
+                },
+                {
+                    "query": "Как приучить щенка к поводку?",
+                    "mode": "bypass",
+                    "system_prompt": "Please answer in Russian and format your response as a bulleted list.",
+                },
+            ]
+        }
+    )
+
+    query: str = Field(description="Текст вопроса.")
+    mode: Literal["hybrid", "local", "global", "mix", "naive", "bypass"] = Field(
+        "hybrid",
+        description=(
+            "Режим LightRAG. \nhybrid, local, global, mix, naive — ответ по индексу. "
+            "\nbypass — тот же GigaChat без retrieval (baseline). "
+            "\nВ bypass учитываются только query, system_prompt и conversation_history."
+        ),
+    )
+    system_prompt: str | None = Field(
+        None,
+        description="Системная инструкция. Учитывается и в RAG, и в bypass.",
+    )
+    temperature: float | None = Field(
+        None,
+        description="Не применяется: прокидывание в LightRAG закомментировано (и RAG, и bypass).",
+    )
+    max_tokens: int | None = Field(
+        None,
+        description="Не применяется: прокидывание в LightRAG закомментировано (и RAG, и bypass).",
+    )
+    top_k: int | None = Field(
+        None,
+        description="Ширина retrieval (сущности или связи). В bypass игнорируется.",
+    )
+    chunk_top_k: int | None = Field(
+        None,
+        description="Сколько текстовых чанков оставить после retrieval. В bypass игнорируется.",
+    )
+    only_need_context: bool = Field(
+        False,
+        description="Вернуть найденный контекст вместо ответа. В bypass игнорируется.",
+    )
+    response_type: str | None = Field(
+        None,
+        description='Формат ответа RAG, например "Bullet Points". В bypass игнорируется.',
+    )
+    conversation_history: list[dict[str, Any]] | None = Field(
+        None,
+        description=(
+            'История [{"role", "content"}]. Учитывается и в RAG, и в bypass. '
+            "Пример Swagger без role/content отбрасывается."
+        ),
+    )
+    user_prompt: str | None = Field(
+        None,
+        description="Дополнительные инструкции в промпт RAG. В bypass игнорируются.",
+    )
 
 
 def _apply_generation_kwargs(rag, temperature, max_tokens):
@@ -275,7 +327,17 @@ async def auth():
     return {"ok": True, "lifetime": exp}
 
 
-@app.post("/query")
+@app.post(
+    "/query",
+    summary="Вопрос с RAG или без (mode=bypass)",
+    description=(
+        "hybrid, local, global, mix, naive — ответ по индексу LightRAG. "
+        "mode=bypass — тот же GigaChat (CHAT_MODEL) без retrieval: "
+        "учитываются query, system_prompt и conversation_history; "
+        "top_k, chunk_top_k, only_need_context, response_type и user_prompt игнорируются. "
+        "temperature и max_tokens сейчас не применяются ни в одном режиме."
+    ),
+)
 async def query(req: QueryRequest):
     _ensure_gigachat_token()
 
