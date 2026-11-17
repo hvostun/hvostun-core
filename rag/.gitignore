@@ -1,0 +1,8 @@
+__pycache__
+uploads/*
+rag_storage/*
+output/*
+dbg/
+lib/
+env.local
+*.zip
