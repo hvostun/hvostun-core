@@ -8,10 +8,12 @@ from sqlmodel import col, func, select
 
 from app.admin.deps import AdminUser, AdminViewer, CurrentUser, SessionDep, is_admin
 from app.admin.templating import PAGE_SIZE, cell, list_context, templates
+from app.core.config import settings
 from app.models import Dog, DogStatus, Owner, Shelter
 from app.models.catalog_immutability import DomainValueValidationError
 from app.pagination import execute_page, page_window
 from app.services import dogs as dog_service
+from app.services import rag_compare
 
 router = APIRouter()
 
@@ -106,6 +108,9 @@ def _dog_detail_response(
     error: str | None = None,
     status_code: int = 200,
     form: dict[str, str] | None = None,
+    question: str = "",
+    answers: tuple[rag_compare.RagAnswer, rag_compare.RagAnswer] | None = None,
+    system_prompt: str | None = None,
 ) -> Any:
     try:
         context = dog_service.get_dog_edit_context(session, dog_id)
@@ -125,6 +130,13 @@ def _dog_detail_response(
             "form": form or _dog_form_from_row(context.dog),
             "can_edit": is_admin(user),
             "error": error,
+            "sessions": rag_compare.list_dog_sessions(session, dog_id),
+            "rag_enabled": settings.rag_enabled,
+            "question": question,
+            "answers": (
+                None if answers is None else {item.mode: item for item in answers}
+            ),
+            "system_prompt": system_prompt,
         },
         status_code=status_code,
     )
@@ -285,3 +297,51 @@ def dog_update(
             form=form,
         )
     return RedirectResponse(f"/dogs/{dog_id}", status_code=303)
+
+
+@router.post("/dogs/{dog_id}/ask")
+async def dog_ask(
+    request: Request,
+    session: SessionDep,
+    user: AdminViewer,
+    dog_id: uuid.UUID,
+    question: str = Form(""),
+) -> Any:
+    text = question.strip()
+    if not text:
+        return _dog_detail_response(
+            request,
+            session,
+            user,
+            dog_id,
+            error="Введите вопрос",
+            status_code=400,
+            question=question,
+        )
+    if not settings.rag_enabled:
+        return _dog_detail_response(
+            request,
+            session,
+            user,
+            dog_id,
+            error="RAG не настроен",
+            status_code=400,
+            question=text,
+        )
+    try:
+        context = dog_service.get_dog_edit_context(session, dog_id)
+    except dog_service.DogNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    sessions = rag_compare.list_dog_sessions(session, dog_id)
+    latest = sessions[0].row if sessions else None
+    system_prompt = rag_compare.build_hybrid_system_prompt(session, context.dog, latest)
+    answers = await rag_compare.ask_both(text, system_prompt)
+    return _dog_detail_response(
+        request,
+        session,
+        user,
+        dog_id,
+        question=text,
+        answers=answers,
+        system_prompt=system_prompt,
+    )

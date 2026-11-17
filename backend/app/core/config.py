@@ -108,6 +108,15 @@ class Settings(BaseSettings):
     def gigachat_enabled(self) -> bool:
         return bool(self.GIGACHAT_AUTH_KEY)
 
+    # Local RAG sidecar (compose service `rag`). Unset in production.
+    RAG_URL: str | None = None
+    RAG_TIMEOUT_SECONDS: float = 120.0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def rag_enabled(self) -> bool:
+        return bool(self.RAG_URL)
+
     TELEGRAM_BOT_TOKEN: str | None = None
     # Comma-separated chat ids, for example "@hvostun_stats,-100123".
     TELEGRAM_CHAT_IDS: str | None = None

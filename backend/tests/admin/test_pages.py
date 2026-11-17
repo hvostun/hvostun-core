@@ -35,6 +35,7 @@ from app.services.dictionaries import (
     SURVEYS_QUESTIONS_CONSTS_KEY,
     SURVEYS_QUESTIONS_GROUP_KEY,
 )
+from app.services.rag_compare import RagAnswer
 from app.services.sessions import (
     days_since_status,
     format_dog_age,
@@ -240,6 +241,81 @@ def test_dog_update_rejects_empty_name(client: TestClient, db: Session) -> None:
     assert "Имя обязательно" in response.text
     db.refresh(dog)
     assert dog.name == "Keep Name"
+
+
+def test_dog_detail_lists_sessions_and_hides_rag_when_unset(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "RAG_URL", None)
+    owner = Owner(name="Анкетный владелец")
+    dog = Dog(name="Анкетный пёс", status="unknown", owner_id=None)
+    survey = Survey(name="Анкеты собаки", slug=f"dog-sessions-{uuid.uuid4()}")
+    db.add(owner)
+    db.add(dog)
+    db.add(survey)
+    db.commit()
+    db.refresh(owner)
+    db.refresh(dog)
+    db.refresh(survey)
+    dog.owner_id = owner.id
+    version = SurveyVersion(survey_id=survey.id, version_num=1)
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    row = SurveySession(
+        owner_id=owner.id,
+        dog_id=dog.id,
+        survey_version_id=version.id,
+        status="draft",
+        created_at=datetime(2026, 11, 2, tzinfo=UTC),
+    )
+    db.add(row)
+    db.commit()
+    _login_superuser(client)
+    page = client.get(f"/dogs/{dog.id}")
+    assert page.status_code == 200
+    assert "Анкеты" in page.text
+    assert f"/sessions/{row.id}" in page.text
+    assert "02.11.2026" in page.text
+    assert "draft" in page.text
+    assert "RAG не настроен" in page.text
+    assert "Собрать ответ" not in page.text
+
+
+def test_dog_ask_renders_bypass_and_hybrid(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "RAG_URL", "http://rag.test")
+    dog = Dog(name="Сравниваемый", status="unknown", description="рыжая")
+    db.add(dog)
+    db.commit()
+    db.refresh(dog)
+
+    async def fake_ask(
+        question: str, system_prompt: str
+    ) -> tuple[RagAnswer, RagAnswer]:
+        assert question == "Как гулять?"
+        assert "Сравниваемый" in system_prompt
+        assert "рыжая" in system_prompt
+        return (
+            RagAnswer("bypass", "ответ без базы", None),
+            RagAnswer("hybrid", "ответ с базой", None),
+        )
+
+    monkeypatch.setattr("app.admin.routes.dogs.rag_compare.ask_both", fake_ask)
+    _login_superuser(client)
+    response = post(
+        client,
+        f"/dogs/{dog.id}/ask",
+        data={"question": "Как гулять?"},
+    )
+    assert response.status_code == 200
+    assert "Без RAG (bypass)" in response.text
+    assert "ответ без базы" in response.text
+    assert "RAG (hybrid)" in response.text
+    assert "ответ с базой" in response.text
+    assert "system_prompt" in response.text
+    assert "Сравниваемый" in response.text
 
 
 def test_sessions_page_shows_related_names(client: TestClient, db: Session) -> None:

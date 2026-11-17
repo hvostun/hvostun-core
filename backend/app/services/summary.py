@@ -72,18 +72,21 @@ class SummaryFacts:
     allowed_numbers: frozenset[str]
 
 
-def anonymize_history(text: str | None, owner: Owner) -> str:
+def anonymize_history(text: str | None, owner: Owner | None) -> str:
     if not text:
         return ""
     result = text
-    for value, replacement in (
-        (owner.email, "[контакт]"),
-        (owner.phone, "[телефон]"),
-        (owner.contact, "[контакт]"),
-        (owner.name, "[владелец]"),
-    ):
-        if value:
-            result = re.sub(re.escape(value), replacement, result, flags=re.IGNORECASE)
+    if owner is not None:
+        for value, replacement in (
+            (owner.email, "[контакт]"),
+            (owner.phone, "[телефон]"),
+            (owner.contact, "[контакт]"),
+            (owner.name, "[владелец]"),
+        ):
+            if value:
+                result = re.sub(
+                    re.escape(value), replacement, result, flags=re.IGNORECASE
+                )
     result = _EMAIL_RE.sub("[контакт]", result)
     result = _URL_RE.sub("[контакт]", result)
     result = _PHONE_RE.sub("[телефон]", result)
