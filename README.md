@@ -18,15 +18,16 @@ hvostun-core/
   backend/
     app/
       admin/             # Jinja + Bootstrap, единственный UI
-      ml-plan/           # ingest, export, baseline K3
-      llm-chat/          # LLM client, RAG, prompt/safety policies
+      ml-plan/           # ingest, export, baseline K3 (план)
+      llm-chat/          # план; фактически см. rag/
       alembic/
     notebooks/
     pyproject.toml
+  rag/                   # локальный RAG-сервис (Compose override)
   frontend/              # неактивная React-заготовка будущего user UI
   data/
-    parquet/             # open subsets / K3 export
-    kb/                  # curated knowledge base для RAG (llm-chat)
+    parquet/             # open subsets / K3 export (план)
+    kb/                  # curated KB для RAG (план)
 ```
 
 | Сервис Compose | Роль |
@@ -34,12 +35,33 @@ hvostun-core/
 | `db` | PostgreSQL 18 — OLTP `hvostun_{FASTAPI_ENV}` (local: `hvostun_development`) |
 | `backend` | FastAPI: HTML-админка + `GET /health` |
 | `db-ui` / `proxy` / `mailpit` | вспомогательные local-сервисы; `db-ui` — образ Adminer, не продуктовая админка |
-| `rag` | локально: FastAPI RAG (`/query`, `/health`), собирается из `rag/`, требует `rag/env.local`; наружу не публикуется |
+| `rag` | только local (`compose.override.yml`): FastAPI RAG из `rag/`; наружу не публикуется |
 | `redis` / `jupyter` / `worker` | позже, в Compose сейчас нет |
 
 Проверка стека: скопировать `.env.example` → `.env`, затем `docker compose up -d db backend`.
 
-RAG (опционально, нужен `rag/env.local` с ключами): `docker compose up -d --build rag`, проверка `docker compose exec rag python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health').read())"`.
+### RAG (локально, опционально)
+
+Отдельный сервис под будущий K5: PDF → индекс (MinerU + LightRAG), ответы через LLM API.
+В production Compose **нет** (тяжёлый образ с torch). Backend пока к нему не ходит.
+
+1. Скопировать `rag/example.env` → `rag/env.local` и заполнить ключи (GigaChat + embeddings).
+2. Поднять:
+
+```bash
+docker compose up -d --build rag
+docker compose exec rag python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health').read())"
+```
+
+Внутри сети Compose: `http://rag:8000`. Эндпоинты: `GET /health`, `GET /auth`, `POST /query`. Swagger: `/docs` (порт наружу не проброшен — смотреть через `exec`/временный publish).
+
+Индекс PDF без HTTP:
+
+```bash
+# из каталога rag/, с заполненным env.local
+python local_rag.py build path/to/doc.pdf
+python local_rag.py query "Вопрос" hybrid
+```
 
 ## Стек
 
@@ -51,6 +73,7 @@ RAG (опционально, нужен `rag/env.local` с ключами): `doc
 | Admin UI | Jinja2 + Bootstrap в `backend/app/admin` |
 | Web UI | Не реализован; `frontend/` — неподключённая заготовка |
 | DB UI | Adminer (`db-ui`), только local |
+| RAG | `rag/`: FastAPI + RAG-Anything/LightRAG; local Compose only |
 | ML | scikit-learn tabular (`RandomForest` + `LogisticRegression`); lockfile `uv.lock` |
 | Deploy | `compose.yml` + `compose.deploy.yml`: HTTPS `proxy` + `backend` + `db`; `db-ui` отключён |
 
