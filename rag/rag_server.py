@@ -107,7 +107,7 @@ async def embedding_func(texts: list[str]):
 )
 def _ensure_gigachat_token(*, force: bool = False) -> str:
     """GigaChat access token for openai-compatible client (and OPENAI_API_KEY fallback)."""
-    global TOKEN, GLOBAL_COUNTER
+    global GLOBAL_COUNTER
     if force or not TOKEN:
         authh()
     else:
@@ -308,7 +308,8 @@ def authh():
         body = response.json()
     except json.JSONDecodeError as exc:
         raise HTTPException(
-            502, f"GigaChat auth non-JSON ({response.status_code}): {response.text[:200]}"
+            502,
+            f"GigaChat auth non-JSON ({response.status_code}): {response.text[:200]}",
         ) from exc
     if response.status_code != 200 or "access_token" not in body:
         raise HTTPException(
@@ -362,7 +363,7 @@ async def query(req: QueryRequest):
     params = {k: v for k, v in params.items() if v is not None}
     try:
         answer = await rag.aquery(req.query, **params)
-    except Exception as e:  # noqa BLE001
+    except Exception as e:
         raise HTTPException(500, str(e)) from e
     if answer is None:
         raise HTTPException(

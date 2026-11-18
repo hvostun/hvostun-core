@@ -36,3 +36,5 @@ alls = "alls"
 # Имя таблицы в схеме: session_recomendations.recomendation_id
 recomendation = "recomendation"
 recomendations = "recomendations"
+# https://pypi.org/project/certifi/
+certifi = "certifi"

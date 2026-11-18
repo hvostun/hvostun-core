@@ -132,6 +132,7 @@ bash scripts/db_backup.sh
 ```
 
 Раскатить бэкап
+
 ```bash
 docker compose exec -T db psql -U postgres -d hvostun_development < .data/backup/hvostun_development.sql
 ```

@@ -152,7 +152,7 @@
     <div class="alert alert-danger">{{ answers.bypass.error }}</div>
     {% endif %}
     {% if answers.bypass.answer %}
-    <p class="mb-0 text-break" style="white-space: pre-wrap;">{{ answers.bypass.answer }}</p>
+    <div class="answer-md">{{ answers.bypass.answer | markdown }}</div>
     {% endif %}
   </div>
   <div class="col-md-6 mb-3">
@@ -161,7 +161,7 @@
     <div class="alert alert-danger">{{ answers.hybrid.error }}</div>
     {% endif %}
     {% if answers.hybrid.answer %}
-    <p class="mb-0 text-break" style="white-space: pre-wrap;">{{ answers.hybrid.answer }}</p>
+    <div class="answer-md">{{ answers.hybrid.answer | markdown }}</div>
     {% endif %}
     {% if system_prompt %}
     <details class="mt-3">

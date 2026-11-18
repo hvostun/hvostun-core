@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
+from app.admin.markdown import markdown_filter
 from app.models import User
 from app.pagination import DEFAULT_PAGE_SIZE, page_count
 
@@ -23,6 +24,7 @@ templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parent / "templates"),
     context_processors=[_template_context],
 )
+templates.env.filters["markdown"] = markdown_filter
 PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 
