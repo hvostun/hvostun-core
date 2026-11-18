@@ -431,7 +431,7 @@ def get_session_recommendations(
     statement = (
         select(SessionRecommendation, Recommendation, User)
         .where(SessionRecommendation.session_id == session_id)
-        .where(SessionRecommendation.recomendation_id == Recommendation.id)
+        .where(SessionRecommendation.recommendation_id == Recommendation.id)
         .where(SessionRecommendation.user_id == User.id)
     )
     if not can_view_all_session_recommendations(current_user):
@@ -648,7 +648,7 @@ def available_recommendations_for_user(
 ) -> list[Recommendation]:
     assigned_ids = set(
         session.exec(
-            select(SessionRecommendation.recomendation_id)
+            select(SessionRecommendation.recommendation_id)
             .where(SessionRecommendation.session_id == session_id)
             .where(SessionRecommendation.user_id == user_id)
         ).all()
@@ -733,7 +733,7 @@ def create_session_recommendation(
     row = SessionRecommendation(
         user_id=current_user.id,
         session_id=session_id,
-        recomendation_id=catalog.id,
+        recommendation_id=catalog.id,
         chart_number=MANUAL_CHART_NUMBER,
         weight=MANUAL_WEIGHT,
     )
@@ -752,13 +752,13 @@ def add_session_recommendation(
     *,
     session_id: uuid.UUID,
     current_user: User,
-    recomendation_id: uuid.UUID,
+    recommendation_id: uuid.UUID,
     comment: str | None = None,
     chart_number: int = MANUAL_CHART_NUMBER,
     weight: float = MANUAL_WEIGHT,
 ) -> SessionRecommendation:
     get_accessible_session(session, session_id, current_user)
-    catalog = session.get(Recommendation, recomendation_id)
+    catalog = session.get(Recommendation, recommendation_id)
     if catalog is None or catalog.status != RecommendationStatus.ACTIVE:
         raise SessionRecommendationError("Рекомендация не найдена")
     if chart_number < 0:
@@ -769,7 +769,7 @@ def add_session_recommendation(
     row = SessionRecommendation(
         user_id=current_user.id,
         session_id=session_id,
-        recomendation_id=recomendation_id,
+        recommendation_id=recommendation_id,
         chart_number=chart_number,
         weight=weight,
         comment=text or None,

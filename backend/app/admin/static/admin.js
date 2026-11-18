@@ -15,7 +15,7 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLSelectElement) || target.id !== "recomendation_id") {
+  if (!(target instanceof HTMLSelectElement) || target.id !== "recommendation_id") {
     return;
   }
   const form = document.getElementById("new-recommendation-form");

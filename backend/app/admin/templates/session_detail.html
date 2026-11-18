@@ -86,8 +86,8 @@
       <form method="post" action="/sessions/{{ session_row.id }}/recommendations" class="mb-4">
         {% include "csrf.html" %}
         <input type="hidden" name="view" value="{{ view }}" />
-        <label class="form-label visually-hidden" for="recomendation_id">Рекомендация</label>
-        <select class="form-select mb-2" id="recomendation_id" name="recomendation_id" required>
+        <label class="form-label visually-hidden" for="recommendation_id">Рекомендация</label>
+        <select class="form-select mb-2" id="recommendation_id" name="recommendation_id" required>
           <option value="">Выберите рекомендацию</option>
           {% for rec in available_recommendations %}
           <option value="{{ rec.id }}">{{ rec.label }}</option>

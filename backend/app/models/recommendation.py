@@ -77,13 +77,13 @@ class RecommendationsPublic(SQLModel):
 
 
 class SessionRecommendation(TimestampMixin, SQLModel, table=True):
-    __tablename__ = "session_recomendations"  # pyright: ignore[reportAssignmentType]
+    __tablename__ = "session_recommendations"  # pyright: ignore[reportAssignmentType]
     __table_args__ = (
         UniqueConstraint(
             "user_id",
             "session_id",
-            "recomendation_id",
-            name="uq_session_recomendations_user_session_recomendation",
+            "recommendation_id",
+            name="uq_session_recommendations_user_session_recommendation",
         ),
     )
 
@@ -98,7 +98,7 @@ class SessionRecommendation(TimestampMixin, SQLModel, table=True):
         ondelete="RESTRICT",
         index=True,
     )
-    recomendation_id: uuid.UUID = Field(
+    recommendation_id: uuid.UUID = Field(
         foreign_key="recommendations.id",
         ondelete="RESTRICT",
         index=True,
@@ -112,7 +112,7 @@ class SessionRecommendationPublic(SQLModel):
     id: uuid.UUID
     user_id: uuid.UUID
     session_id: uuid.UUID
-    recomendation_id: uuid.UUID
+    recommendation_id: uuid.UUID
     chart_number: int
     weight: float
     comment: str | None = None

@@ -561,7 +561,7 @@ def add_session_recommendation(
     session: SessionDep,
     user: CurrentUser,
     session_id: uuid.UUID,
-    recomendation_id: str = Form(""),
+    recommendation_id: str = Form(""),
     chart_number: str = Form(""),
     weight: str = Form(""),
     comment: str = Form(""),
@@ -570,7 +570,7 @@ def add_session_recommendation(
     group: str = Form(""),
     view: str = Form(""),
 ) -> Any:
-    if recomendation_id == "new":
+    if recommendation_id == "new":
         try:
             session_service.create_session_recommendation(
                 session,
@@ -594,7 +594,7 @@ def add_session_recommendation(
             )
         return RedirectResponse(_session_location(session_id, view), status_code=303)
     try:
-        parsed_id = uuid.UUID(recomendation_id)
+        parsed_id = uuid.UUID(recommendation_id)
     except ValueError:
         return _session_detail_response(
             request,
@@ -610,7 +610,7 @@ def add_session_recommendation(
             session,
             session_id=session_id,
             current_user=user,
-            recomendation_id=parsed_id,
+            recommendation_id=parsed_id,
             comment=comment,
             chart_number=session_service.parse_chart_number(chart_number),
             weight=session_service.parse_weight(weight),

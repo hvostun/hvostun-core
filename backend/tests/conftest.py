@@ -52,7 +52,7 @@ def _truncate_test_data(session: Session) -> None:
             """
             TRUNCATE TABLE
                 dictionaries,
-                session_recomendations,
+                session_recommendations,
                 answer_events,
                 survey_sessions,
                 surveys_questions,

@@ -39,7 +39,7 @@ def expert_totals(
 ) -> ExpertTotals:
     """Surveys, author-survey pairs, and recommendation rows for every author.
 
-    ``since`` and ``until`` bound ``session_recomendations.created_at`` as
+    ``since`` and ``until`` bound ``session_recommendations.created_at`` as
     ``[since, until)``. The stats page calls this without a window.
     """
     pair = tuple_(

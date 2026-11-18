@@ -430,7 +430,7 @@ def test_sessions_page_shows_recommendation_counts(
         SessionRecommendation(
             user_id=owner.id,
             session_id=session_row.id,
-            recomendation_id=first.id,
+            recommendation_id=first.id,
             chart_number=0,
             weight=1.0,
         )
@@ -439,7 +439,7 @@ def test_sessions_page_shows_recommendation_counts(
         SessionRecommendation(
             user_id=owner.id,
             session_id=session_row.id,
-            recomendation_id=second.id,
+            recommendation_id=second.id,
             chart_number=1,
             weight=0.5,
         )
@@ -448,7 +448,7 @@ def test_sessions_page_shows_recommendation_counts(
         SessionRecommendation(
             user_id=other.id,
             session_id=session_row.id,
-            recomendation_id=first.id,
+            recommendation_id=first.id,
             chart_number=0,
             weight=1.0,
         )
@@ -1212,7 +1212,7 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
         client,
         f"/sessions/{session_row.id}/recommendations",
         data={
-            "recomendation_id": str(recommendation.id),
+            "recommendation_id": str(recommendation.id),
             "chart_number": "2",
             "weight": "0.75",
             "comment": "приоритет на первую неделю",
@@ -1229,7 +1229,7 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     ).first()
     assert saved is not None
     assert saved.user_id == user.id
-    assert saved.recomendation_id == recommendation.id
+    assert saved.recommendation_id == recommendation.id
     assert saved.comment == "приоритет на первую неделю"
     assert saved.chart_number == 2
     assert saved.weight == 0.75
@@ -1257,7 +1257,7 @@ def test_session_new_recommendation_option_creates_and_assigns(
     missing = post(
         client,
         f"/sessions/{session_row.id}/recommendations",
-        data={"recomendation_id": "new", "name": "", "description": ""},
+        data={"recommendation_id": "new", "name": "", "description": ""},
     )
     assert missing.status_code == 400
     assert "Название и описание обязательны" in missing.text
@@ -1265,7 +1265,7 @@ def test_session_new_recommendation_option_creates_and_assigns(
         client,
         f"/sessions/{session_row.id}/recommendations",
         data={
-            "recomendation_id": "new",
+            "recommendation_id": "new",
             "name": "Тихий вход",
             "description": "Не встречайте у двери.",
             "group": "Fear_Anxiety",
@@ -1283,7 +1283,7 @@ def test_session_new_recommendation_option_creates_and_assigns(
         client,
         f"/sessions/{session_row.id}/recommendations",
         data={
-            "recomendation_id": "new",
+            "recommendation_id": "new",
             "name": "Без категории",
             "description": "Текст",
             "group": "nope",
@@ -1293,7 +1293,7 @@ def test_session_new_recommendation_option_creates_and_assigns(
     assert "Неизвестная категория" in unknown_group.text
     assignment = db.exec(
         select(SessionRecommendation).where(
-            SessionRecommendation.recomendation_id == row.id
+            SessionRecommendation.recommendation_id == row.id
         )
     ).one()
     assert assignment.session_id == session_row.id
@@ -1325,7 +1325,7 @@ def test_session_recommendations_sorted_by_added_at_desc(
             id=uuid.UUID(int=2),
             user_id=other.id,
             session_id=session_row.id,
-            recomendation_id=first.id,
+            recommendation_id=first.id,
             chart_number=0,
             weight=1.0,
             created_at=datetime(2026, 1, 1, tzinfo=UTC),
@@ -1336,7 +1336,7 @@ def test_session_recommendations_sorted_by_added_at_desc(
             id=uuid.UUID(int=1),
             user_id=other.id,
             session_id=session_row.id,
-            recomendation_id=second.id,
+            recommendation_id=second.id,
             chart_number=0,
             weight=1.0,
             created_at=datetime(2026, 2, 1, tzinfo=UTC),
@@ -1365,7 +1365,7 @@ def test_session_recommendation_rejects_duplicate(
         SessionRecommendation(
             user_id=user.id,
             session_id=session_row.id,
-            recomendation_id=recommendation.id,
+            recommendation_id=recommendation.id,
             chart_number=0,
             weight=1.0,
         )
@@ -1375,7 +1375,7 @@ def test_session_recommendation_rejects_duplicate(
     response = post(
         client,
         f"/sessions/{session_row.id}/recommendations",
-        data={"recomendation_id": str(recommendation.id), "comment": ""},
+        data={"recommendation_id": str(recommendation.id), "comment": ""},
     )
     assert response.status_code == 400
     assert "уже добавлена" in response.text
@@ -1388,7 +1388,7 @@ def test_user_can_delete_own_session_recommendation(
     row = SessionRecommendation(
         user_id=user.id,
         session_id=session_row.id,
-        recomendation_id=recommendation.id,
+        recommendation_id=recommendation.id,
         chart_number=0,
         weight=1.0,
     )
@@ -1416,7 +1416,7 @@ def test_user_cannot_delete_another_users_session_recommendation(
     row = SessionRecommendation(
         user_id=author.id,
         session_id=session_row.id,
-        recomendation_id=recommendation.id,
+        recommendation_id=recommendation.id,
         chart_number=0,
         weight=1.0,
     )
@@ -1452,7 +1452,7 @@ def test_session_recommendation_can_be_updated(client: TestClient, db: Session) 
     row = SessionRecommendation(
         user_id=user.id,
         session_id=session_row.id,
-        recomendation_id=recommendation.id,
+        recommendation_id=recommendation.id,
         chart_number=1,
         weight=1.0,
         comment="черновик",
@@ -1505,7 +1505,7 @@ def test_session_recommendations_can_be_saved_together(
     first_row = SessionRecommendation(
         user_id=user.id,
         session_id=session_row.id,
-        recomendation_id=first.id,
+        recommendation_id=first.id,
         chart_number=0,
         weight=1.0,
         comment="черновик 1",
@@ -1513,7 +1513,7 @@ def test_session_recommendations_can_be_saved_together(
     second_row = SessionRecommendation(
         user_id=user.id,
         session_id=session_row.id,
-        recomendation_id=second.id,
+        recommendation_id=second.id,
         chart_number=1,
         weight=0.5,
         comment="черновик 2",
@@ -1553,7 +1553,7 @@ def test_session_recommendation_update_rejects_bad_weight(
     row = SessionRecommendation(
         user_id=user.id,
         session_id=session_row.id,
-        recomendation_id=recommendation.id,
+        recommendation_id=recommendation.id,
         chart_number=1,
         weight=0.5,
     )
@@ -1690,7 +1690,7 @@ def test_auditor_reads_admin_pages_and_cannot_write(
         SessionRecommendation(
             user_id=expert.id,
             session_id=session_row.id,
-            recomendation_id=visible.id,
+            recommendation_id=visible.id,
             chart_number=0,
             weight=1.0,
         )
@@ -1762,7 +1762,7 @@ def test_auditor_reads_admin_pages_and_cannot_write(
         ),
         (
             f"/sessions/{session_row.id}/recommendations",
-            {"recomendation_id": str(visible.id), "chart_number": "0", "weight": "1"},
+            {"recommendation_id": str(visible.id), "chart_number": "0", "weight": "1"},
         ),
         (f"/sessions/{session_row.id}/summary", {"model": ""}),
     )
@@ -1838,7 +1838,7 @@ def test_moderator_sessions_hide_evaluation_count(
             SessionRecommendation(
                 user_id=user.id,
                 session_id=session_row.id,
-                recomendation_id=recommendation.id,
+                recommendation_id=recommendation.id,
                 chart_number=0,
                 weight=1.0,
             )
@@ -3300,7 +3300,7 @@ def _queue_session(
             SessionRecommendation(
                 user_id=rater.id,
                 session_id=row.id,
-                recomendation_id=recommendation.id,
+                recommendation_id=recommendation.id,
                 chart_number=0,
                 weight=1.0,
             )
@@ -3442,7 +3442,7 @@ def test_recommendation_submit_keeps_the_open_view(
         client,
         f"/sessions/{session_row.id}/recommendations",
         data={
-            "recomendation_id": str(recommendation.id),
+            "recommendation_id": str(recommendation.id),
             "chart_number": "1",
             "weight": "0.5",
             "comment": "на сводке",
@@ -3456,7 +3456,7 @@ def test_recommendation_submit_keeps_the_open_view(
     duplicate = post(
         client,
         f"/sessions/{session_row.id}/recommendations",
-        data={"recomendation_id": str(recommendation.id), "view": "summary"},
+        data={"recommendation_id": str(recommendation.id), "view": "summary"},
     )
     assert duplicate.status_code == 400
     assert "уже добавлена" in duplicate.text
@@ -3497,7 +3497,7 @@ def test_recommendation_submit_keeps_the_open_view(
         client,
         f"/sessions/{session_row.id}/recommendations",
         data={
-            "recomendation_id": str(recommendation.id),
+            "recommendation_id": str(recommendation.id),
             "chart_number": "0",
             "weight": "1",
             "comment": "",
@@ -3812,7 +3812,7 @@ def _stats_assign(
             SessionRecommendation(
                 user_id=user.id,
                 session_id=session_row.id,
-                recomendation_id=recommendation.id,
+                recommendation_id=recommendation.id,
                 chart_number=0,
                 weight=1.0,
             )

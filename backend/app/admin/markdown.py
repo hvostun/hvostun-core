@@ -1,7 +1,6 @@
 """Render model answers as HTML. Markdown in, sanitized HTML out."""
 
-import markdown as markdown_lib # type: ignore[import-untyped]
-
+import markdown as markdown_lib  # type: ignore[import-untyped]
 import nh3
 from markupsafe import Markup
 
