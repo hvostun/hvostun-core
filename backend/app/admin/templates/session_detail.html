@@ -81,11 +81,11 @@
           <li><strong>Комментарий</strong> — уточнение под случай или полный текст своей рекомендации.</li>
         </ul>
       </div>
-      {% if can_edit_session_recommendations %}
-      <h3 class="h6">Добавить рекомендацию</h3>
-      <form method="post" action="/sessions/{{ session_row.id }}/recommendations" class="mb-4">
+      <form method="post" action="/sessions/{{ session_row.id }}/recommendations/save" class="mb-4">
         {% include "csrf.html" %}
         <input type="hidden" name="view" value="{{ view }}" />
+        {% if can_edit_session_recommendations %}
+        <h3 class="h6">Добавить рекомендацию</h3>
         <label class="form-label visually-hidden" for="recomendation_id">Рекомендация</label>
         <select class="form-select mb-2" id="recomendation_id" name="recomendation_id" required>
           <option value="">Выберите рекомендацию</option>
@@ -112,16 +112,13 @@
             </select>
           </div>
         </div>
-        <button class="btn btn-outline-primary w-100 w-sm-auto" type="submit">Добавить</button>
-      </form>
-      {% endif %}
-      <h3 class="h6 mt-3">Назначенные</h3>
-      {% if not rec_groups %}
-      <p class="text-muted">Нет рекомендаций.</p>
-      {% else %}
-      <form method="post" action="/sessions/{{ session_row.id }}/recommendations/save">
-        {% include "csrf.html" %}
-        <input type="hidden" name="view" value="{{ view }}" />
+        <button class="btn btn-outline-primary w-100 w-sm-auto" type="submit"
+          formaction="/sessions/{{ session_row.id }}/recommendations">Добавить</button>
+        {% endif %}
+        <h3 class="h6 mt-3">Назначенные</h3>
+        {% if not rec_groups %}
+        <p class="text-muted">Нет рекомендаций.</p>
+        {% else %}
         <fieldset {% if not can_edit_session_recommendations %}disabled{% endif %}>
         {% for group in rec_groups %}
         {% for item in group.recommendations %}
@@ -155,6 +152,7 @@
               {% if can_edit_session_recommendations and (item.user_id == user.id or can_manage_all_recommendations) %}
               <button class="btn btn-danger btn-sm" type="submit"
                 formaction="/sessions/{{ session_row.id }}/recommendations/{{ item.id }}/delete" formmethod="post"
+                formnovalidate
                 data-confirm="Удалить рекомендацию?">Удалить</button>
               {% endif %}
             </div>
@@ -163,11 +161,11 @@
         {% endfor %}
         {% endfor %}
         {% if can_edit_session_recommendations %}
-        <button class="btn btn-primary w-100 w-sm-auto" type="submit">Сохранить</button>
+        <button class="btn btn-primary w-100 w-sm-auto" type="submit" formnovalidate>Сохранить</button>
         {% endif %}
         </fieldset>
+        {% endif %}
       </form>
-      {% endif %}
     </div>
   </details>
 </div>
