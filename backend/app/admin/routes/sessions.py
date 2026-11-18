@@ -555,6 +555,85 @@ def generate_session_summary(
     return RedirectResponse(f"/sessions/{session_id}?view=summary", status_code=303)
 
 
+def _parse_recommendation_updates(
+    recommendation_id: list[str],
+    chart_number: list[str],
+    weight: list[str],
+    comment: list[str],
+) -> list[tuple[uuid.UUID, int, float, str]]:
+    if not (len(recommendation_id) == len(chart_number) == len(weight) == len(comment)):
+        raise ValueError("Некорректные данные рекомендаций")
+    return [
+        (
+            uuid.UUID(row_id),
+            session_service.parse_chart_number(chart),
+            session_service.parse_weight(weight_value),
+            text,
+        )
+        for row_id, chart, weight_value, text in zip(
+            recommendation_id,
+            chart_number,
+            weight,
+            comment,
+            strict=True,
+        )
+    ]
+
+
+def _apply_pending_updates(
+    request: Request,
+    session: SessionDep,
+    user: CurrentUser,
+    session_id: uuid.UUID,
+    recommendation_id: list[str],
+    chart_number: list[str],
+    weight: list[str],
+    comment: list[str],
+    view: str,
+    *,
+    exclude: uuid.UUID | None = None,
+) -> Any | None:
+    try:
+        updates = _parse_recommendation_updates(
+            recommendation_id, chart_number, weight, comment
+        )
+        if exclude is not None:
+            updates = [item for item in updates if item[0] != exclude]
+        if not updates:
+            return None
+        session_service.update_session_recommendations(
+            session,
+            session_id=session_id,
+            current_user=user,
+            updates=updates,
+        )
+    except session_service.SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except session_service.SessionRecommendationError as exc:
+        return _session_detail_response(
+            request,
+            session,
+            user,
+            session_id,
+            view=view,
+            error=str(exc),
+            status_code=400,
+        )
+    except session_service.SessionRecommendationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError:
+        return _session_detail_response(
+            request,
+            session,
+            user,
+            session_id,
+            view=view,
+            error="Некорректные данные рекомендаций",
+            status_code=400,
+        )
+    return None
+
+
 @router.post("/sessions/{session_id}/recommendations")
 def add_session_recommendation(
     request: Request,
@@ -570,6 +649,19 @@ def add_session_recommendation(
     group: str = Form(""),
     view: str = Form(""),
 ) -> Any:
+    pending = _apply_pending_updates(
+        request,
+        session,
+        user,
+        session_id,
+        recommendation_id,
+        chart_number,
+        weight,
+        comment,
+        view,
+    )
+    if pending is not None:
+        return pending
     if recommendation_id == "new":
         try:
             session_service.create_session_recommendation(
@@ -632,12 +724,31 @@ def add_session_recommendation(
 
 @router.post("/sessions/{session_id}/recommendations/{recommendation_id}/delete")
 def delete_session_recommendation(
+    request: Request,
     session: SessionDep,
     user: CurrentUser,
     session_id: uuid.UUID,
     recommendation_id: uuid.UUID,
+    assigned_recommendation_id: list[str] = Form(default=[], alias="recommendation_id"),
+    chart_number: list[str] = Form(default=[]),
+    weight: list[str] = Form(default=[]),
+    comment: list[str] = Form(default=[]),
     view: str = Form(""),
-) -> RedirectResponse:
+) -> Any:
+    pending = _apply_pending_updates(
+        request,
+        session,
+        user,
+        session_id,
+        assigned_recommendation_id,
+        chart_number,
+        weight,
+        comment,
+        view,
+        exclude=recommendation_id,
+    )
+    if pending is not None:
+        return pending
     try:
         session_service.delete_session_recommendation(
             session,
@@ -664,60 +775,17 @@ def save_session_recommendations(
     comment: list[str] = Form(default=[]),
     view: str = Form(""),
 ) -> Any:
-    if not (len(recommendation_id) == len(chart_number) == len(weight) == len(comment)):
-        return _session_detail_response(
-            request,
-            session,
-            user,
-            session_id,
-            view=view,
-            error="Некорректные данные рекомендаций",
-            status_code=400,
-        )
-    try:
-        updates = [
-            (
-                uuid.UUID(row_id),
-                session_service.parse_chart_number(chart),
-                session_service.parse_weight(weight_value),
-                text,
-            )
-            for row_id, chart, weight_value, text in zip(
-                recommendation_id,
-                chart_number,
-                weight,
-                comment,
-                strict=True,
-            )
-        ]
-        session_service.update_session_recommendations(
-            session,
-            session_id=session_id,
-            current_user=user,
-            updates=updates,
-        )
-    except session_service.SessionNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except session_service.SessionRecommendationError as exc:
-        return _session_detail_response(
-            request,
-            session,
-            user,
-            session_id,
-            view=view,
-            error=str(exc),
-            status_code=400,
-        )
-    except session_service.SessionRecommendationPermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except ValueError:
-        return _session_detail_response(
-            request,
-            session,
-            user,
-            session_id,
-            view=view,
-            error="Некорректные данные рекомендаций",
-            status_code=400,
-        )
+    pending = _apply_pending_updates(
+        request,
+        session,
+        user,
+        session_id,
+        recommendation_id,
+        chart_number,
+        weight,
+        comment,
+        view,
+    )
+    if pending is not None:
+        return pending
     return RedirectResponse(_session_location(session_id, view), status_code=303)
