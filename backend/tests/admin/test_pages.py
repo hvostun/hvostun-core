@@ -1135,12 +1135,7 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     response = post(
         client,
         f"/sessions/{session_row.id}/recommendations",
-        data={
-            "recomendation_id": str(recommendation.id),
-            "chart_number": "2",
-            "weight": "0.75",
-            "comment": "приоритет на первую неделю",
-        },
+        data={"recomendation_id": str(recommendation.id)},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -1154,6 +1149,22 @@ def test_session_detail_can_add_recommendation(client: TestClient, db: Session) 
     assert saved is not None
     assert saved.user_id == user.id
     assert saved.recomendation_id == recommendation.id
+    assert saved.comment is None
+    assert saved.chart_number == 0
+    assert saved.weight == 1.0
+    saved_comment = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations/save",
+        data={
+            "recommendation_id": [str(saved.id)],
+            "chart_number": ["2"],
+            "weight": ["0.75"],
+            "comment": ["приоритет на первую неделю"],
+        },
+        follow_redirects=False,
+    )
+    assert saved_comment.status_code == 303
+    db.refresh(saved)
     assert saved.comment == "приоритет на первую неделю"
     assert saved.chart_number == 2
     assert saved.weight == 0.75
@@ -1299,7 +1310,7 @@ def test_session_recommendation_rejects_duplicate(
     response = post(
         client,
         f"/sessions/{session_row.id}/recommendations",
-        data={"recomendation_id": str(recommendation.id), "comment": ""},
+        data={"recomendation_id": str(recommendation.id)},
     )
     assert response.status_code == 400
     assert "уже добавлена" in response.text
@@ -1394,7 +1405,16 @@ def test_session_recommendation_can_be_updated(client: TestClient, db: Session) 
     assert "Критичность" not in page.text
     assert "видна всем" in page.text
     assert page.text.count("Сохранить") == 1
-    assert f"/sessions/{session_row.id}/recommendations/save" in page.text
+    accordion = page.text.split('id="recommendations-accordion"', 1)[1].split(
+        "</details>", 1
+    )[0]
+    assert accordion.count("<form") == 1
+    assert f'action="/sessions/{session_row.id}/recommendations/save"' in accordion
+    assert (
+        f'formaction="/sessions/{session_row.id}/recommendations">Добавить' in accordion
+    )
+    assert "formnovalidate>Сохранить" in accordion
+    assert "formnovalidate" in accordion.split("Удалить", 1)[0]
     assert f'/sessions/{session_row.id}/recommendations/{row.id}"' not in page.text
     response = post(
         client,
@@ -1499,6 +1519,199 @@ def test_session_recommendation_update_rejects_bad_weight(
     assert "от 0 до 1" in response.text
     db.refresh(row)
     assert row.weight == 0.5
+
+
+def _active_recommendation(db: Session, name: str) -> Recommendation:
+    row = Recommendation(
+        name=name,
+        slug=f"{name}-{random_lower_string()}",
+        text="Текст рекомендации.",
+        status=RecommendationStatus.ACTIVE,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def test_add_recommendation_saves_pending_edits(
+    client: TestClient, db: Session
+) -> None:
+    session_row, recommendation, user = _session_with_recommendation_catalog(db)
+    other = _active_recommendation(db, "Тихий вход")
+    row = SessionRecommendation(
+        user_id=user.id,
+        session_id=session_row.id,
+        recomendation_id=recommendation.id,
+        chart_number=0,
+        weight=1.0,
+        comment="черновик",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _login_superuser(client)
+    response = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations",
+        data={
+            "recomendation_id": str(other.id),
+            "recommendation_id": [str(row.id)],
+            "chart_number": ["1"],
+            "weight": ["0.5"],
+            "comment": ["новое объяснение"],
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    db.refresh(row)
+    assert row.comment == "новое объяснение"
+    assert row.chart_number == 1
+    assert row.weight == 0.5
+    added = db.exec(
+        select(SessionRecommendation).where(
+            SessionRecommendation.recomendation_id == other.id
+        )
+    ).one()
+    assert added.session_id == session_row.id
+    assert added.user_id == user.id
+    assert added.comment is None
+    assert added.chart_number == 0
+    assert added.weight == 1.0
+
+
+def test_add_recommendation_error_still_saves_edits(
+    client: TestClient, db: Session
+) -> None:
+    session_row, recommendation, user = _session_with_recommendation_catalog(db)
+    row = SessionRecommendation(
+        user_id=user.id,
+        session_id=session_row.id,
+        recomendation_id=recommendation.id,
+        chart_number=0,
+        weight=1.0,
+        comment="черновик",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _login_superuser(client)
+    response = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations",
+        data={
+            "recomendation_id": "",
+            "recommendation_id": [str(row.id)],
+            "chart_number": ["2"],
+            "weight": ["0.4"],
+            "comment": ["новое объяснение"],
+        },
+    )
+    assert response.status_code == 400
+    assert "Выберите рекомендацию" in response.text
+    assert "новое объяснение" in response.text
+    db.refresh(row)
+    assert row.comment == "новое объяснение"
+    assert row.chart_number == 2
+    assert row.weight == 0.4
+    assignments = db.exec(
+        select(SessionRecommendation).where(
+            SessionRecommendation.session_id == session_row.id
+        )
+    ).all()
+    assert len(assignments) == 1
+
+
+def test_delete_recommendation_saves_other_edits(
+    client: TestClient, db: Session
+) -> None:
+    session_row, first, user = _session_with_recommendation_catalog(db)
+    second = _active_recommendation(db, "Тишина")
+    first_row = SessionRecommendation(
+        user_id=user.id,
+        session_id=session_row.id,
+        recomendation_id=first.id,
+        chart_number=0,
+        weight=1.0,
+        comment="черновик 1",
+    )
+    second_row = SessionRecommendation(
+        user_id=user.id,
+        session_id=session_row.id,
+        recomendation_id=second.id,
+        chart_number=1,
+        weight=0.5,
+        comment="черновик 2",
+    )
+    db.add(first_row)
+    db.add(second_row)
+    db.commit()
+    db.refresh(first_row)
+    db.refresh(second_row)
+    first_id = first_row.id
+    second_id = second_row.id
+    _login_superuser(client)
+    response = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations/{first_id}/delete",
+        data={
+            "recommendation_id": [str(first_id), str(second_id)],
+            "chart_number": ["0", "2"],
+            "weight": ["1", "0.3"],
+            "comment": ["уйдёт", "останется"],
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    db.expire_all()
+    assert db.get(SessionRecommendation, first_id) is None
+    kept = db.get(SessionRecommendation, second_id)
+    assert kept is not None
+    assert kept.comment == "останется"
+    assert kept.chart_number == 2
+    assert kept.weight == 0.3
+
+
+def test_add_recommendation_forged_edit_is_forbidden(
+    client: TestClient, db: Session
+) -> None:
+    session_row, recommendation, author = _session_with_recommendation_catalog(db)
+    other = _active_recommendation(db, "Чужая добавка")
+    row = SessionRecommendation(
+        user_id=author.id,
+        session_id=session_row.id,
+        recomendation_id=recommendation.id,
+        chart_number=0,
+        weight=1.0,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _login_expert(client, db)
+    response = post(
+        client,
+        f"/sessions/{session_row.id}/recommendations",
+        data={
+            "recomendation_id": str(other.id),
+            "recommendation_id": [str(row.id)],
+            "chart_number": ["2"],
+            "weight": ["0.5"],
+            "comment": ["чужое изменение"],
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 403
+    db.expire_all()
+    kept = db.get(SessionRecommendation, row.id)
+    assert kept is not None
+    assert kept.comment is None
+    assert kept.chart_number == 0
+    assignments = db.exec(
+        select(SessionRecommendation).where(
+            SessionRecommendation.session_id == session_row.id
+        )
+    ).all()
+    assert len(assignments) == 1
 
 
 def _login_admin(client: TestClient, db: Session) -> User:
@@ -3365,13 +3578,7 @@ def test_recommendation_submit_keeps_the_open_view(
     added = post(
         client,
         f"/sessions/{session_row.id}/recommendations",
-        data={
-            "recomendation_id": str(recommendation.id),
-            "chart_number": "1",
-            "weight": "0.5",
-            "comment": "на сводке",
-            "view": "summary",
-        },
+        data={"recomendation_id": str(recommendation.id), "view": "summary"},
         follow_redirects=False,
     )
     assert added.status_code == 303
@@ -3420,13 +3627,7 @@ def test_recommendation_submit_keeps_the_open_view(
     unknown = post(
         client,
         f"/sessions/{session_row.id}/recommendations",
-        data={
-            "recomendation_id": str(recommendation.id),
-            "chart_number": "0",
-            "weight": "1",
-            "comment": "",
-            "view": "sideways",
-        },
+        data={"recomendation_id": str(recommendation.id), "view": "sideways"},
         follow_redirects=False,
     )
     assert unknown.status_code == 303
