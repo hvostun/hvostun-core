@@ -274,6 +274,87 @@ a.view-tab:hover {
   }
 }
 
+.answer-md > :first-child {
+  margin-top: 0;
+}
+
+.answer-md > :last-child {
+  margin-bottom: 0;
+}
+
+.answer-md h1,
+.answer-md h2 {
+  font-size: 1.15rem;
+}
+
+.answer-md h3,
+.answer-md h4,
+.answer-md h5,
+.answer-md h6 {
+  font-size: 1rem;
+}
+
+.answer-md h1,
+.answer-md h2,
+.answer-md h3,
+.answer-md h4,
+.answer-md h5,
+.answer-md h6 {
+  margin: 1rem 0 0.4rem;
+  font-weight: 600;
+}
+
+.answer-md p,
+.answer-md ul,
+.answer-md ol,
+.answer-md pre,
+.answer-md blockquote,
+.answer-md table {
+  margin-bottom: 0.75rem;
+}
+
+.answer-md ul,
+.answer-md ol {
+  padding-left: 1.25rem;
+}
+
+.answer-md blockquote {
+  margin-left: 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+.answer-md code {
+  font-size: 0.9em;
+}
+
+.answer-md pre {
+  padding: 0.75rem;
+  overflow: auto;
+  background: var(--muted);
+  border-radius: var(--bs-border-radius);
+}
+
+.answer-md pre code {
+  font-size: inherit;
+}
+
+.answer-md table {
+  width: 100%;
+}
+
+.answer-md th,
+.answer-md td {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.answer-md a {
+  color: var(--bs-link-color);
+}
+
 .table > tbody > tr.recommendation-pending > * {
   --bs-table-bg-type: var(--sand);
   --bs-table-bg: var(--sand);

@@ -19,6 +19,8 @@ dependencies = [
     "pyjwt<3.0.0,>=2.15.0",
     "tzdata>=2026.2",
     "pwdlib[argon2,bcrypt]>=0.3.1",
+    "markdown<4.0.0,>=3.11.3",
+    "nh3<1.0.0,>=0.3.8",
 ]
 
 [dependency-groups]

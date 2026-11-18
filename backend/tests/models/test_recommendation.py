@@ -83,7 +83,7 @@ def test_session_recommendation_persists_fields(db: Session) -> None:
     row = SessionRecommendation(
         user_id=user.id,
         session_id=session_row.id,
-        recomendation_id=recommendation.id,
+        recommendation_id=recommendation.id,
         chart_number=2,
         weight=0.75,
         comment="высокий приоритет",
@@ -94,7 +94,7 @@ def test_session_recommendation_persists_fields(db: Session) -> None:
 
     assert row.user_id == user.id
     assert row.session_id == session_row.id
-    assert row.recomendation_id == recommendation.id
+    assert row.recommendation_id == recommendation.id
     assert row.chart_number == 2
     assert row.weight == 0.75
     assert row.comment == "высокий приоритет"
@@ -102,7 +102,7 @@ def test_session_recommendation_persists_fields(db: Session) -> None:
     assert row.updated_at is not None
 
 
-def test_session_recommendation_unique_user_session_recomendation(
+def test_session_recommendation_unique_user_session_recommendation(
     db: Session,
 ) -> None:
     user, dog, questionnaire, recommendation, session_row = (
@@ -113,7 +113,7 @@ def test_session_recommendation_unique_user_session_recomendation(
         SessionRecommendation(
             user_id=user.id,
             session_id=session_row.id,
-            recomendation_id=recommendation.id,
+            recommendation_id=recommendation.id,
             chart_number=1,
             weight=0.5,
         )
@@ -124,7 +124,7 @@ def test_session_recommendation_unique_user_session_recomendation(
         SessionRecommendation(
             user_id=user.id,
             session_id=session_row.id,
-            recomendation_id=recommendation.id,
+            recommendation_id=recommendation.id,
             chart_number=3,
             weight=0.1,
         )

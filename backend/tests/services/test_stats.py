@@ -71,7 +71,7 @@ def _assign(
         SessionRecommendation(
             user_id=user.id,
             session_id=session_row.id,
-            recomendation_id=recommendation.id,
+            recommendation_id=recommendation.id,
             chart_number=0,
             weight=1.0,
             created_at=when,

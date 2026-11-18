@@ -61,6 +61,26 @@ Stop a locally running FastAPI server before starting the Compose backend becaus
 
 **Note**: The first time you start the stack, it might take a minute for all the services to be ready. To monitor it, use `docker compose logs`, or `docker compose logs backend` for the backend service.
 
+## RAG (optional, local only)
+
+The `rag` service is declared only in `compose.override.yml` (not in production deploy). It builds from `./rag`, publishes host port `8001` → container `8000`, and is reachable as `http://rag:8000` inside the Compose network.
+
+- Swagger UI: <http://localhost:8001/docs>
+- Health: <http://localhost:8001/health>
+
+```bash
+cp rag/example.env rag/env.local   # fill GigaChat + embedding keys
+docker compose up -d --build rag
+curl -s http://localhost:8001/health
+```
+
+Index a PDF without HTTP (from `rag/`, with `env.local` loaded):
+
+```bash
+python local_rag.py build path/to/doc.pdf
+python local_rag.py query "Question" hybrid
+```
+
 ## Mailpit
 
 [Mailpit](https://mailpit.axllent.org) captures emails sent during local development instead of delivering them. The local backend connects to it at `localhost:1025`, and the Compose backend connects to the `mailpit` service. Captured emails are available at <http://localhost:8025>.

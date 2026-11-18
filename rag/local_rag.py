@@ -135,7 +135,7 @@ async def query(question: str, mode: str) -> None:
         sys.exit(1)
 
     print(f"🔍 [{mode}] {question}")
-    rag = build_rag()
+    rag = build_rag(WORKING_DIR, llm_model_func, embedding_func, EMBED_DIM)
     try:
         answer = await rag.aquery(question, mode=mode)
     finally:

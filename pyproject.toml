@@ -21,6 +21,10 @@ extend-exclude = [
     "backend/coverage/",
     "backend/htmlcov/",
     "frontend/src/client/",
+    # Applied revisions keep the old table spelling; 0024 renames it.
+    "backend/app/alembic/versions/0016_session_recomendations.py",
+    "backend/app/alembic/versions/0017_dictionaries.py",
+    "backend/app/alembic/versions/0024_session_recs_rename.py",
 ]
 
 [tool.typos.default]
@@ -33,6 +37,5 @@ extend-ignore-re = [
 alls = "alls"
 
 [tool.typos.default.extend-words]
-# Имя таблицы в схеме: session_recomendations.recomendation_id
-recomendation = "recomendation"
-recomendations = "recomendations"
+# https://pypi.org/project/certifi/
+certifi = "certifi"

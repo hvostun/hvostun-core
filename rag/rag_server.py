@@ -11,27 +11,24 @@ Run it:
     # or: uvicorn pdf_rag_server:app --reload
 
 Endpoints:
-    GET  /health                     -> server + storage status
-    POST /build  {"pdf_path": "..."} -> parse + index a PDF into the storage
-    POST /query  {"query": "...", ...} -> ask a question
+    GET  /health -> server + storage status
+    GET  /auth   -> refresh the GigaChat access token
+    POST /query  -> question against the index, or the same LLM without RAG
 
-Query body fields:
-    query                (required)
-    mode                 hybrid | local | global | mix | naive | bypass  (default hybrid)
-    system_prompt        the "system role" instruction for the answer
-    temperature          LLM sampling temperature (per request)
-    max_tokens           LLM max output tokens (per request)
-    top_k, chunk_top_k   retrieval breadth
-    only_need_context    return retrieved context instead of an answer
-    response_type        e.g. "Bullet Points", "Single Paragraph"
-    conversation_history [{"role": "...", "content": "..."}]
-    user_prompt          extra instructions for the LLM
+POST /query mode:
+    hybrid | local | global | mix | naive  retrieval + answer (default hybrid)
+    bypass                                 same GigaChat, no retrieval (baseline)
+
+In bypass only query, system_prompt and conversation_history are sent to the LLM.
+top_k, chunk_top_k, only_need_context, response_type and user_prompt are ignored.
+temperature and max_tokens are accepted but not applied in any mode.
 """
 
 import json
 import os
 from contextlib import asynccontextmanager
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 import numpy as np
 import requests
@@ -43,7 +40,7 @@ from openai import (
     OpenAI,  # Убедитесь, что импорт корректен
     RateLimitError,  # Убедитесь, что импорт корректен
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 # RAG-Anything imports
 from tenacity import (
@@ -74,6 +71,27 @@ EMBED_DIM = int(os.environ["EMBED_DIM"])
 WORKING_DIR = os.environ["WORKING_DIR"]
 OUTPUT_DIR = os.environ["OUTPUT_DIR"]
 
+# GigaChat TLS: НУЦ Минцифры is not in Mozilla/certifi.
+# Same file as backend: repo certs/russian_trusted_root_ca_pem.crt → /certs in Compose.
+_GIGACHAT_CA = os.environ.get(
+    "GIGACHAT_CA_BUNDLE", "/certs/russian_trusted_root_ca_pem.crt"
+)
+_SSL_VERIFY: bool | str = True
+if os.path.isfile(_GIGACHAT_CA):
+    try:
+        import certifi
+
+        _merged = "/tmp/rag_ca_bundle.pem"
+        certifi_pem = Path(certifi.where()).read_text(encoding="utf-8").strip() + "\n"
+        russian_pem = Path(_GIGACHAT_CA).read_text(encoding="utf-8").strip() + "\n"
+        Path(_merged).write_text(certifi_pem + russian_pem, encoding="utf-8")
+        os.environ["SSL_CERT_FILE"] = _merged
+        os.environ["REQUESTS_CA_BUNDLE"] = _merged
+        os.environ["CURL_CA_BUNDLE"] = _merged
+        _SSL_VERIFY = _merged
+    except Exception:  # noqa: BLE001
+        _SSL_VERIFY = _GIGACHAT_CA
+
 
 async def embedding_func(texts: list[str]):
     client = OpenAI(api_key=EMBED_KEY, base_url=EMBED_URL)
@@ -87,6 +105,21 @@ async def embedding_func(texts: list[str]):
     wait=wait_exponential(multiplier=1, min=4, max=15),  # Экспоненциальная задержка
     reraise=True,
 )
+def _ensure_gigachat_token(*, force: bool = False) -> str:
+    """GigaChat access token for openai-compatible client (and OPENAI_API_KEY fallback)."""
+    global GLOBAL_COUNTER
+    if force or not TOKEN:
+        authh()
+    else:
+        GLOBAL_COUNTER += 1
+        if GLOBAL_COUNTER >= 10:
+            authh()
+    assert TOKEN is not None
+    # lightrag/openai falls back to env when api_key is missing
+    os.environ["OPENAI_API_KEY"] = TOKEN
+    return TOKEN
+
+
 async def llm_model_func(
     prompt: str,
     system_prompt: str | None = None,
@@ -94,60 +127,11 @@ async def llm_model_func(
     **kwargs,
 ) -> str:
     # history_messages: list[dict] = None, RUF013 PEP 484 prohibits implicit `Optional`
-    global GLOBAL_COUNTER
-    GLOBAL_COUNTER += 1
-    if GLOBAL_COUNTER == 10:
-        authh()
+    api_key = _ensure_gigachat_token()
 
-    # ✅ Удаляем оба параметра, которые заставляют GigaChat ломаться
+    # GigaChat rejects these OpenAI-oriented kwargs from LightRAG.
     kwargs.pop("response_format", None)
     kwargs.pop("keyword_extraction", None)
-    # fuckin madness......
-
-    # kwargs.pop("response_format", None)
-    # 1. Достаём response_format из kwargs (если он есть)
-    # response_format = kwargs.get("response_format")
-    # # 2. Если это Pydantic-класс — заменяем на явную JSON-схему для GigaChat
-    # if isinstance(response_format, type):
-    #     kwargs["response_format"] = {
-    #         "type": "json_schema",
-    #         "schema": {
-    #             "type": "object",
-    #             "properties": {
-    #                 "high_level_keywords": {
-    #                     "type": "array",
-    #                     "items": {"type": "string"}
-    #                 },
-    #                 "low_level_keywords": {
-    #                     "type": "array",
-    #                     "items": {"type": "string"}
-    #                 }
-    #             },
-    #             "required": ["high_level_keywords", "low_level_keywords"],
-    #             "additionalProperties": False
-    #         }
-    #     }
-    # # 3. Если пришла строка "json_object" — GigaChat её не понимает,
-    # #    заменяем на ту же явную схему
-    # elif response_format == "json_object":
-    #     kwargs["response_format"] = {
-    #         "type": "json_schema",
-    #         "schema": {
-    #             "type": "object",
-    #             "properties": {
-    #                 "high_level_keywords": {
-    #                     "type": "array",
-    #                     "items": {"type": "string"}
-    #                 },
-    #                 "low_level_keywords": {
-    #                     "type": "array",
-    #                     "items": {"type": "string"}
-    #                 }
-    #             },
-    #             "required": ["high_level_keywords", "low_level_keywords"],
-    #             "additionalProperties": False
-    #         }
-    #     }
 
     return await openai_complete_if_cache(
         model=CHAT_MODEL,
@@ -155,7 +139,7 @@ async def llm_model_func(
         system_prompt=system_prompt,
         history_messages=history_messages or [],
         base_url=CHAT_URL,
-        api_key=TOKEN,
+        api_key=api_key,
         **kwargs,
     )
 
@@ -180,17 +164,73 @@ app = FastAPI(title="LM Studio PDF RAG", lifespan=lifespan)
 
 
 class QueryRequest(BaseModel):
-    query: str
-    mode: str = "hybrid"
-    system_prompt: str | None = None
-    temperature: float | None = None
-    max_tokens: int | None = None
-    top_k: int | None = None
-    chunk_top_k: int | None = None
-    only_need_context: bool = False
-    response_type: str | None = None
-    conversation_history: list[dict[str, Any]] | None = None
-    user_prompt: str | None = None
+    """One body for both RAG and no-RAG (`mode=bypass`) so the same JSON can be compared."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "query": "Как приучить щенка к поводку?",
+                    "mode": "hybrid",
+                    "system_prompt": "Please answer in Russian and format your response as a bulleted list.",
+                },
+                {
+                    "query": "Как приучить щенка к поводку?",
+                    "mode": "bypass",
+                    "system_prompt": "Please answer in Russian and format your response as a bulleted list.",
+                },
+            ]
+        }
+    )
+
+    query: str = Field(description="Текст вопроса.")
+    mode: Literal["hybrid", "local", "global", "mix", "naive", "bypass"] = Field(
+        "hybrid",
+        description=(
+            "Режим LightRAG. \nhybrid, local, global, mix, naive — ответ по индексу. "
+            "\nbypass — тот же GigaChat без retrieval (baseline). "
+            "\nВ bypass учитываются только query, system_prompt и conversation_history."
+        ),
+    )
+    system_prompt: str | None = Field(
+        None,
+        description="Системная инструкция. Учитывается и в RAG, и в bypass.",
+    )
+    temperature: float | None = Field(
+        None,
+        description="Не применяется: прокидывание в LightRAG закомментировано (и RAG, и bypass).",
+    )
+    max_tokens: int | None = Field(
+        None,
+        description="Не применяется: прокидывание в LightRAG закомментировано (и RAG, и bypass).",
+    )
+    top_k: int | None = Field(
+        None,
+        description="Ширина retrieval (сущности или связи). В bypass игнорируется.",
+    )
+    chunk_top_k: int | None = Field(
+        None,
+        description="Сколько текстовых чанков оставить после retrieval. В bypass игнорируется.",
+    )
+    only_need_context: bool = Field(
+        False,
+        description="Вернуть найденный контекст вместо ответа. В bypass игнорируется.",
+    )
+    response_type: str | None = Field(
+        None,
+        description='Формат ответа RAG, например "Bullet Points". В bypass игнорируется.',
+    )
+    conversation_history: list[dict[str, Any]] | None = Field(
+        None,
+        description=(
+            'История [{"role", "content"}]. Учитывается и в RAG, и в bypass. '
+            "Пример Swagger без role/content отбрасывается."
+        ),
+    )
+    user_prompt: str | None = Field(
+        None,
+        description="Дополнительные инструкции в промпт RAG. В bypass игнорируются.",
+    )
 
 
 def _apply_generation_kwargs(rag, temperature, max_tokens):
@@ -237,6 +277,11 @@ def authh():
     global TOKEN
     global GLOBAL_COUNTER
     GLOBAL_COUNTER = 0
+    if not ATOKEN.strip() or not RqUID.strip():
+        raise HTTPException(
+            503,
+            "RqUID and ATOKEN must be set in rag/env.local (GigaChat Studio)",
+        )
     payload = {"scope": "GIGACHAT_API_PERS"}
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -244,11 +289,37 @@ def authh():
         "RqUID": RqUID,
         "Authorization": f"Basic {ATOKEN}",
     }
-    response = requests.request("POST", AUTH_URL, headers=headers, data=payload)
-    payload = json.loads(response.text)
-    print(payload["expires_at"])
-    TOKEN = payload["access_token"]
-    return payload["expires_at"]
+    try:
+        response = requests.post(
+            AUTH_URL,
+            headers=headers,
+            data=payload,
+            timeout=30,
+            verify=_SSL_VERIFY,
+        )
+    except requests.exceptions.SSLError as exc:
+        raise HTTPException(
+            502,
+            "GigaChat TLS failed (НУЦ Минцифры). Mount repo certs/ or set GIGACHAT_CA_BUNDLE.",
+        ) from exc
+    except requests.exceptions.RequestException as exc:
+        raise HTTPException(502, f"GigaChat auth unreachable: {exc}") from exc
+    try:
+        body = response.json()
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            502,
+            f"GigaChat auth non-JSON ({response.status_code}): {response.text[:200]}",
+        ) from exc
+    if response.status_code != 200 or "access_token" not in body:
+        raise HTTPException(
+            502,
+            f"GigaChat auth failed ({response.status_code}): {body}",
+        )
+    print(body.get("expires_at"))
+    TOKEN = body["access_token"]
+    os.environ["OPENAI_API_KEY"] = TOKEN
+    return body.get("expires_at")
 
 
 @app.get("/auth")
@@ -257,15 +328,28 @@ async def auth():
     return {"ok": True, "lifetime": exp}
 
 
-@app.post("/query")
+@app.post(
+    "/query",
+    summary="Вопрос с RAG или без (mode=bypass)",
+    description=(
+        "hybrid, local, global, mix, naive — ответ по индексу LightRAG. "
+        "mode=bypass — тот же GigaChat (CHAT_MODEL) без retrieval: "
+        "учитываются query, system_prompt и conversation_history; "
+        "top_k, chunk_top_k, only_need_context, response_type и user_prompt игнорируются. "
+        "temperature и max_tokens сейчас не применяются ни в одном режиме."
+    ),
+)
 async def query(req: QueryRequest):
-    global GLOBAL_COUNTER
-    GLOBAL_COUNTER += 1
-    if GLOBAL_COUNTER == 10:
-        auth()
+    _ensure_gigachat_token()
 
     rag = state["rag"]
     # await _apply_generation_kwargs(rag, req.temperature, req.max_tokens)
+    history = req.conversation_history
+    if history and not all(
+        isinstance(m, dict) and "role" in m and "content" in m for m in history
+    ):
+        # Swagger default `[{additionalProp1:{}}]` breaks LightRAG; ignore it.
+        history = None
     params = {
         "mode": req.mode,
         "system_prompt": req.system_prompt,
@@ -273,14 +357,19 @@ async def query(req: QueryRequest):
         "top_k": req.top_k,
         "chunk_top_k": req.chunk_top_k,
         "response_type": req.response_type,
-        "conversation_history": req.conversation_history,
+        "conversation_history": history,
         "user_prompt": req.user_prompt,
     }
     params = {k: v for k, v in params.items() if v is not None}
     try:
         answer = await rag.aquery(req.query, **params)
-    except Exception as e:  # noqa BLE001
-        raise HTTPException(500, str(e))
+    except Exception as e:
+        raise HTTPException(500, str(e)) from e
+    if answer is None:
+        raise HTTPException(
+            502,
+            "RAG returned empty answer (LLM failed). Check logs for OPENAI_API_KEY / GigaChat.",
+        )
     return {"query": req.query, "mode": req.mode, "answer": answer}
 
 
