@@ -28,7 +28,7 @@ import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 import requests
@@ -36,11 +36,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from lightrag.llm.openai import openai_complete_if_cache
-from openai import (
-    OpenAI,  # Убедитесь, что импорт корректен
-    RateLimitError,  # Убедитесь, что импорт корректен
-)
-from pydantic import BaseModel, ConfigDict, Field
+from openai import OpenAI, RateLimitError 
 
 # RAG-Anything imports
 from tenacity import (
@@ -49,7 +45,9 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
 from utils import build_rag
+from data_scheme import QueryRequest 
 
 TOKEN = None
 GLOBAL_COUNTER = 0
@@ -149,7 +147,6 @@ state: dict[str, Any] = {"rag": None}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # rag = build_rag()
     rag = build_rag(WORKING_DIR, llm_model_func, embedding_func, EMBED_DIM)
     await rag._ensure_lightrag_initialized()
     state["rag"] = rag
@@ -160,77 +157,8 @@ async def lifespan(app: FastAPI):
         await rag.finalize_storages()
 
 
+
 app = FastAPI(title="LM Studio PDF RAG", lifespan=lifespan)
-
-
-class QueryRequest(BaseModel):
-    """One body for both RAG and no-RAG (`mode=bypass`) so the same JSON can be compared."""
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {
-                    "query": "Как приучить щенка к поводку?",
-                    "mode": "hybrid",
-                    "system_prompt": "Please answer in Russian and format your response as a bulleted list.",
-                },
-                {
-                    "query": "Как приучить щенка к поводку?",
-                    "mode": "bypass",
-                    "system_prompt": "Please answer in Russian and format your response as a bulleted list.",
-                },
-            ]
-        }
-    )
-
-    query: str = Field(description="Текст вопроса.")
-    mode: Literal["hybrid", "local", "global", "mix", "naive", "bypass"] = Field(
-        "hybrid",
-        description=(
-            "Режим LightRAG. \nhybrid, local, global, mix, naive — ответ по индексу. "
-            "\nbypass — тот же GigaChat без retrieval (baseline). "
-            "\nВ bypass учитываются только query, system_prompt и conversation_history."
-        ),
-    )
-    system_prompt: str | None = Field(
-        None,
-        description="Системная инструкция. Учитывается и в RAG, и в bypass.",
-    )
-    temperature: float | None = Field(
-        None,
-        description="Не применяется: прокидывание в LightRAG закомментировано (и RAG, и bypass).",
-    )
-    max_tokens: int | None = Field(
-        None,
-        description="Не применяется: прокидывание в LightRAG закомментировано (и RAG, и bypass).",
-    )
-    top_k: int | None = Field(
-        None,
-        description="Ширина retrieval (сущности или связи). В bypass игнорируется.",
-    )
-    chunk_top_k: int | None = Field(
-        None,
-        description="Сколько текстовых чанков оставить после retrieval. В bypass игнорируется.",
-    )
-    only_need_context: bool = Field(
-        False,
-        description="Вернуть найденный контекст вместо ответа. В bypass игнорируется.",
-    )
-    response_type: str | None = Field(
-        None,
-        description='Формат ответа RAG, например "Bullet Points". В bypass игнорируется.',
-    )
-    conversation_history: list[dict[str, Any]] | None = Field(
-        None,
-        description=(
-            'История [{"role", "content"}]. Учитывается и в RAG, и в bypass. '
-            "Пример Swagger без role/content отбрасывается."
-        ),
-    )
-    user_prompt: str | None = Field(
-        None,
-        description="Дополнительные инструкции в промпт RAG. В bypass игнорируются.",
-    )
 
 
 @app.get("/health")
@@ -290,7 +218,6 @@ def authh():
             502,
             f"GigaChat auth failed ({response.status_code}): {body}",
         )
-    print(body.get("expires_at"))
     TOKEN = body["access_token"]
     os.environ["OPENAI_API_KEY"] = TOKEN
     return body.get("expires_at")
