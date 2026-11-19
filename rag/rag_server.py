@@ -144,7 +144,7 @@ async def llm_model_func(
     )
 
 
-state: dict[str, Any] = {"rag": None, "gen_kwargs": {}}
+state: dict[str, Any] = {"rag": None}
 
 
 @asynccontextmanager
@@ -233,32 +233,6 @@ class QueryRequest(BaseModel):
     )
 
 
-def _apply_generation_kwargs(rag, temperature, max_tokens):
-    """Bake per-request temperature/max_tokens into LightRAG's query role.
-    LightRAG has no per-query generation params: the query role's kwargs are
-    fixed when the LLM wrapper is built. update_llm_role_config rebuilds that
-    wrapper, so we only do it when the values actually change.
-    """
-    gen = {}
-    if temperature is not None:
-        gen["temperature"] = temperature
-    if max_tokens is not None:
-        gen["max_tokens"] = max_tokens
-    if gen == state["gen_kwargs"]:
-        return
-    # ✅ Прямое использование атрибута query_llm_model_kwargs llm_model_kwargs
-    # ✅ Use the generic `llm_model_kwargs` attribute
-    merged = dict(rag.lightrag.llm_model_kwargs or {})
-    # rag.lightrag.role_llm_kwargs.get("query")
-    # merged = dict(rag.lightrag._get_effective_role_llm_kwargs("query") or rag.lightrag.llm_model_kwargs or {})
-    merged.update(gen)
-    rag.lightrag.aupdate_llm_role_config(
-        "query", provider_options={"temperature": temperature, "max_tokens": max_tokens}
-    )
-    # rag.lightrag.update_llm_role_config("query", model_kwargs=merged)
-    state["gen_kwargs"] = gen
-
-
 @app.get("/health")
 async def health():
     return {
@@ -343,7 +317,7 @@ async def query(req: QueryRequest):
     _ensure_gigachat_token()
 
     rag = state["rag"]
-    # await _apply_generation_kwargs(rag, req.temperature, req.max_tokens)
+
     history = req.conversation_history
     if history and not all(
         isinstance(m, dict) and "role" in m and "content" in m for m in history
@@ -352,6 +326,8 @@ async def query(req: QueryRequest):
         history = None
     params = {
         "mode": req.mode,
+        "temperature": req.temperature, 
+        "max_tokens": req.max_tokens,
         "system_prompt": req.system_prompt,
         "only_need_context": req.only_need_context,
         "top_k": req.top_k,
@@ -362,7 +338,7 @@ async def query(req: QueryRequest):
     }
     params = {k: v for k, v in params.items() if v is not None}
     try:
-        answer = await rag.aquery(req.query, **params)
+        answer = await rag.aquery(req.query, **params)  
     except Exception as e:
         raise HTTPException(500, str(e)) from e
     if answer is None:
